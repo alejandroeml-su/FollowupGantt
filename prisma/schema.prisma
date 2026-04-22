@@ -71,20 +71,57 @@ model User {
   updatedAt      DateTime  @updatedAt
 }
 
+// Módulo de Estructura Organizacional
+model Area {
+  id             String    @id @default(uuid())
+  name           String    // Ejemplo: "Gerencia de TI", "Operaciones"
+  description    String?
+  
+  projects       Project[]
+
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+}
+
 model Project {
   id             String    @id @default(uuid())
   name           String
   description    String?
   status         ProjectStatus @default(PLANNING)
   
+  // Área / Gerencia
+  areaId         String?
+  area           Area?     @relation(fields: [areaId], references: [id])
+  
   managerId      String?
   manager        User?     @relation("ProjectManager", fields: [managerId], references: [id])
 
-  // Relaciones Híbridas
+  // KPIs financieros y de cronograma (EVM - Earned Value Management)
+  // Se pueden guardar calculados o dejarlos para consulta dinámica
+  cpi            Float?    // Cost Performance Index
+  spi            Float?    // Schedule Performance Index
+
+  // Relaciones
+  phases         Phase[]
   sprints        Sprint[]
   columns        BoardColumn[]
   tasks          Task[]
   baselines      Baseline[]
+
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+}
+
+// Fases del Proyecto (Waterfall / PMI)
+model Phase {
+  id             String    @id @default(uuid())
+  name           String
+  order          Int       @default(0)
+  
+  projectId      String
+  project        Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  
+  tasks          Task[]
 
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
@@ -132,11 +169,21 @@ model Task {
   status         TaskStatus @default(TODO)
   priority       Priority   @default(MEDIUM)
   
+  // Jerarquía (Subtareas)
+  parentId       String?
+  parent         Task?     @relation("SubTasks", fields: [parentId], references: [id], onDelete: Cascade)
+  subtasks       Task[]    @relation("SubTasks")
+
   // Relaciones de Agrupación
   projectId      String
   project        Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  
+  phaseId        String?
+  phase          Phase?    @relation(fields: [phaseId], references: [id])
+  
   sprintId       String?
   sprint         Sprint?   @relation(fields: [sprintId], references: [id])
+  
   columnId       String?
   column         BoardColumn? @relation(fields: [columnId], references: [id])
   
@@ -158,9 +205,10 @@ model Task {
   slaResolutionLimit  DateTime? // Límite de tiempo para resolver
   isEscalated         Boolean   @default(false)
 
-  // Métricas Financieras y Flujo (KPIs)
-  estimatedHours Int?
-  actualHours    Int?
+  // EVM y KPIs (Horas / Costos)
+  plannedValue   Float?    // PV: Valor Planificado (Costo o esfuerzo base)
+  actualCost     Float?    // AC: Costo/Esfuerzo real incurrido
+  earnedValue    Float?    // EV: Valor Ganado (PV * progress/100)
   
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
@@ -185,7 +233,7 @@ model TaskDependency {
 model Baseline {
   id             String    @id @default(uuid())
   version        Int       // Versión 1, 2, 3...
-  snapshotData   Json      // Json estructurado con el estado de las tareas en ese momento
+  snapshotData   Json      // Json estructurado con el estado de las tareas (fechas, PV, EV, AC)
   
   projectId      String
   project        Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)

@@ -2,12 +2,13 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { LayoutDashboard, Columns, CalendarDays, Target } from 'lucide-react';
+import { LayoutDashboard, Columns, CalendarDays, Target, FolderKanban } from 'lucide-react';
 import { clsx } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 
 const routes = [
   { name: 'Dashboard', path: '/', icon: LayoutDashboard },
+  { name: 'Gestión Proyectos', path: '/projects', icon: FolderKanban },
   { name: 'Kanban Board', path: '/kanban', icon: Columns },
   { name: 'Gantt Timeline', path: '/gantt', icon: CalendarDays },
 ];
