@@ -1,0 +1,49 @@
+/* Estilos adicionales al Tailwind CDN */
+:root {
+  --brand: #1E40AF;
+  --brand-light: #DBEAFE;
+  --accent: #F59E0B;
+  --danger: #DC2626;
+  --success: #10B981;
+}
+
+body { font-family: 'Inter', system-ui, -apple-system, sans-serif; background: #F9FAFB; }
+
+/* Top nav */
+.topnav { backdrop-filter: blur(8px); background: rgba(255,255,255,.9); }
+
+/* Kanban */
+.kanban-column { min-height: 65vh; }
+.kanban-column.drag-over { background: #DBEAFE; outline: 2px dashed #3B82F6; }
+.kanban-column.wip-exceeded .col-header { background: #FEE2E2; border-color: #DC2626; }
+.kanban-card { cursor: grab; transition: transform .12s ease, box-shadow .12s ease; }
+.kanban-card:active { cursor: grabbing; }
+.kanban-card.dragging { opacity: .4; transform: scale(.98); }
+.kanban-card:hover { transform: translateY(-2px); box-shadow: 0 8px 20px rgba(0,0,0,.08); }
+
+/* Gantt */
+.gantt-grid { background-image: linear-gradient(to right, #E5E7EB 1px, transparent 1px); }
+.gantt-bar { transition: all .15s ease; cursor: pointer; }
+.gantt-bar:hover { filter: brightness(1.1); box-shadow: 0 2px 8px rgba(0,0,0,.15); }
+.gantt-bar.critical { background: linear-gradient(90deg,#DC2626,#F87171)!important; }
+.gantt-milestone { transform: rotate(45deg); background: #F59E0B; width: 18px; height: 18px; }
+
+/* SLA Timer */
+.sla-timer { font-variant-numeric: tabular-nums; font-weight: 600; }
+.sla-timer.danger { color: #DC2626; }
+.sla-timer.warn { color: #F59E0B; }
+.sla-timer.ok { color: #10B981; }
+
+/* Scroll */
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-thumb { background: #CBD5E1; border-radius: 5px; }
+::-webkit-scrollbar-track { background: #F1F5F9; }
+
+/* Modal */
+.modal-backdrop { background: rgba(15,23,42,.5); }
+
+/* Cards KPI */
+.kpi-card { background: linear-gradient(135deg, #fff 0%, #F8FAFC 100%); border: 1px solid #E2E8F0; }
+
+.animate-pulse-soft { animation: pulse-soft 2s infinite; }
+@keyframes pulse-soft { 0%,100%{opacity:1} 50%{opacity:.6} }

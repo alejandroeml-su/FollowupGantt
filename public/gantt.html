@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <title>Gantt · FollowupGantt</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="/css/app.css" />
+</head>
+<body class="min-h-screen">
+  <div id="nav"></div>
+
+  <main class="max-w-7xl mx-auto px-6 py-8">
+    <div class="flex items-center justify-between mb-6">
+      <div>
+        <h1 class="text-2xl font-bold">Diagrama de Gantt</h1>
+        <p class="text-sm text-gray-500">Ruta crítica · dependencias · hitos</p>
+      </div>
+      <div class="flex gap-2">
+        <button id="baseline-btn" class="px-4 py-2 rounded-lg border bg-white hover:bg-gray-50">Guardar Baseline</button>
+        <a href="/kanban" class="px-4 py-2 rounded-lg border bg-white hover:bg-gray-50">Vista Kanban</a>
+      </div>
+    </div>
+
+    <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
+      <div class="p-4 border-b bg-gray-50 flex items-center gap-4 text-xs">
+        <div class="flex items-center gap-1"><span class="w-3 h-3 rounded bg-blue-500"></span> Normal</div>
+        <div class="flex items-center gap-1"><span class="w-3 h-3 rounded bg-red-500"></span> Ruta Crítica</div>
+        <div class="flex items-center gap-1"><span class="gantt-milestone inline-block"></span> Hito</div>
+        <div class="flex items-center gap-1"><span class="w-3 h-3 rounded bg-green-400"></span> Progreso</div>
+      </div>
+      <div class="overflow-x-auto">
+        <div id="gantt" class="min-w-max"></div>
+      </div>
+    </div>
+  </main>
+
+  <script src="/js/api.js"></script>
+  <script src="/js/app.js"></script>
+  <script src="/js/nav.js"></script>
+  <script>
+    document.getElementById('nav').innerHTML = renderTopNav('gantt');
+
+    const DAY_WIDTH = 28;
+    const ROW_HEIGHT = 38;
+
+    function parseDate(d) { return d ? new Date(d) : null; }
+    function diffDays(a, b) { return Math.round((b - a) / 86400000); }
+
+    function renderGantt(timeline) {
+      const { tasks, dependencies } = timeline;
+      if (!tasks.length) {
+        document.getElementById('gantt').innerHTML = '<div class="p-8 text-center text-gray-500">Sin tareas con fechas en este proyecto.</div>';
+        return;
+      }
+
+      let minD = null, maxD = null;
+      tasks.forEach(t => {
+        const s = parseDate(t.start_date);
+        const e = parseDate(t.due_date);
+        if (s && (!minD || s < minD)) minD = s;
+        if (e && (!maxD || e > maxD)) maxD = e;
+      });
+      if (!minD || !maxD) return;
+      minD = new Date(minD.getFullYear(), minD.getMonth(), minD.getDate() - 2);
+      maxD = new Date(maxD.getFullYear(), maxD.getMonth(), maxD.getDate() + 2);
+      const totalDays = diffDays(minD, maxD) + 1;
+      const width = totalDays * DAY_WIDTH;
+
+      // Header with days
+      let headerHtml = '<div class="flex border-b bg-gray-100 sticky top-0 z-10">';
+      headerHtml += '<div class="w-64 shrink-0 p-2 font-semibold text-xs border-r">Tarea</div>';
+      headerHtml += '<div class="flex text-xs" style="min-width:' + width + 'px;">';
+      for (let i = 0; i < totalDays; i++) {
+        const d = new Date(minD.getTime() + i * 86400000);
+        const isWeekend = [0, 6].includes(d.getDay());
+        headerHtml += `<div class="text-center border-r ${isWeekend ? 'bg-gray-200' : ''}" style="width:${DAY_WIDTH}px;">
+          <div class="text-[10px] text-gray-500">${d.toLocaleDateString('es', {month:'short'})}</div>
+          <div>${d.getDate()}</div>
+        </div>`;
+      }
+      headerHtml += '</div></div>';
+
+      // Rows
+      let rowsHtml = '';
+      tasks.forEach((t, idx) => {
+        const s = parseDate(t.start_date);
+        const e = parseDate(t.due_date);
+        if (!s || !e) return;
+        const offset = diffDays(minD, s) * DAY_WIDTH;
+        const w = Math.max(DAY_WIDTH, (diffDays(s, e) + 1) * DAY_WIDTH);
+        const isMilestone = t.is_milestone || t.type === 'milestone';
+        const isCrit = t.is_critical_path;
+
+        rowsHtml += `
+          <div class="flex items-center border-b hover:bg-gray-50" style="height:${ROW_HEIGHT}px;" data-task="${t.id}">
+            <div class="w-64 shrink-0 px-3 border-r text-sm truncate" title="${escapeHtml(t.title)}">
+              ${isCrit ? '<span class="text-red-500 mr-1">⚡</span>' : ''}${escapeHtml(t.title)}
+            </div>
+            <div class="relative" style="min-width:${width}px; height:${ROW_HEIGHT}px;">
+              ${isMilestone
+                ? `<div class="absolute gantt-milestone" style="left:${offset + DAY_WIDTH/2 - 9}px; top:${ROW_HEIGHT/2 - 9}px;" title="${escapeHtml(t.title)}"></div>`
+                : `<div class="absolute gantt-bar rounded ${isCrit ? 'critical' : ''}" style="left:${offset}px; top:8px; width:${w}px; height:22px; background:${isCrit ? '#DC2626' : '#3B82F6'};">
+                    <div class="h-full rounded" style="width:${t.progress || 0}%; background:rgba(16,185,129,.8);"></div>
+                    <div class="absolute inset-0 px-2 text-xs text-white font-medium flex items-center overflow-hidden">${t.progress || 0}%</div>
+                  </div>`}
+            </div>
+          </div>`;
+      });
+
+      document.getElementById('gantt').innerHTML = headerHtml + '<div class="gantt-grid">' + rowsHtml + '</div>';
+    }
+
+    async function load() {
+      if (!AppState.currentProjectId) await AppState.init();
+      const timeline = await api.gantt.timeline(AppState.currentProjectId).catch(() => null)
+        || await api.gantt.timeline('demo-1');
+      renderGantt(timeline);
+    }
+
+    document.getElementById('baseline-btn').addEventListener('click', async () => {
+      const name = prompt('Nombre de la baseline (ej. "B1 - Kickoff"):');
+      if (!name) return;
+      try {
+        await api.baselines.create({ project_id: AppState.currentProjectId, name });
+        alert('Baseline guardada.');
+      } catch (e) { alert('Error: ' + e.message); }
+    });
+
+    (async () => { await AppState.init(); await load(); })();
+  </script>
+</body>
+</html>

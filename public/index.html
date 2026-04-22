@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>FollowupGantt — Enterprise Work Orchestration</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/app.css" />
+</head>
+<body class="min-h-screen">
+  <!-- Hero / Landing -->
+  <header class="topnav sticky top-0 z-40 border-b border-gray-200">
+    <div class="max-w-7xl mx-auto px-6 py-3 flex items-center justify-between">
+      <div class="flex items-center gap-2">
+        <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-600 to-indigo-600 flex items-center justify-center text-white font-bold">F</div>
+        <span class="font-bold text-lg">FollowupGantt</span>
+      </div>
+      <nav class="hidden md:flex items-center gap-6 text-sm">
+        <a href="#features" class="text-gray-600 hover:text-gray-900">Características</a>
+        <a href="#roadmap" class="text-gray-600 hover:text-gray-900">Roadmap</a>
+        <a href="#kpis" class="text-gray-600 hover:text-gray-900">KPIs</a>
+        <a href="/dashboard" class="px-4 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700">Entrar</a>
+      </nav>
+    </div>
+  </header>
+
+  <section class="max-w-7xl mx-auto px-6 py-16 md:py-24">
+    <div class="grid md:grid-cols-2 gap-10 items-center">
+      <div>
+        <span class="inline-block px-3 py-1 rounded-full bg-blue-100 text-blue-700 text-xs font-semibold mb-4">
+          Agile · PMI · ITIL v4 · SAFe
+        </span>
+        <h1 class="text-4xl md:text-5xl font-bold leading-tight text-gray-900">
+          Plataforma híbrida de orquestación de trabajo
+        </h1>
+        <p class="mt-4 text-lg text-gray-600 leading-relaxed">
+          Centraliza la demanda y gestiona el flujo de valor: coexisten Agile y Waterfall,
+          e integra Service Management (ITIL) en un único ecosistema de datos.
+        </p>
+        <div class="mt-8 flex gap-3">
+          <a href="/dashboard" class="px-6 py-3 rounded-lg bg-blue-600 text-white font-semibold hover:bg-blue-700 shadow-sm">Abrir Dashboard</a>
+          <a href="/kanban" class="px-6 py-3 rounded-lg bg-white border border-gray-300 text-gray-800 font-semibold hover:bg-gray-50">Ver Kanban</a>
+        </div>
+        <div class="mt-8 grid grid-cols-3 gap-4 text-center max-w-md">
+          <div><div class="text-2xl font-bold text-blue-600">360°</div><div class="text-xs text-gray-500">Visibilidad</div></div>
+          <div><div class="text-2xl font-bold text-amber-500">↔</div><div class="text-xs text-gray-500">Sync Híbrida</div></div>
+          <div><div class="text-2xl font-bold text-green-600">KPIs</div><div class="text-xs text-gray-500">Gobernanza</div></div>
+        </div>
+      </div>
+      <div class="relative">
+        <div class="absolute -inset-2 bg-gradient-to-br from-blue-400 to-indigo-500 rounded-2xl blur opacity-20"></div>
+        <div class="relative bg-white rounded-2xl border border-gray-200 p-6 shadow-lg">
+          <div class="flex gap-2 mb-4">
+            <span class="w-3 h-3 rounded-full bg-red-400"></span>
+            <span class="w-3 h-3 rounded-full bg-yellow-400"></span>
+            <span class="w-3 h-3 rounded-full bg-green-400"></span>
+          </div>
+          <div class="grid grid-cols-3 gap-3">
+            <div class="p-3 bg-blue-50 rounded-lg">
+              <div class="text-xs text-blue-600 font-semibold">TO DO</div>
+              <div class="mt-2 space-y-1">
+                <div class="bg-white rounded p-2 text-xs shadow-sm">Setup repo</div>
+                <div class="bg-white rounded p-2 text-xs shadow-sm">Diseño DB</div>
+              </div>
+            </div>
+            <div class="p-3 bg-amber-50 rounded-lg">
+              <div class="text-xs text-amber-600 font-semibold">IN PROGRESS</div>
+              <div class="mt-2 space-y-1">
+                <div class="bg-white rounded p-2 text-xs shadow-sm">API Auth</div>
+              </div>
+            </div>
+            <div class="p-3 bg-green-50 rounded-lg">
+              <div class="text-xs text-green-600 font-semibold">DONE</div>
+              <div class="mt-2 space-y-1">
+                <div class="bg-white rounded p-2 text-xs shadow-sm">Discovery</div>
+                <div class="bg-white rounded p-2 text-xs shadow-sm">UX Mockups</div>
+              </div>
+            </div>
+          </div>
+          <div class="mt-4 h-24 bg-gradient-to-r from-blue-100 via-indigo-100 to-purple-100 rounded-lg flex items-end p-2 gap-1">
+            <div class="flex-1 bg-blue-500 rounded-t" style="height:40%"></div>
+            <div class="flex-1 bg-blue-500 rounded-t" style="height:65%"></div>
+            <div class="flex-1 bg-indigo-500 rounded-t" style="height:80%"></div>
+            <div class="flex-1 bg-indigo-500 rounded-t" style="height:55%"></div>
+            <div class="flex-1 bg-purple-500 rounded-t" style="height:90%"></div>
+            <div class="flex-1 bg-amber-500 rounded-t" style="height:35%"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="features" class="bg-white border-y border-gray-200 py-16">
+    <div class="max-w-7xl mx-auto px-6">
+      <h2 class="text-2xl font-bold text-center mb-10">Un ecosistema, tres marcos</h2>
+      <div class="grid md:grid-cols-3 gap-6">
+        <div class="p-6 rounded-xl border border-gray-200 bg-gradient-to-br from-white to-blue-50">
+          <div class="w-10 h-10 rounded-lg bg-blue-600 text-white flex items-center justify-center font-bold">A</div>
+          <h3 class="mt-4 font-semibold">Agile · Scrum/Kanban</h3>
+          <p class="mt-2 text-sm text-gray-600">Tableros con WIP limits, sprints, historias y CFD para optimizar el Cycle Time y detectar cuellos de botella.</p>
+        </div>
+        <div class="p-6 rounded-xl border border-gray-200 bg-gradient-to-br from-white to-indigo-50">
+          <div class="w-10 h-10 rounded-lg bg-indigo-600 text-white flex items-center justify-center font-bold">P</div>
+          <h3 class="mt-4 font-semibold">PMI · Gantt & Baselines</h3>
+          <p class="mt-2 text-sm text-gray-600">Cronograma con dependencias FS/SS/FF/SF, cálculo automático de ruta crítica, holgura y hasta 3 líneas base.</p>
+        </div>
+        <div class="p-6 rounded-xl border border-gray-200 bg-gradient-to-br from-white to-emerald-50">
+          <div class="w-10 h-10 rounded-lg bg-emerald-600 text-white flex items-center justify-center font-bold">I</div>
+          <h3 class="mt-4 font-semibold">ITIL · Service Desk</h3>
+          <p class="mt-2 text-sm text-gray-600">Tickets con SLA automático por prioridad, escalamiento al 80% y métricas MTTR / SLA Compliance.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="roadmap" class="max-w-7xl mx-auto px-6 py-16">
+    <h2 class="text-2xl font-bold mb-8">Roadmap (3 horizontes)</h2>
+    <div class="grid md:grid-cols-3 gap-6">
+      <div class="p-6 rounded-xl bg-blue-600 text-white"><div class="text-sm opacity-75">Horizonte 1 · Mes 1-3</div><h3 class="text-xl font-bold mt-1">Core Engine & Agility</h3><p class="mt-3 text-sm opacity-90">BD, Kanban, Sprints, Roles</p></div>
+      <div class="p-6 rounded-xl bg-indigo-600 text-white"><div class="text-sm opacity-75">Horizonte 2 · Mes 4-6</div><h3 class="text-xl font-bold mt-1">Governance & Predictability</h3><p class="mt-3 text-sm opacity-90">Gantt dinámico, dependencias, baselines</p></div>
+      <div class="p-6 rounded-xl bg-emerald-600 text-white"><div class="text-sm opacity-75">Horizonte 3 · Mes 7-9</div><h3 class="text-xl font-bold mt-1">Service Excellence</h3><p class="mt-3 text-sm opacity-90">ITIL, SLA Engine, BI Dashboards, APIs</p></div>
+    </div>
+  </section>
+
+  <section id="kpis" class="bg-gray-900 text-white py-16">
+    <div class="max-w-7xl mx-auto px-6">
+      <h2 class="text-2xl font-bold mb-8">KPIs integrados</h2>
+      <div class="grid md:grid-cols-3 gap-6">
+        <div>
+          <h3 class="text-blue-400 font-semibold">Flujo (Agile)</h3>
+          <ul class="mt-2 text-sm text-gray-300 space-y-1"><li>Cycle Time</li><li>Throughput</li><li>CFD</li></ul>
+        </div>
+        <div>
+          <h3 class="text-amber-400 font-semibold">Gobernanza (PMI)</h3>
+          <ul class="mt-2 text-sm text-gray-300 space-y-1"><li>SPI · Meta &gt; 1.0</li><li>CPI · Meta &gt; 1.0</li><li>Resource Utilization</li></ul>
+        </div>
+        <div>
+          <h3 class="text-emerald-400 font-semibold">Servicio (ITIL)</h3>
+          <ul class="mt-2 text-sm text-gray-300 space-y-1"><li>SLA Compliance Rate</li><li>MTTR</li></ul>
+        </div>
+      </div>
+      <div class="mt-10 text-center">
+        <a href="/dashboard" class="px-6 py-3 rounded-lg bg-white text-gray-900 font-semibold hover:bg-gray-100">Abrir Dashboard de KPIs</a>
+      </div>
+    </div>
+  </section>
+
+  <footer class="bg-white border-t py-6 text-sm text-gray-500 text-center">
+    FollowupGantt · Enterprise Work Orchestration Platform · v1.0
+  </footer>
+
+  <script src="/js/api.js"></script>
+  <script src="/js/app.js"></script>
+</body>
+</html>

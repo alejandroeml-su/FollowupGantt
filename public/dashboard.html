@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <title>Dashboard · FollowupGantt</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <link rel="stylesheet" href="/css/app.css" />
+</head>
+<body class="min-h-screen">
+  <div id="nav"></div>
+
+  <main class="max-w-7xl mx-auto px-6 py-8">
+    <div class="flex items-center justify-between mb-6">
+      <div>
+        <h1 class="text-2xl font-bold">Dashboard Ejecutivo</h1>
+        <p class="text-sm text-gray-500">KPIs integrados Agile · PMI · ITIL</p>
+      </div>
+    </div>
+
+    <!-- KPI Cards -->
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+      <div class="kpi-card p-5 rounded-xl">
+        <div class="text-xs uppercase text-gray-500">Cycle Time</div>
+        <div class="mt-1 flex items-baseline gap-1"><span id="kpi-cycle" class="text-3xl font-bold">—</span><span class="text-sm text-gray-500">días</span></div>
+        <div class="text-xs text-gray-400 mt-2">Promedio de entrega</div>
+      </div>
+      <div class="kpi-card p-5 rounded-xl">
+        <div class="text-xs uppercase text-gray-500">Throughput</div>
+        <div class="mt-1 flex items-baseline gap-1"><span id="kpi-throughput" class="text-3xl font-bold">—</span><span class="text-sm text-gray-500">ítems</span></div>
+        <div class="text-xs text-gray-400 mt-2">Completados en periodo</div>
+      </div>
+      <div class="kpi-card p-5 rounded-xl">
+        <div class="text-xs uppercase text-gray-500">SPI</div>
+        <div class="mt-1"><span id="kpi-spi" class="text-3xl font-bold">—</span></div>
+        <div class="text-xs mt-2" id="kpi-spi-label">—</div>
+      </div>
+      <div class="kpi-card p-5 rounded-xl">
+        <div class="text-xs uppercase text-gray-500">CPI</div>
+        <div class="mt-1"><span id="kpi-cpi" class="text-3xl font-bold">—</span></div>
+        <div class="text-xs mt-2" id="kpi-cpi-label">—</div>
+      </div>
+      <div class="kpi-card p-5 rounded-xl">
+        <div class="text-xs uppercase text-gray-500">SLA Compliance</div>
+        <div class="mt-1 flex items-baseline gap-1"><span id="kpi-sla" class="text-3xl font-bold">—</span><span class="text-sm text-gray-500">%</span></div>
+      </div>
+      <div class="kpi-card p-5 rounded-xl">
+        <div class="text-xs uppercase text-gray-500">MTTR</div>
+        <div class="mt-1 flex items-baseline gap-1"><span id="kpi-mttr" class="text-3xl font-bold">—</span><span class="text-sm text-gray-500">hrs</span></div>
+      </div>
+      <div class="kpi-card p-5 rounded-xl">
+        <div class="text-xs uppercase text-gray-500">Tickets abiertos</div>
+        <div class="mt-1"><span id="kpi-open-tickets" class="text-3xl font-bold">—</span></div>
+      </div>
+      <div class="kpi-card p-5 rounded-xl">
+        <div class="text-xs uppercase text-gray-500">Utilización</div>
+        <div class="mt-1 flex items-baseline gap-1"><span id="kpi-util" class="text-3xl font-bold">—</span><span class="text-sm text-gray-500">%</span></div>
+      </div>
+    </div>
+
+    <!-- Charts -->
+    <div class="grid md:grid-cols-2 gap-6">
+      <div class="bg-white rounded-xl p-5 border border-gray-200">
+        <h3 class="font-semibold mb-4">Cumulative Flow Diagram (CFD)</h3>
+        <canvas id="chart-cfd" height="120"></canvas>
+      </div>
+      <div class="bg-white rounded-xl p-5 border border-gray-200">
+        <h3 class="font-semibold mb-4">Índices de Desempeño</h3>
+        <canvas id="chart-perf" height="120"></canvas>
+      </div>
+    </div>
+  </main>
+
+  <script src="/js/api.js"></script>
+  <script src="/js/app.js"></script>
+  <script src="/js/nav.js"></script>
+  <script>
+    document.getElementById('nav').innerHTML = renderTopNav('dashboard');
+
+    async function loadKpis() {
+      const projectId = AppState.currentProjectId;
+      const s = await api.kpis.summary(projectId).catch(() => null);
+      if (!s) return;
+
+      document.getElementById('kpi-cycle').textContent = s.flow.cycle_time_days;
+      document.getElementById('kpi-throughput').textContent = s.flow.throughput;
+      document.getElementById('kpi-spi').textContent = s.governance.spi.toFixed(2);
+      document.getElementById('kpi-spi-label').innerHTML = s.governance.spi >= 1
+        ? '<span class="text-green-600">✓ En meta</span>' : '<span class="text-red-600">⚠ Bajo meta</span>';
+      document.getElementById('kpi-cpi').textContent = s.governance.cpi.toFixed(2);
+      document.getElementById('kpi-cpi-label').innerHTML = s.governance.cpi >= 1
+        ? '<span class="text-green-600">✓ En meta</span>' : '<span class="text-red-600">⚠ Bajo meta</span>';
+      document.getElementById('kpi-sla').textContent = s.service.sla_compliance_rate;
+      document.getElementById('kpi-mttr').textContent = s.service.mttr_hours;
+      document.getElementById('kpi-open-tickets').textContent = s.service.open_tickets;
+      document.getElementById('kpi-util').textContent = s.governance.utilization_percent;
+
+      // CFD
+      const labels = s.cfd.map(x => x.date);
+      new Chart(document.getElementById('chart-cfd'), {
+        type: 'line',
+        data: {
+          labels,
+          datasets: [
+            { label: 'Done', data: s.cfd.map(x => x.done), backgroundColor: 'rgba(16,185,129,.5)', borderColor: '#10B981', fill: true },
+            { label: 'In Progress', data: s.cfd.map(x => x.in_progress), backgroundColor: 'rgba(245,158,11,.5)', borderColor: '#F59E0B', fill: true },
+            { label: 'To Do', data: s.cfd.map(x => x.todo), backgroundColor: 'rgba(59,130,246,.5)', borderColor: '#3B82F6', fill: true },
+          ],
+        },
+        options: { responsive: true, plugins: { legend: { position: 'bottom' } }, scales: { y: { stacked: true, beginAtZero: true } } },
+      });
+
+      new Chart(document.getElementById('chart-perf'), {
+        type: 'bar',
+        data: {
+          labels: ['SPI', 'CPI', 'SLA %', 'Utilización %'],
+          datasets: [{
+            data: [s.governance.spi, s.governance.cpi, s.service.sla_compliance_rate, s.governance.utilization_percent],
+            backgroundColor: ['#3B82F6', '#6366F1', '#10B981', '#F59E0B'],
+          }],
+        },
+        options: { responsive: true, plugins: { legend: { display: false } } },
+      });
+    }
+
+    (async () => {
+      await AppState.init();
+      await loadKpis();
+    })();
+  </script>
+</body>
+</html>

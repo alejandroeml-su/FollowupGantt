@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <title>Proyectos · FollowupGantt</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="/css/app.css" />
+</head>
+<body class="min-h-screen">
+  <div id="nav"></div>
+  <main class="max-w-7xl mx-auto px-6 py-8">
+    <div class="flex items-center justify-between mb-6">
+      <h1 class="text-2xl font-bold">Proyectos</h1>
+      <button id="new-btn" class="px-4 py-2 rounded-lg bg-blue-600 text-white">+ Nuevo proyecto</button>
+    </div>
+    <div id="list" class="grid md:grid-cols-2 lg:grid-cols-3 gap-4"></div>
+  </main>
+
+  <div id="modal" class="hidden fixed inset-0 z-50 modal-backdrop items-center justify-center p-4">
+    <div class="bg-white rounded-xl w-full max-w-lg p-6 shadow-xl">
+      <h3 class="text-lg font-semibold mb-4">Nuevo proyecto</h3>
+      <form id="project-form" class="space-y-3">
+        <input name="code" placeholder="Código (ej. P-002)" class="w-full border rounded-lg px-3 py-2" required>
+        <input name="name" placeholder="Nombre" class="w-full border rounded-lg px-3 py-2" required>
+        <textarea name="description" placeholder="Descripción" class="w-full border rounded-lg px-3 py-2"></textarea>
+        <div class="grid grid-cols-2 gap-3">
+          <select name="methodology" class="border rounded-lg px-3 py-2">
+            <option value="hybrid">Híbrido</option><option value="agile">Agile</option>
+            <option value="waterfall">Waterfall</option><option value="itil">ITIL</option>
+          </select>
+          <select name="status" class="border rounded-lg px-3 py-2">
+            <option value="planning">Planning</option><option value="active" selected>Active</option>
+            <option value="on_hold">On Hold</option>
+          </select>
+          <input name="start_date" type="date" class="border rounded-lg px-3 py-2">
+          <input name="end_date" type="date" class="border rounded-lg px-3 py-2">
+          <input name="budget" type="number" step="0.01" placeholder="Presupuesto" class="border rounded-lg px-3 py-2 col-span-2">
+        </div>
+        <div class="flex justify-end gap-2 pt-2">
+          <button type="button" id="cancel-btn" class="px-4 py-2 rounded-lg border">Cancelar</button>
+          <button type="submit" class="px-4 py-2 rounded-lg bg-blue-600 text-white">Crear</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script src="/js/api.js"></script>
+  <script src="/js/app.js"></script>
+  <script src="/js/nav.js"></script>
+  <script>
+    document.getElementById('nav').innerHTML = renderTopNav('projects');
+
+    async function load() {
+      const list = await api.projects.list().catch(() => []);
+      document.getElementById('list').innerHTML = list.map(p => `
+        <div class="bg-white rounded-xl border p-5 hover:shadow-md transition">
+          <div class="flex items-center justify-between">
+            <span class="text-xs text-gray-500 font-mono">${escapeHtml(p.code || '')}</span>
+            ${statusBadge(p.status)}
+          </div>
+          <h3 class="mt-2 font-semibold">${escapeHtml(p.name)}</h3>
+          <p class="text-sm text-gray-600 mt-1 line-clamp-2">${escapeHtml(p.description || '')}</p>
+          <div class="mt-3 flex items-center justify-between text-xs text-gray-500">
+            <span>${escapeHtml(p.methodology || 'hybrid')}</span>
+            <span>${fmt(p.start_date)} → ${fmt(p.end_date)}</span>
+          </div>
+          <div class="mt-4 flex gap-2">
+            <button data-id="${p.id}" class="open-btn text-sm px-3 py-1.5 rounded-lg bg-blue-600 text-white">Abrir</button>
+          </div>
+        </div>
+      `).join('') || '<div class="col-span-full bg-white rounded-xl border p-6 text-center text-gray-500">Sin proyectos.</div>';
+
+      document.querySelectorAll('.open-btn').forEach(b => {
+        b.addEventListener('click', () => {
+          AppState.setProject(b.dataset.id);
+          window.location.href = '/dashboard';
+        });
+      });
+    }
+
+    const modal = document.getElementById('modal');
+    document.getElementById('new-btn').addEventListener('click', () => modal.classList.remove('hidden'));
+    document.getElementById('cancel-btn').addEventListener('click', () => modal.classList.add('hidden'));
+    document.getElementById('project-form').addEventListener('submit', async e => {
+      e.preventDefault();
+      const body = Object.fromEntries(new FormData(e.target).entries());
+      if (body.budget) body.budget = parseFloat(body.budget);
+      try {
+        await api.projects.create(body);
+        modal.classList.add('hidden'); e.target.reset();
+        await load();
+      } catch (err) { alert(err.message); }
+    });
+
+    (async () => { await AppState.init(); await load(); })();
+  </script>
+</body>
+</html>

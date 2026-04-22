@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <title>Service Desk · FollowupGantt</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="/css/app.css" />
+</head>
+<body class="min-h-screen">
+  <div id="nav"></div>
+
+  <main class="max-w-7xl mx-auto px-6 py-8">
+    <div class="flex items-center justify-between mb-6">
+      <div>
+        <h1 class="text-2xl font-bold">Service Desk (ITIL v4)</h1>
+        <p class="text-sm text-gray-500">Tickets con SLA automático y escalamiento</p>
+      </div>
+      <button id="new-ticket-btn" class="px-4 py-2 rounded-lg bg-blue-600 text-white">+ Nuevo ticket</button>
+    </div>
+
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6" id="sla-summary"></div>
+
+    <div class="bg-white rounded-xl border overflow-hidden">
+      <table class="w-full text-sm">
+        <thead class="bg-gray-50 text-left text-xs uppercase text-gray-500">
+          <tr>
+            <th class="px-4 py-3">Código</th>
+            <th class="px-4 py-3">Título</th>
+            <th class="px-4 py-3">Prioridad</th>
+            <th class="px-4 py-3">Estado</th>
+            <th class="px-4 py-3">SLA Resolución</th>
+            <th class="px-4 py-3">Abierto</th>
+            <th class="px-4 py-3"></th>
+          </tr>
+        </thead>
+        <tbody id="ticket-list"></tbody>
+      </table>
+    </div>
+  </main>
+
+  <div id="modal" class="hidden fixed inset-0 z-50 modal-backdrop items-center justify-center p-4">
+    <div class="bg-white rounded-xl w-full max-w-lg p-6 shadow-xl">
+      <h3 class="text-lg font-semibold mb-4">Nuevo ticket</h3>
+      <form id="ticket-form" class="space-y-3">
+        <input name="title" placeholder="Título" class="w-full border rounded-lg px-3 py-2" required>
+        <textarea name="description" placeholder="Descripción" class="w-full border rounded-lg px-3 py-2"></textarea>
+        <div class="grid grid-cols-2 gap-3">
+          <select name="ticket_type" class="border rounded-lg px-3 py-2">
+            <option value="incident">Incident</option>
+            <option value="request">Request</option>
+            <option value="problem">Problem</option>
+            <option value="change">Change</option>
+          </select>
+          <select name="priority" class="border rounded-lg px-3 py-2">
+            <option value="low">Low</option><option value="medium" selected>Medium</option>
+            <option value="high">High</option><option value="critical">Critical</option>
+          </select>
+        </div>
+        <div class="flex justify-end gap-2 pt-2">
+          <button type="button" id="cancel-btn" class="px-4 py-2 rounded-lg border">Cancelar</button>
+          <button type="submit" class="px-4 py-2 rounded-lg bg-blue-600 text-white">Crear</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script src="/js/api.js"></script>
+  <script src="/js/app.js"></script>
+  <script src="/js/nav.js"></script>
+  <script>
+    document.getElementById('nav').innerHTML = renderTopNav('itil');
+
+    let tickets = [];
+
+    function slaTimer(due) {
+      if (!due) return '—';
+      const ms = new Date(due).getTime() - Date.now();
+      const sign = ms < 0 ? '-' : '';
+      const abs = Math.abs(ms);
+      const h = Math.floor(abs / 3600000);
+      const m = Math.floor((abs % 3600000) / 60000);
+      const s = Math.floor((abs % 60000) / 1000);
+      const cls = ms < 0 ? 'danger' : (ms < abs * 0.2 ? 'warn' : 'ok');
+      return `<span class="sla-timer ${cls}" data-due="${due}">${sign}${h}h ${m.toString().padStart(2,'0')}m ${s.toString().padStart(2,'0')}s</span>`;
+    }
+
+    function render() {
+      // Summary
+      const summary = { open: 0, in_progress: 0, resolved: 0, breached: 0 };
+      tickets.forEach(t => {
+        if (t.status === 'open') summary.open++;
+        if (t.status === 'in_progress') summary.in_progress++;
+        if (t.status === 'resolved' || t.status === 'closed') summary.resolved++;
+        if (t.sla_resolution_due && new Date(t.sla_resolution_due) < new Date() && !['resolved','closed'].includes(t.status)) summary.breached++;
+      });
+      document.getElementById('sla-summary').innerHTML = `
+        <div class="kpi-card p-5 rounded-xl"><div class="text-xs uppercase text-gray-500">Abiertos</div><div class="text-3xl font-bold text-blue-600 mt-1">${summary.open}</div></div>
+        <div class="kpi-card p-5 rounded-xl"><div class="text-xs uppercase text-gray-500">En curso</div><div class="text-3xl font-bold text-amber-600 mt-1">${summary.in_progress}</div></div>
+        <div class="kpi-card p-5 rounded-xl"><div class="text-xs uppercase text-gray-500">Resueltos</div><div class="text-3xl font-bold text-green-600 mt-1">${summary.resolved}</div></div>
+        <div class="kpi-card p-5 rounded-xl"><div class="text-xs uppercase text-gray-500">SLA Incumplidos</div><div class="text-3xl font-bold text-red-600 mt-1">${summary.breached}</div></div>
+      `;
+
+      document.getElementById('ticket-list').innerHTML = tickets.map(t => `
+        <tr class="border-t hover:bg-gray-50">
+          <td class="px-4 py-3 font-mono text-xs">${escapeHtml(t.code || '')}</td>
+          <td class="px-4 py-3">${escapeHtml(t.title)}</td>
+          <td class="px-4 py-3">${priorityBadge(t.priority)}</td>
+          <td class="px-4 py-3">${statusBadge(t.status)}</td>
+          <td class="px-4 py-3">${slaTimer(t.sla_resolution_due)}</td>
+          <td class="px-4 py-3 text-xs text-gray-500">${fmt(t.opened_at)}</td>
+          <td class="px-4 py-3">
+            <select data-id="${t.id}" class="status-sel border rounded px-2 py-1 text-xs">
+              <option ${t.status==='open'?'selected':''} value="open">open</option>
+              <option ${t.status==='in_progress'?'selected':''} value="in_progress">in_progress</option>
+              <option ${t.status==='pending'?'selected':''} value="pending">pending</option>
+              <option ${t.status==='resolved'?'selected':''} value="resolved">resolved</option>
+              <option ${t.status==='closed'?'selected':''} value="closed">closed</option>
+            </select>
+          </td>
+        </tr>
+      `).join('');
+
+      document.querySelectorAll('.status-sel').forEach(sel => {
+        sel.addEventListener('change', async () => {
+          try {
+            await api.itil.updateTicket(sel.dataset.id, { status: sel.value });
+            await load();
+          } catch (e) { alert(e.message); }
+        });
+      });
+    }
+
+    async function load() {
+      tickets = await api.itil.tickets().catch(() => []);
+      render();
+    }
+
+    setInterval(() => {
+      // Just re-render timers without full reload
+      document.querySelectorAll('.sla-timer').forEach(el => {
+        const due = el.dataset.due;
+        const html = slaTimer(due);
+        el.outerHTML = html;
+      });
+    }, 1000);
+
+    const modal = document.getElementById('modal');
+    document.getElementById('new-ticket-btn').addEventListener('click', () => modal.classList.remove('hidden'));
+    document.getElementById('cancel-btn').addEventListener('click', () => modal.classList.add('hidden'));
+    document.getElementById('ticket-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const fd = new FormData(e.target);
+      const body = Object.fromEntries(fd.entries());
+      try {
+        await api.itil.createTicket(body);
+        modal.classList.add('hidden'); e.target.reset();
+        await load();
+      } catch (err) { alert(err.message); }
+    });
+
+    (async () => { await AppState.init(); await load(); })();
+  </script>
+</body>
+</html>
