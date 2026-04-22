@@ -1,0 +1,194 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ---------------------------------------------------------
+// ENUMERADORES (Tipos definidos)
+// ---------------------------------------------------------
+
+enum Role {
+  ADMIN
+  PROJECT_MANAGER
+  SCRUM_MASTER
+  SERVICE_DESK
+  DEVELOPER
+  STAKEHOLDER
+}
+
+enum TaskType {
+  AGILE_STORY
+  PMI_TASK
+  ITIL_TICKET
+}
+
+enum DependencyType {
+  FINISH_TO_START   // FS
+  START_TO_START    // SS
+  FINISH_TO_FINISH  // FF
+  START_TO_FINISH   // SF
+}
+
+enum ProjectStatus {
+  PLANNING
+  ACTIVE
+  ON_HOLD
+  COMPLETED
+}
+
+enum TaskStatus {
+  TODO
+  IN_PROGRESS
+  REVIEW
+  DONE
+}
+
+enum Priority {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+// ---------------------------------------------------------
+// ENTIDADES PRINCIPALES
+// ---------------------------------------------------------
+
+model User {
+  id             String    @id @default(uuid())
+  name           String
+  email          String    @unique
+  role           Role      @default(DEVELOPER)
+  
+  // Relaciones
+  managedProjects Project[] @relation("ProjectManager")
+  tasks          Task[]    @relation("TaskAssignee")
+  
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+}
+
+model Project {
+  id             String    @id @default(uuid())
+  name           String
+  description    String?
+  status         ProjectStatus @default(PLANNING)
+  
+  managerId      String?
+  manager        User?     @relation("ProjectManager", fields: [managerId], references: [id])
+
+  // Relaciones Híbridas
+  sprints        Sprint[]
+  columns        BoardColumn[]
+  tasks          Task[]
+  baselines      Baseline[]
+
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+}
+
+// Módulo Agile: Sprints y Columnas Kanban
+model Sprint {
+  id             String    @id @default(uuid())
+  name           String
+  goal           String?
+  startDate      DateTime
+  endDate        DateTime
+  status         ProjectStatus @default(PLANNING)
+  
+  projectId      String
+  project        Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  
+  tasks          Task[]
+
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+}
+
+model BoardColumn {
+  id             String    @id @default(uuid())
+  name           String
+  order          Int
+  wipLimit       Int?      // Límite de Work in Progress (AC Kanban)
+  
+  projectId      String
+  project        Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  
+  tasks          Task[]
+
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+}
+
+// Tarea Universal: Soporta Story (Agile), Hito/Tarea (Gantt) y Ticket (ITIL)
+model Task {
+  id             String    @id @default(uuid())
+  title          String
+  description    String?
+  type           TaskType  @default(AGILE_STORY)
+  status         TaskStatus @default(TODO)
+  priority       Priority   @default(MEDIUM)
+  
+  // Relaciones de Agrupación
+  projectId      String
+  project        Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  sprintId       String?
+  sprint         Sprint?   @relation(fields: [sprintId], references: [id])
+  columnId       String?
+  column         BoardColumn? @relation(fields: [columnId], references: [id])
+  
+  assigneeId     String?
+  assignee       User?     @relation("TaskAssignee", fields: [assigneeId], references: [id])
+
+  // Módulo PMI (Gantt)
+  startDate      DateTime?
+  endDate        DateTime?
+  progress       Int       @default(0) // 0 - 100%
+  isMilestone    Boolean   @default(false)
+  
+  // Dependencias (Gantt)
+  predecessors   TaskDependency[] @relation("SuccessorTask")
+  successors     TaskDependency[] @relation("PredecessorTask")
+
+  // Módulo ITIL (SLA Management)
+  slaResponseLimit    DateTime? // Límite de tiempo para responder
+  slaResolutionLimit  DateTime? // Límite de tiempo para resolver
+  isEscalated         Boolean   @default(false)
+
+  // Métricas Financieras y Flujo (KPIs)
+  estimatedHours Int?
+  actualHours    Int?
+  
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+}
+
+// Dependencias entre tareas (FS, SS, FF, SF)
+model TaskDependency {
+  id             String    @id @default(uuid())
+  
+  predecessorId  String
+  predecessor    Task      @relation("PredecessorTask", fields: [predecessorId], references: [id], onDelete: Cascade)
+  
+  successorId    String
+  successor      Task      @relation("SuccessorTask", fields: [successorId], references: [id], onDelete: Cascade)
+  
+  type           DependencyType @default(FINISH_TO_START)
+
+  @@unique([predecessorId, successorId])
+}
+
+// Módulo PMI: Líneas Base (Snapshots para calcular Schedule Variance)
+model Baseline {
+  id             String    @id @default(uuid())
+  version        Int       // Versión 1, 2, 3...
+  snapshotData   Json      // Json estructurado con el estado de las tareas en ese momento
+  
+  projectId      String
+  project        Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  createdAt      DateTime  @default(now())
+}
