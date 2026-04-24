@@ -2,6 +2,8 @@
 
 import prisma from '@/lib/prisma'
 import { revalidatePath } from 'next/cache'
+import { after } from 'next/server'
+import { sendMentionNotification } from '@/lib/email/mention-notification'
 import type {
   TaskType,
   ProjectStatus,
@@ -518,16 +520,6 @@ export async function getAreasByGerencia(gerenciaId: string) {
 // CRUD: COMENTARIOS / SEGUIMIENTO
 // =============================================
 
-/**
- * Simula el envío de un correo electrónico cuando se menciona a alguien.
- * En producción, esto se integraría con Resend, SendGrid, etc.
- */
-async function sendMentionEmail(userEmail: string, taskTitle: string, commentContent: string) {
-  console.log(`[EMAIL SIMULATION] Sending to ${userEmail}:`)
-  console.log(`Subject: Has sido mencionado en la tarea: ${taskTitle}`)
-  console.log(`Body: ${commentContent}`)
-}
-
 export async function createComment(formData: FormData) {
   const content = formData.get('content') as string
   const taskId = formData.get('taskId') as string
@@ -536,28 +528,57 @@ export async function createComment(formData: FormData) {
 
   if (!content || !taskId) throw new Error('Contenido y tarea son requeridos')
 
-  const comment = await prisma.comment.create({
-    data: { 
-      content, 
-      taskId, 
+  await prisma.comment.create({
+    data: {
+      content,
+      taskId,
       authorId: authorId || null,
-      isInternal
+      isInternal,
     },
-    include: { task: true }
   })
 
-  // Lógica de menciones: Buscar @email.com o @nombre
   const mentions = content.match(/@[\w.-]+@[\w.-]+\.\w+|@[\w.-]+/g)
   if (mentions) {
-    for (const mention of mentions) {
-      const target = mention.substring(1) // Quitar el @
-      // Buscar usuario por email o nombre
-      const user = await prisma.user.findFirst({
-        where: { OR: [{ email: target }, { name: target }] }
+    const handles = Array.from(new Set(mentions.map((m) => m.substring(1))))
+    const [mentionedUsers, task, author] = await Promise.all([
+      prisma.user.findMany({
+        where: { OR: [{ email: { in: handles } }, { name: { in: handles } }] },
+        select: { id: true, email: true, name: true },
+      }),
+      prisma.task.findUnique({
+        where: { id: taskId },
+        select: {
+          title: true,
+          mnemonic: true,
+          parent: { select: { title: true } },
+        },
+      }),
+      authorId
+        ? prisma.user.findUnique({ where: { id: authorId }, select: { name: true } })
+        : Promise.resolve(null),
+    ])
+
+    const recipients = mentionedUsers.filter((u) => u.id !== authorId)
+    if (task && recipients.length > 0) {
+      const authorName = author?.name ?? 'Un colaborador'
+      const parentTitle = task.parent?.title ?? null
+      after(async () => {
+        await Promise.all(
+          recipients.map((user) =>
+            sendMentionNotification({
+              to: user.email,
+              recipientName: user.name,
+              authorName,
+              taskTitle: task.title,
+              taskMnemonic: task.mnemonic,
+              commentContent: content,
+              taskId,
+              parentTaskTitle: parentTitle,
+              isInternal,
+            }),
+          ),
+        )
       })
-      if (user) {
-        await sendMentionEmail(user.email, comment.task.title, content)
-      }
     }
   }
 
