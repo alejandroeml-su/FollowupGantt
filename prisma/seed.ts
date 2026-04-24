@@ -9,8 +9,10 @@
  * Todas las entidades llevan el prefijo `test_` en sus IDs.
  */
 import { PrismaClient, Priority, TaskStatus, TaskType } from '@prisma/client'
+import { PrismaPg } from '@prisma/adapter-pg'
 
-const prisma = new PrismaClient()
+const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL! })
+const prisma = new PrismaClient({ adapter })
 
 const FIXED = {
   userId: 'test_user_alpha',

@@ -7,6 +7,8 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y --no-install-recommends openssl \
     && rm -rf /var/lib/apt/lists/*
 COPY package.json package-lock.json ./
+# prisma/ es necesario porque `postinstall: prisma generate` lo requiere.
+COPY prisma ./prisma
 RUN npm ci --no-audit --no-fund
 
 # ---- build ----

@@ -71,7 +71,7 @@ export default function AutomationsPage() {
                   </div>
                   <div>
                     <p className="text-xs text-slate-500 mb-0.5">CUANDO</p>
-                    <p className="text-sm text-slate-200 font-medium">El estado cambie a "REVIEW"</p>
+                    <p className="text-sm text-slate-200 font-medium">El estado cambie a &quot;REVIEW&quot;</p>
                   </div>
                 </div>
                 
