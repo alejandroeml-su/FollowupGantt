@@ -10,15 +10,6 @@ datasource db {
 // ENUMERADORES (Tipos definidos)
 // ---------------------------------------------------------
 
-enum Role {
-  ADMIN
-  PROJECT_MANAGER
-  SCRUM_MASTER
-  SERVICE_DESK
-  DEVELOPER
-  STAKEHOLDER
-}
-
 enum TaskType {
   AGILE_STORY
   PMI_TASK
@@ -61,7 +52,15 @@ model User {
   id             String    @id @default(uuid())
   name           String
   email          String    @unique
-  role           Role      @default(DEVELOPER)
+  
+  // Roles y Permisos
+  roles          UserRole[]
+  
+  // Equipos
+  teams          TeamMember[]
+
+  // Asignaciones a Proyectos (para restringir edición)
+  projectAssignments ProjectAssignment[]
   
   // Relaciones
   managedProjects Project[] @relation("ProjectManager")
@@ -73,6 +72,57 @@ model User {
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
 }
+
+model Role {
+  id          String    @id @default(uuid())
+  name        String    @unique // AGENTE, ADMIN, SUPER_ADMIN
+  description String?
+  permissions Json?     // Ejemplo: { "allowedViews": ["list", "kanban", "gantt"] }
+  
+  users       UserRole[]
+  
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+}
+
+model UserRole {
+  userId String
+  roleId String
+  user   User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role   Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  
+  @@id([userId, roleId])
+}
+
+model Team {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  description String?
+  
+  members     TeamMember[]
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model TeamMember {
+  teamId String
+  userId String
+  team   Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  user   User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@id([teamId, userId])
+}
+
+model ProjectAssignment {
+  projectId String
+  userId    String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user      User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@id([projectId, userId])
+}
+
 
 // Módulo de Estructura Organizacional
 model Gerencia {
@@ -125,6 +175,7 @@ model Project {
   columns        BoardColumn[]
   tasks          Task[]
   baselines      Baseline[]
+  assignments    ProjectAssignment[]
 
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt

@@ -3,11 +3,7 @@
 import prisma from '@/lib/prisma'
 import { revalidatePath } from 'next/cache'
 import type {
-  ProjectStatus,
-  TaskStatus,
-  Priority,
   TaskType,
-  Role,
 } from '@prisma/client'
 
 // =============================================
@@ -152,12 +148,33 @@ export async function updateTask(formData: FormData) {
   const plannedValue = formData.get('plannedValue') ? Number(formData.get('plannedValue')) : undefined
   const actualCost = formData.get('actualCost') ? Number(formData.get('actualCost')) : undefined
   const userId = formData.get('userId') as string || undefined // ID del usuario que hace el cambio
+  const userRoles = formData.get('userRoles') as string // JSON array de roles del usuario
 
   if (!id) throw new Error('ID es requerido')
 
+  // ─── Control de Acceso ───────────────────────────────────────────
+  // 1. Obtener la tarea y su proyecto
+  const taskToUpdate = await prisma.task.findUnique({ 
+    where: { id },
+    include: { project: { include: { assignments: true } } }
+  })
+  if (!taskToUpdate) throw new Error('Tarea no encontrada')
+
+  // 2. Verificar si el usuario es ADMIN/SUPER_ADMIN o si está asignado al proyecto
+  const roles = userRoles ? JSON.parse(userRoles) : []
+  const isAdmin = roles.some((r: string) => r === 'ADMIN' || r === 'SUPER_ADMIN')
+  
+  if (!isAdmin && userId) {
+    const isAssigned = taskToUpdate.project.assignments.some(a => a.userId === userId)
+    if (!isAssigned) {
+      throw new Error('No tienes permisos para editar tareas en este proyecto. Debes estar asignado al mismo.')
+    }
+  }
+  // ─────────────────────────────────────────────────────────────────
+
   // Obtener estado anterior para el historial
-  const oldTask = await prisma.task.findUnique({ where: { id } })
-  if (!oldTask) throw new Error('Tarea no encontrada')
+  const oldTask = taskToUpdate // ya la tenemos
+
 
   const data: Record<string, unknown> = {}
   const historyEntries: any[] = []
@@ -229,15 +246,90 @@ export async function updateTaskStatus(id: string, status: string) {
 export async function createUser(formData: FormData) {
   const name = formData.get('name') as string
   const email = formData.get('email') as string
-  const role = (formData.get('role') as string) || 'DEVELOPER'
+  const roleIds = formData.getAll('roleIds') as string[]
 
   if (!name || !email) throw new Error('Nombre y email son requeridos')
 
   await prisma.user.create({
-    data: { name, email, role: role as Role }
+    data: { 
+      name, 
+      email, 
+      roles: {
+        create: roleIds.map(roleId => ({ roleId }))
+      }
+    }
   })
   revalidatePath('/workload')
 }
+
+// =============================================
+// CRUD: ROLES Y PERMISOS
+// =============================================
+
+export async function createRole(formData: FormData) {
+  const name = formData.get('name') as string
+  const description = formData.get('description') as string || undefined
+  const allowedViews = formData.get('allowedViews') as string // JSON string array
+
+  if (!name) throw new Error('El nombre del rol es requerido')
+
+  await prisma.role.create({
+    data: { 
+      name: name.toUpperCase(), 
+      description,
+      permissions: allowedViews ? { allowedViews: JSON.parse(allowedViews) } : null
+    }
+  })
+  revalidatePath('/settings/roles')
+}
+
+export async function deleteRole(formData: FormData) {
+  const id = formData.get('id') as string
+  await prisma.role.delete({ where: { id } })
+  revalidatePath('/settings/roles')
+}
+
+// =============================================
+// CRUD: EQUIPOS
+// =============================================
+
+export async function createTeam(formData: FormData) {
+  const name = formData.get('name') as string
+  const description = formData.get('description') as string || undefined
+
+  if (!name) throw new Error('El nombre del equipo es requerido')
+
+  await prisma.team.create({
+    data: { name, description }
+  })
+  revalidatePath('/settings/teams')
+}
+
+export async function addMemberToTeam(teamId: string, userId: string) {
+  await prisma.teamMember.create({
+    data: { teamId, userId }
+  })
+  revalidatePath('/settings/teams')
+}
+
+// =============================================
+// ASIGNACIÓN DE PROYECTOS
+// =============================================
+
+export async function assignUserToProject(projectId: string, userId: string) {
+  await prisma.projectAssignment.create({
+    data: { projectId, userId }
+  })
+  revalidatePath('/projects')
+}
+
+export async function removeUserFromProject(projectId: string, userId: string) {
+  await prisma.projectAssignment.delete({
+    where: { projectId_userId: { projectId, userId } }
+  })
+  revalidatePath('/projects')
+}
+
 
 export async function deleteUser(formData: FormData) {
   const id = formData.get('id') as string

@@ -65,6 +65,8 @@ const menuGroups: RouteGroup[] = [
       { name: 'Gerencias', path: '/gerencias', icon: Building2 },
       { name: 'Proyectos', path: '/projects', icon: FolderKanban },
       { name: 'Usuarios', path: '/workload', icon: Users },
+      { name: 'Equipos', path: '/settings/teams', icon: Users },
+      { name: 'Roles & Permisos', path: '/settings/roles', icon: Settings },
     ],
   },
 ];
@@ -80,8 +82,37 @@ export default function Sidebar() {
   const mobileOpen = useUIStore((s) => s.mobileSidebarOpen);
   const setMobileOpen = useUIStore((s) => s.setMobileSidebarOpen);
 
+  // ─── Simulación de Usuario y Roles (Mapeo de Vistas) ────────────────
+  // En producción, esto vendría de la base de datos (prisma.user.findUnique...)
+  const currentUser = {
+    roles: [
+      { 
+        name: 'ADMIN', 
+        permissions: { allowedViews: ['list', 'kanban', 'gantt', 'table', 'docs', 'forms', 'gerencias', 'projects', 'workload', 'settings'] } 
+      }
+    ]
+  };
+
+  const allowedViews = currentUser.roles.flatMap(r => r.permissions.allowedViews);
+  const isAdmin = currentUser.roles.some(r => r.name === 'ADMIN' || r.name === 'SUPER_ADMIN');
+
+  // Filtrar rutas basadas en permisos
+  const filteredTopRoutes = topRoutes.filter(r => 
+    r.path === '/' || allowedViews.includes(r.path.replace('/', ''))
+  );
+
+  const filteredMenuGroups = menuGroups.map(group => ({
+    ...group,
+    routes: group.routes.filter(r => {
+      const viewName = r.path.split('/').pop() || '';
+      return allowedViews.includes(viewName) || isAdmin;
+    })
+  })).filter(group => group.routes.length > 0);
+
+  // ─────────────────────────────────────────────────────────────────
+
   // Determine which groups should start open (if a child is active)
-  const initialOpen = menuGroups.reduce<Record<string, boolean>>((acc, group) => {
+  const initialOpen = filteredMenuGroups.reduce<Record<string, boolean>>((acc, group) => {
     acc[group.label] = group.routes.some(r => r.path === pathname);
     return acc;
   }, {});
@@ -130,7 +161,7 @@ export default function Sidebar() {
 
           <nav className="flex-1 space-y-0.5">
             {/* ── Top-level routes ──────────────────────────── */}
-            {topRoutes.map(route => (
+            {filteredTopRoutes.map(route => (
               <NavLink key={route.path} route={route} pathname={pathname} onClick={() => setMobileOpen(false)} />
             ))}
 
@@ -138,7 +169,7 @@ export default function Sidebar() {
             <div className="!my-3 border-t border-border/60" />
 
             {/* ── Collapsible groups ────────────────────────── */}
-            {menuGroups.map(group => {
+            {filteredMenuGroups.map(group => {
               const isOpen = openGroups[group.label] ?? false;
               const hasActiveChild = group.routes.some(r => r.path === pathname);
               const GroupIcon = group.icon;
