@@ -79,7 +79,7 @@ jobs:
       - run: npm install -g tsx
       # En tests usamos `db push` (idempotente, no requiere migración baseline)
       # para crear el schema desde prisma/schema.prisma directamente.
-      - run: npx prisma db push --skip-generate --accept-data-loss
+      - run: npx prisma db push --accept-data-loss
       - run: tsx prisma/seed.ts
       - run: npm run build
       - name: Start Next.js
@@ -126,7 +126,7 @@ jobs:
           cache: npm
       - run: npm ci --no-audit --no-fund
       - run: npm install -g tsx
-      - run: npx prisma db push --skip-generate --accept-data-loss
+      - run: npx prisma db push --accept-data-loss
       - run: tsx prisma/seed.ts
       - run: npm run build
       - name: Start Next.js
