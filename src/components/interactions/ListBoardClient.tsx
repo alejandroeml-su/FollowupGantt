@@ -314,103 +314,105 @@ function Row({
     : 'Sin fecha'
 
   return (
-    <TaskWithContextMenu ctx={{ taskId: task.id }}>
-      <div
-        ref={setNodeRef}
-        style={style}
-        data-task-id={task.id}
-        data-focused={focused || undefined}
-        tabIndex={-1}
-        role="row"
-        onClick={(e) => {
-          if (e.ctrlKey || e.metaKey) {
-            e.preventDefault()
-            onToggleSelect(true)
-          } else {
-            onFocus()
-            openDrawer(task.id)
-          }
-        }}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter') {
-            e.preventDefault()
-            openDrawer(task.id)
-          }
-        }}
-        className={clsx(
-          'group grid cursor-pointer grid-cols-12 items-center gap-4 border-l-2 px-4 py-2.5 text-sm transition-all',
-          focused
-            ? 'border-indigo-500 bg-slate-800/60 outline-2 outline-indigo-500'
-            : selected
-              ? 'border-indigo-500/50 bg-indigo-500/5'
-              : 'border-transparent hover:border-indigo-500 hover:bg-slate-800/50',
-        )}
-      >
+    <>
+      <TaskWithContextMenu ctx={{ taskId: task.id }}>
         <div
-          className="col-span-4 flex items-center"
-          style={{ paddingLeft: `${level * 1.5}rem` }}
+          ref={setNodeRef}
+          style={style}
+          data-task-id={task.id}
+          data-focused={focused || undefined}
+          tabIndex={-1}
+          role="row"
+          onClick={(e) => {
+            if (e.ctrlKey || e.metaKey) {
+              e.preventDefault()
+              onToggleSelect(true)
+            } else {
+              onFocus()
+              openDrawer(task.id)
+            }
+          }}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault()
+              openDrawer(task.id)
+            }
+          }}
+          className={clsx(
+            'group grid cursor-pointer grid-cols-12 items-center gap-4 border-l-2 px-4 py-2.5 text-sm transition-all',
+            focused
+              ? 'border-indigo-500 bg-slate-800/60 outline-2 outline-indigo-500'
+              : selected
+                ? 'border-indigo-500/50 bg-indigo-500/5'
+                : 'border-transparent hover:border-indigo-500 hover:bg-slate-800/50',
+          )}
         >
-          {dragHandle}
+          <div
+            className="col-span-4 flex items-center"
+            style={{ paddingLeft: `${level * 1.5}rem` }}
+          >
+            {dragHandle}
 
-          {hasSubs ? (
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation()
-                onToggleExpand?.()
-              }}
-              aria-label={expanded ? 'Colapsar' : 'Expandir'}
-              className="mr-1 rounded p-0.5 text-slate-500 hover:bg-slate-700 hover:text-slate-300"
-            >
-              {expanded ? (
-                <ChevronDown className="h-4 w-4" />
-              ) : (
-                <ChevronRight className="h-4 w-4" />
-              )}
-            </button>
-          ) : (
-            <div className="mr-1 w-5" />
-          )}
+            {hasSubs ? (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  onToggleExpand?.()
+                }}
+                aria-label={expanded ? 'Colapsar' : 'Expandir'}
+                className="mr-1 rounded p-0.5 text-slate-500 hover:bg-slate-700 hover:text-slate-300"
+              >
+                {expanded ? (
+                  <ChevronDown className="h-4 w-4" />
+                ) : (
+                  <ChevronRight className="h-4 w-4" />
+                )}
+              </button>
+            ) : (
+              <div className="mr-1 w-5" />
+            )}
 
-          <span className={clsx('mr-2 h-4 w-4', statusColor)}>
-            {STATUS_ICON[task.status] ?? <Circle className="h-4 w-4" />}
-          </span>
-          <span className="truncate font-medium text-slate-200 group-hover:text-indigo-300">
-            {task.title}
-          </span>
-          {commentCount > 0 && (
-            <span className="ml-2 flex items-center gap-0.5 text-[10px] text-slate-500">
-              <MessageSquare className="h-3 w-3" /> {commentCount}
+            <span className={clsx('mr-2 h-4 w-4', statusColor)}>
+              {STATUS_ICON[task.status] ?? <Circle className="h-4 w-4" />}
             </span>
-          )}
-        </div>
+            <span className="truncate font-medium text-slate-200 group-hover:text-indigo-300">
+              {task.title}
+            </span>
+            {commentCount > 0 && (
+              <span className="ml-2 flex items-center gap-0.5 text-[10px] text-slate-500">
+                <MessageSquare className="h-3 w-3" /> {commentCount}
+              </span>
+            )}
+          </div>
 
-        <div className="col-span-2 flex items-center">
-          <UserCircle2 className="mr-2 h-4 w-4 text-slate-400" />
-          <span className="truncate text-xs text-slate-300">
-            {task.assignee?.name ?? 'Sin Asignar'}
-          </span>
-        </div>
+          <div className="col-span-2 flex items-center">
+            <UserCircle2 className="mr-2 h-4 w-4 text-slate-400" />
+            <span className="truncate text-xs text-slate-300">
+              {task.assignee?.name ?? 'Sin Asignar'}
+            </span>
+          </div>
 
-        <div className="col-span-2" onClick={(e) => e.stopPropagation()}>
-          <StatusSelector taskId={task.id} currentStatus={task.status} />
-        </div>
+          <div className="col-span-2" onClick={(e) => e.stopPropagation()}>
+            <StatusSelector taskId={task.id} currentStatus={task.status} />
+          </div>
 
-        <div className="col-span-2 flex items-center text-xs text-slate-400">
-          <Calendar className="mr-2 h-3.5 w-3.5" />
-          {dateStr}
-        </div>
+          <div className="col-span-2 flex items-center text-xs text-slate-400">
+            <Calendar className="mr-2 h-3.5 w-3.5" />
+            {dateStr}
+          </div>
 
-        <div className="col-span-1 flex justify-center">
-          <Flag className={clsx('h-4 w-4', priorityColor)} />
-        </div>
+          <div className="col-span-1 flex justify-center">
+            <Flag className={clsx('h-4 w-4', priorityColor)} />
+          </div>
 
-        <div className="col-span-1 flex justify-center text-xs text-slate-500">
-          #{task.id.substring(0, 4)}
+          <div className="col-span-1 flex justify-center text-xs text-slate-500">
+            #{task.id.substring(0, 4)}
+          </div>
         </div>
-      </div>
+      </TaskWithContextMenu>
       {children}
-    </TaskWithContextMenu>
+    </>
   )
 }
 
