@@ -25,26 +25,26 @@ export default function TaskForm({ projects, users }: TaskFormProps) {
       {open && (
         <form 
           action={createTask}
-          className="grid grid-cols-1 md:grid-cols-3 gap-3 bg-slate-900 border border-slate-800 rounded-xl p-5 mb-4"
+          className="grid grid-cols-1 md:grid-cols-3 gap-3 bg-card border border-border rounded-xl p-5 mb-4"
         >
           {/* Título */}
           <div className="md:col-span-2">
-            <label className="block text-xs font-medium text-slate-400 mb-1">Título *</label>
+            <label className="block text-xs font-medium text-muted-foreground mb-1">Título *</label>
             <input 
               name="title" 
               required 
               placeholder="Ej: Implementar login con Supabase Auth"
-              className="w-full rounded-md border border-slate-700 bg-slate-950 py-2 px-3 text-sm text-white placeholder-slate-500 focus:border-indigo-500 focus:outline-none"
+              className="w-full rounded-md border border-border bg-background py-2 px-3 text-sm text-white focus:border-indigo-500 focus:outline-none"
             />
           </div>
 
           {/* Proyecto */}
           <div>
-            <label className="block text-xs font-medium text-slate-400 mb-1">Proyecto *</label>
+            <label className="block text-xs font-medium text-muted-foreground mb-1">Proyecto *</label>
             <select 
               name="projectId" 
               required
-              className="w-full rounded-md border border-slate-700 bg-slate-950 py-2 px-3 text-sm text-white focus:border-indigo-500 focus:outline-none"
+              className="w-full rounded-md border border-border bg-background py-2 px-3 text-sm text-white focus:border-indigo-500 focus:outline-none"
             >
               <option value="">Seleccionar...</option>
               {projects.map(p => (
@@ -55,11 +55,11 @@ export default function TaskForm({ projects, users }: TaskFormProps) {
 
           {/* Prioridad */}
           <div>
-            <label className="block text-xs font-medium text-slate-400 mb-1">Prioridad</label>
+            <label className="block text-xs font-medium text-muted-foreground mb-1">Prioridad</label>
             <select 
               name="priority"
               defaultValue="MEDIUM"
-              className="w-full rounded-md border border-slate-700 bg-slate-950 py-2 px-3 text-sm text-white focus:border-indigo-500 focus:outline-none"
+              className="w-full rounded-md border border-border bg-background py-2 px-3 text-sm text-white focus:border-indigo-500 focus:outline-none"
             >
               <option value="LOW">Low</option>
               <option value="MEDIUM">Medium</option>
@@ -70,10 +70,10 @@ export default function TaskForm({ projects, users }: TaskFormProps) {
 
           {/* Tipo */}
           <div>
-            <label className="block text-xs font-medium text-slate-400 mb-1">Tipo</label>
+            <label className="block text-xs font-medium text-muted-foreground mb-1">Tipo</label>
             <select 
               name="type"
-              className="w-full rounded-md border border-slate-700 bg-slate-950 py-2 px-3 text-sm text-white focus:border-indigo-500 focus:outline-none"
+              className="w-full rounded-md border border-border bg-background py-2 px-3 text-sm text-white focus:border-indigo-500 focus:outline-none"
             >
               <option value="AGILE_STORY">Agile Story</option>
               <option value="PMI_TASK">PMI Task</option>
@@ -83,10 +83,10 @@ export default function TaskForm({ projects, users }: TaskFormProps) {
 
           {/* Asignado */}
           <div>
-            <label className="block text-xs font-medium text-slate-400 mb-1">Asignado</label>
+            <label className="block text-xs font-medium text-muted-foreground mb-1">Asignado</label>
             <select 
               name="assigneeId"
-              className="w-full rounded-md border border-slate-700 bg-slate-950 py-2 px-3 text-sm text-white focus:border-indigo-500 focus:outline-none"
+              className="w-full rounded-md border border-border bg-background py-2 px-3 text-sm text-white focus:border-indigo-500 focus:outline-none"
             >
               <option value="">Sin Asignar</option>
               {users.map(u => (
@@ -97,30 +97,30 @@ export default function TaskForm({ projects, users }: TaskFormProps) {
 
           {/* Fechas */}
           <div>
-            <label className="block text-xs font-medium text-slate-400 mb-1">Fecha Inicio</label>
+            <label className="block text-xs font-medium text-muted-foreground mb-1">Fecha Inicio</label>
             <input 
               name="startDate" 
               type="date"
-              className="w-full rounded-md border border-slate-700 bg-slate-950 py-2 px-3 text-sm text-white focus:border-indigo-500 focus:outline-none"
+              className="w-full rounded-md border border-border bg-background py-2 px-3 text-sm text-white focus:border-indigo-500 focus:outline-none"
             />
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-slate-400 mb-1">Fecha Final</label>
+            <label className="block text-xs font-medium text-muted-foreground mb-1">Fecha Final</label>
             <input 
               name="endDate" 
               type="date"
-              className="w-full rounded-md border border-slate-700 bg-slate-950 py-2 px-3 text-sm text-white focus:border-indigo-500 focus:outline-none"
+              className="w-full rounded-md border border-border bg-background py-2 px-3 text-sm text-white focus:border-indigo-500 focus:outline-none"
             />
           </div>
 
           {/* Descripción */}
           <div className="md:col-span-2">
-            <label className="block text-xs font-medium text-slate-400 mb-1">Descripción</label>
+            <label className="block text-xs font-medium text-muted-foreground mb-1">Descripción</label>
             <input 
               name="description" 
               placeholder="Descripción opcional..."
-              className="w-full rounded-md border border-slate-700 bg-slate-950 py-2 px-3 text-sm text-white placeholder-slate-500 focus:border-indigo-500 focus:outline-none"
+              className="w-full rounded-md border border-border bg-background py-2 px-3 text-sm text-white focus:border-indigo-500 focus:outline-none"
             />
           </div>
 

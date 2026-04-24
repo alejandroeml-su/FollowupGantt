@@ -58,22 +58,22 @@ export function MindMapsBoardClient({
   }, [projects, filters])
 
   return (
-    <div className="flex h-full flex-col bg-slate-950 overflow-hidden">
-      <header className="flex h-16 shrink-0 items-center justify-between border-b border-slate-800 px-8 bg-slate-900/50 z-10">
+    <div className="flex h-full flex-col bg-background overflow-hidden">
+      <header className="flex h-16 shrink-0 items-center justify-between border-b border-border px-8 bg-subtle/50 z-10">
         <div>
           <h1 className="text-xl font-semibold text-white flex items-center gap-2">
             <Network className="h-5 w-5 text-indigo-400" />
             Mind Maps (Supabase SSR)
           </h1>
-          <p className="mt-1 text-xs text-slate-400">Estructura lógica y desglose de trabajo jerárquico</p>
+          <p className="mt-1 text-xs text-muted-foreground">Estructura lógica y desglose de trabajo jerárquico</p>
         </div>
         <div className="flex items-center gap-3">
-          <div className="flex items-center rounded-md bg-slate-800 p-1 border border-slate-700">
-            <button className="p-1.5 text-slate-400 hover:text-white rounded hover:bg-slate-700 transition-colors">
+          <div className="flex items-center rounded-md bg-secondary p-1 border border-border">
+            <button className="p-1.5 text-muted-foreground hover:text-white rounded hover:bg-secondary/80 transition-colors">
               <ZoomOut className="h-4 w-4" />
             </button>
-            <span className="px-2 text-xs font-medium text-slate-400">100%</span>
-            <button className="p-1.5 text-slate-400 hover:text-white rounded hover:bg-slate-700 transition-colors">
+            <span className="px-2 text-xs font-medium text-muted-foreground">100%</span>
+            <button className="p-1.5 text-muted-foreground hover:text-white rounded hover:bg-secondary/80 transition-colors">
               <ZoomIn className="h-4 w-4" />
             </button>
           </div>
@@ -104,7 +104,7 @@ export function MindMapsBoardClient({
 
         <div className="relative min-h-[800px] min-w-[1200px] p-20 flex justify-center items-center">
           {visibleProjects.length === 0 ? (
-            <div className="text-slate-500 bg-slate-900 p-4 rounded-xl border border-slate-800">
+            <div className="text-muted-foreground bg-card p-4 rounded-xl border border-border">
               No hay proyectos o tareas que coincidan con los filtros actuales.
             </div>
           ) : (
@@ -116,35 +116,35 @@ export function MindMapsBoardClient({
                     <p className="text-xs text-indigo-300">Proyecto Raíz</p>
                   </div>
 
-                  {project.tasks.length > 0 && <div className="w-0.5 h-12 bg-slate-700" />}
+                  {project.tasks.length > 0 && <div className="w-0.5 h-12 bg-border" />}
 
                   <div className="flex gap-8 relative">
                     {project.tasks.length > 1 && (
                       <div
-                        className="absolute top-0 left-[50%] right-[50%] h-0.5 bg-slate-700"
+                        className="absolute top-0 left-[50%] right-[50%] h-0.5 bg-border"
                         style={{ width: `calc(100% - ${100 / project.tasks.length}%)`, transform: 'translateX(-50%)' }}
                       />
                     )}
 
                     {project.tasks.map(task => (
                       <div key={task.id} className="flex flex-col items-center relative">
-                        {project.tasks.length > 1 && <div className="w-0.5 h-8 bg-slate-700" />}
+                        {project.tasks.length > 1 && <div className="w-0.5 h-8 bg-border" />}
 
-                        <div className="bg-slate-800 border border-slate-600 rounded-xl p-4 w-48 text-center shadow-lg z-10 hover:border-indigo-400 transition-colors cursor-pointer">
-                          <p className="text-sm font-semibold text-slate-200 truncate">{task.title}</p>
-                          <span className="inline-block mt-2 px-2 py-0.5 bg-slate-900 rounded text-[10px] text-slate-400">
+                        <div className="bg-secondary border border-border rounded-xl p-4 w-48 text-center shadow-lg z-10 hover:border-indigo-400 transition-colors cursor-pointer">
+                          <p className="text-sm font-semibold text-foreground truncate">{task.title}</p>
+                          <span className="inline-block mt-2 px-2 py-0.5 bg-card rounded text-[10px] text-muted-foreground">
                             {task.status}
                           </span>
                         </div>
 
-                        {(task.subtasks?.length ?? 0) > 0 && <div className="w-0.5 h-8 bg-slate-700" />}
+                        {(task.subtasks?.length ?? 0) > 0 && <div className="w-0.5 h-8 bg-border" />}
 
                         <div className="flex flex-col gap-4">
                           {(task.subtasks ?? []).map(sub => (
                             <div key={sub.id} className="flex items-center relative">
-                              <div className="w-4 h-0.5 bg-slate-700 absolute -left-4" />
-                              <div className="bg-slate-900 border border-slate-700 rounded-lg p-3 w-40 text-center shadow-md hover:border-slate-500 transition-colors cursor-pointer">
-                                <p className="text-xs font-medium text-slate-300 truncate">{sub.title}</p>
+                              <div className="w-4 h-0.5 bg-border absolute -left-4" />
+                              <div className="bg-card border border-border rounded-lg p-3 w-40 text-center shadow-md hover:border-border transition-colors cursor-pointer">
+                                <p className="text-xs font-medium text-foreground/90 truncate">{sub.title}</p>
                               </div>
                             </div>
                           ))}

@@ -76,10 +76,10 @@ const TYPE_COLOR: Record<string, string> = {
 }
 
 const PRIORITY_COLOR: Record<string, string> = {
-  CRITICAL: 'bg-red-500/10 text-red-500 border-red-500/20',
-  HIGH: 'bg-orange-500/10 text-orange-500 border-orange-500/20',
-  MEDIUM: 'bg-amber-500/10 text-amber-500 border-amber-500/20',
-  LOW: 'bg-blue-500/10 text-blue-500 border-blue-500/20',
+  CRITICAL: 'bg-red-500/15 text-red-300 border-red-500/40',
+  HIGH: 'bg-amber-500/15 text-amber-300 border-amber-500/40',
+  MEDIUM: 'bg-blue-500/15 text-blue-300 border-blue-500/40',
+  LOW: 'bg-secondary text-muted-foreground border-border',
 }
 
 // Parser de errores tipados devueltos por las server actions
@@ -319,7 +319,7 @@ export function KanbanBoardClient({
             <>
               {drawerTask.project?.name}
               {' › '}
-              <span className="text-slate-300">
+              <span className="text-foreground/90">
                 #{drawerTask.id.substring(0, 6)}
               </span>
             </>
@@ -366,8 +366,8 @@ function DragOverlayCard({
     .find((t) => t.id === activeId)
 
   return (
-    <div className="relative rounded-lg border border-indigo-500/50 bg-slate-800 p-4 shadow-xl">
-      <p className="truncate text-sm font-medium text-slate-200">
+    <div className="relative rounded-lg border border-indigo-500/50 bg-secondary p-4 shadow-xl">
+      <p className="truncate text-sm font-medium text-foreground">
         {task?.title ?? activeId}
       </p>
       {isBulk && (
@@ -414,11 +414,11 @@ function BoardColumn({
       ref={setNodeRef}
       style={accent ? ({ ['--col-accent' as string]: accent }) : undefined}
       className={clsx(
-        'flex h-full shrink-0 flex-col rounded-xl border bg-slate-900/80 transition-[width]',
+        'flex h-full shrink-0 flex-col rounded-xl border bg-subtle/80 transition-[width]',
         collapsed ? 'w-12 items-center' : 'w-80',
         isOver
           ? 'border-indigo-500 ring-2 ring-indigo-500/40'
-          : 'border-slate-800',
+          : 'border-border',
       )}
       aria-label={`Columna ${column.title}`}
       role="group"
@@ -429,7 +429,7 @@ function BoardColumn({
         trigger={
           <div
             className={clsx(
-              'flex w-full items-center justify-between border-b border-slate-800/50 p-4',
+              'flex w-full items-center justify-between border-b border-border/50 p-4',
               isOverWip && 'rounded-t-xl bg-red-500/5',
               collapsed && 'flex-col gap-2 p-3',
             )}
@@ -449,7 +449,7 @@ function BoardColumn({
             >
               {!collapsed && (
                 <h3
-                  className="font-semibold text-slate-200"
+                  className="font-semibold text-foreground"
                   style={accent ? { color: accent } : undefined}
                 >
                   {column.title}
@@ -462,7 +462,7 @@ function BoardColumn({
                     ? 'bg-red-500/20 text-red-400 ring-1 ring-red-500/30'
                     : nearWip
                       ? 'bg-amber-500/20 text-amber-300 ring-1 ring-amber-500/30'
-                      : 'bg-slate-800 text-slate-400',
+                      : 'bg-secondary text-muted-foreground',
                 )}
                 aria-live="polite"
               >
@@ -470,7 +470,7 @@ function BoardColumn({
                 {effectiveWip != null ? ` / ${effectiveWip}` : ''}
               </span>
               {collapsed && (
-                <span className="rotate-180 text-[10px] uppercase tracking-widest text-slate-500 [writing-mode:vertical-rl]">
+                <span className="rotate-180 text-[10px] uppercase tracking-widest text-muted-foreground [writing-mode:vertical-rl]">
                   {column.title}
                 </span>
               )}
@@ -479,7 +479,7 @@ function BoardColumn({
               <button
                 type="button"
                 aria-label={`Opciones de ${column.title}`}
-                className="text-slate-500 hover:text-slate-300"
+                className="text-muted-foreground hover:text-foreground/90"
                 onClick={(e) => {
                   // abrir menú contextual con clic izquierdo en los "..."
                   e.preventDefault()
@@ -517,7 +517,7 @@ function BoardColumn({
               />
             ))}
             {tasks.length === 0 && (
-              <div className="rounded-lg border-2 border-dashed border-slate-800 p-4 text-center text-xs text-slate-600">
+              <div className="rounded-lg border-2 border-dashed border-border p-4 text-center text-xs text-muted-foreground">
                 Soltar aquí
               </div>
             )}
@@ -526,10 +526,10 @@ function BoardColumn({
       )}
 
       {!collapsed && (
-        <div className="border-t border-slate-800 p-2">
+        <div className="border-t border-border p-2">
           <button
             type="button"
-            className="flex w-full items-center justify-center gap-1 rounded text-xs text-slate-500 hover:text-slate-300"
+            className="flex w-full items-center justify-center gap-1 rounded text-xs text-muted-foreground hover:text-foreground/90"
           >
             <Plus className="h-3 w-3" /> Añadir tarea
           </button>
@@ -591,13 +591,13 @@ function SortableKanbanCard({
           onOpenDrawer(task.id)
         }}
         className={clsx(
-          'group relative flex flex-col gap-3 rounded-lg border bg-slate-800 p-4 shadow-sm transition-all',
+          'group relative flex flex-col gap-3 rounded-lg border bg-secondary p-4 shadow-sm transition-all',
           'hover:border-indigo-500/50 hover:shadow-md focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-500',
           focused
             ? 'border-indigo-500 ring-2 ring-indigo-500/60'
             : selected
               ? 'border-indigo-500 ring-2 ring-indigo-500/40'
-              : 'border-slate-700/50',
+              : 'border-border/50',
         )}
       >
         <div
@@ -607,7 +607,7 @@ function SortableKanbanCard({
           )}
         />
         <div className="flex items-start justify-between pl-2">
-          <p className="text-sm font-medium leading-snug text-slate-200">
+          <p className="text-sm font-medium leading-snug text-foreground">
             {task.title}
           </p>
           <button
@@ -615,18 +615,18 @@ function SortableKanbanCard({
             {...(listeners as Record<string, unknown>)}
             aria-label="Arrastrar"
             onClick={(e) => e.stopPropagation()}
-            className="cursor-grab text-slate-600 opacity-0 transition-opacity group-hover:opacity-100 active:cursor-grabbing"
+            className="cursor-grab text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100 active:cursor-grabbing"
           >
             <GripVertical className="h-4 w-4" />
           </button>
         </div>
         <div className="mt-2 flex items-center justify-between pl-2">
           <div className="flex items-center gap-2">
-            <span className="text-xs text-slate-500" title={task.id}>
+            <span className="text-xs text-muted-foreground" title={task.id}>
               #{task.id.substring(0, 6)}
             </span>
             {commentCount > 0 && (
-              <span className="flex items-center gap-0.5 text-[10px] text-slate-500">
+              <span className="flex items-center gap-0.5 text-[10px] text-muted-foreground">
                 <MessageSquare className="h-3 w-3" /> {commentCount}
               </span>
             )}
@@ -635,7 +635,7 @@ function SortableKanbanCard({
             className={clsx(
               'inline-flex items-center rounded border px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider',
               PRIORITY_COLOR[task.priority] ??
-                'bg-slate-500/10 text-slate-500 border-slate-500/20',
+                'bg-slate-500/10 text-muted-foreground border-slate-500/20',
             )}
           >
             {task.priority}

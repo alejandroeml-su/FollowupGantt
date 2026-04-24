@@ -19,11 +19,11 @@ export default function AreaFormClient({ gerencias }: AreaFormClientProps) {
     <>
       {/* Selector de Gerencia */}
       <div>
-        <label className="block text-xs font-medium text-slate-400 mb-1">Gerencia</label>
+        <label className="block text-xs font-medium text-muted-foreground mb-1">Gerencia</label>
         <select
           value={selectedGerenciaId}
           onChange={(e) => setSelectedGerenciaId(e.target.value)}
-          className="w-full rounded-md border border-slate-700 bg-slate-950 py-2 px-3 text-sm text-white focus:border-indigo-500 focus:outline-none"
+          className="w-full rounded-md border border-border bg-background py-2 px-3 text-sm text-white focus:border-indigo-500 focus:outline-none"
         >
           <option value="">Seleccionar Gerencia...</option>
           {gerencias.map(g => (
@@ -34,13 +34,13 @@ export default function AreaFormClient({ gerencias }: AreaFormClientProps) {
 
       {/* Selector de Área (dependiente de Gerencia) */}
       <div>
-        <label className="block text-xs font-medium text-slate-400 mb-1">
-          Área {!selectedGerenciaId && <span className="text-slate-600">(selecciona gerencia primero)</span>}
+        <label className="block text-xs font-medium text-muted-foreground mb-1">
+          Área {!selectedGerenciaId && <span className="text-muted-foreground">(selecciona gerencia primero)</span>}
         </label>
         <select
           name="areaId"
           disabled={!selectedGerenciaId}
-          className="w-full rounded-md border border-slate-700 bg-slate-950 py-2 px-3 text-sm text-white focus:border-indigo-500 focus:outline-none disabled:opacity-40 disabled:cursor-not-allowed"
+          className="w-full rounded-md border border-border bg-background py-2 px-3 text-sm text-white focus:border-indigo-500 focus:outline-none disabled:opacity-40 disabled:cursor-not-allowed"
         >
           <option value="">
             {selectedGerenciaId

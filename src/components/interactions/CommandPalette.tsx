@@ -132,10 +132,10 @@ export function CommandPalette() {
     <Dialog.Root open={open} onOpenChange={(v) => toggle(v)}>
       <Dialog.Portal>
         <Dialog.Overlay className="fixed inset-0 z-50 bg-black/40" />
-        <Dialog.Content className="fixed left-1/2 top-[20%] z-50 w-full max-w-xl -translate-x-1/2 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-2xl dark:border-slate-700 dark:bg-slate-900">
+        <Dialog.Content className="fixed left-1/2 top-[20%] z-50 w-full max-w-xl -translate-x-1/2 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-2xl dark:border-border dark:bg-card">
           <Dialog.Title className="sr-only">Paleta de comandos</Dialog.Title>
-          <div className="flex items-center gap-2 border-b border-slate-200 px-3 py-2 dark:border-slate-800">
-            <Search className="h-4 w-4 text-slate-500" aria-hidden />
+          <div className="flex items-center gap-2 border-b border-slate-200 px-3 py-2 dark:border-border">
+            <Search className="h-4 w-4 text-muted-foreground" aria-hidden />
             <input
               autoFocus
               value={q}
@@ -145,9 +145,9 @@ export function CommandPalette() {
                   ? 'Buscar tareas, proyectos o acciones…'
                   : 'Cargando datos…'
               }
-              className="w-full bg-transparent text-sm outline-none placeholder:text-slate-400"
+              className="w-full bg-transparent text-sm outline-none"
             />
-            <kbd className="rounded bg-slate-100 px-1.5 py-0.5 font-mono text-xs text-slate-500 dark:bg-slate-800">
+            <kbd className="rounded bg-slate-100 px-1.5 py-0.5 font-mono text-xs text-muted-foreground dark:bg-secondary">
               Esc
             </kbd>
           </div>
@@ -160,20 +160,20 @@ export function CommandPalette() {
                     c.onRun()
                     toggle(false)
                   }}
-                  className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left text-sm hover:bg-blue-50 dark:hover:bg-slate-800"
+                  className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left text-sm hover:bg-blue-50 dark:hover:bg-secondary"
                 >
                   <span className="flex items-center gap-2">
                     <KindBadge k={c.kind} />
                     <span>{c.label}</span>
                   </span>
                   {c.hint && (
-                    <span className="text-xs text-slate-500">{c.hint}</span>
+                    <span className="text-xs text-muted-foreground">{c.hint}</span>
                   )}
                 </button>
               </li>
             ))}
             {results.length === 0 && (
-              <li className="px-3 py-6 text-center text-sm text-slate-500">
+              <li className="px-3 py-6 text-center text-sm text-muted-foreground">
                 Sin coincidencias
               </li>
             )}

@@ -62,7 +62,7 @@ export function ColumnContextMenu({
         label: sw.label,
         icon: (
           <span
-            className="inline-block h-3 w-3 rounded-full border border-slate-600"
+            className="inline-block h-3 w-3 rounded-full border border-border"
             style={{ backgroundColor: sw.color ?? 'transparent' }}
             aria-hidden
           />

@@ -29,15 +29,15 @@ export function TaskDrawer({
       <Dialog.Portal>
         <Dialog.Overlay className="fixed inset-0 z-40 bg-black/20 data-[state=open]:animate-in data-[state=open]:fade-in" />
         <Dialog.Content
-          className="fixed inset-y-0 right-0 z-50 flex h-full w-full max-w-[520px] flex-col border-l border-slate-200 bg-white shadow-xl outline-none md:max-w-[520px] max-md:max-w-full dark:border-slate-800 dark:bg-slate-950"
+          className="fixed inset-y-0 right-0 z-50 flex h-full w-full max-w-[520px] flex-col border-l border-slate-200 bg-white shadow-xl outline-none md:max-w-[520px] max-md:max-w-full dark:border-border dark:bg-background"
           onOpenAutoFocus={(e) => e.preventDefault()}
         >
-          <header className="flex items-center gap-2 border-b border-slate-200 px-4 py-3 dark:border-slate-800">
+          <header className="flex items-center gap-2 border-b border-slate-200 px-4 py-3 dark:border-border">
             <button
               type="button"
               aria-label="Anterior (K)"
               onClick={onPrev}
-              className="rounded p-1 hover:bg-slate-100 dark:hover:bg-slate-800"
+              className="rounded p-1 hover:bg-secondary dark:hover:bg-secondary"
             >
               <ChevronLeft className="h-4 w-4" />
             </button>
@@ -45,18 +45,18 @@ export function TaskDrawer({
               type="button"
               aria-label="Siguiente (J)"
               onClick={onNext}
-              className="rounded p-1 hover:bg-slate-100 dark:hover:bg-slate-800"
+              className="rounded p-1 hover:bg-secondary dark:hover:bg-secondary"
             >
               <ChevronRight className="h-4 w-4" />
             </button>
-            <div className="min-w-0 flex-1 truncate text-xs text-slate-500">
+            <div className="min-w-0 flex-1 truncate text-xs text-muted-foreground">
               {breadcrumbs}
             </div>
             <Dialog.Close asChild>
               <button
                 type="button"
                 aria-label="Cerrar (Esc)"
-                className="rounded p-1 hover:bg-slate-100 dark:hover:bg-slate-800"
+                className="rounded p-1 hover:bg-secondary dark:hover:bg-secondary"
               >
                 <X className="h-4 w-4" />
               </button>
@@ -83,7 +83,7 @@ export function TaskBreadcrumbs({
           {s.href ? (
             <a
               href={s.href}
-              className="truncate hover:text-slate-900 dark:hover:text-slate-100"
+              className="truncate hover:text-foreground dark:hover:text-foreground"
             >
               {s.label}
             </a>

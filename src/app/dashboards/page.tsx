@@ -47,14 +47,14 @@ export default async function DashboardsPage({
   ])
 
   return (
-    <div className="flex h-full flex-col bg-slate-950">
-      <header className="flex h-16 shrink-0 items-center justify-between border-b border-slate-800 bg-slate-900/50 px-8">
+    <div className="flex h-full flex-col bg-background">
+      <header className="flex h-16 shrink-0 items-center justify-between border-b border-border bg-subtle/50 px-8">
         <div>
           <h1 className="flex items-center gap-2 text-xl font-semibold text-white">
             <LayoutTemplate className="h-5 w-5 text-indigo-400" />
             Dashboards Ejecutivos & Gobernanza
           </h1>
-          <p className="mt-1 text-xs text-slate-400">
+          <p className="mt-1 text-xs text-muted-foreground">
             KPIs PMBOK · EVM · Retorno · Eficiencia operativa
           </p>
         </div>
@@ -67,8 +67,8 @@ export default async function DashboardsPage({
           <KPIDashboardView kpis={kpis} />
 
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-            <div className="flex flex-col overflow-hidden rounded-2xl border border-slate-800/80 bg-slate-900/60 shadow-sm backdrop-blur">
-              <div className="flex items-center justify-between border-b border-slate-800 p-5">
+            <div className="flex flex-col overflow-hidden rounded-2xl border border-border/80 bg-card/60 shadow-sm backdrop-blur">
+              <div className="flex items-center justify-between border-b border-border p-5">
                 <h3 className="flex items-center gap-2 font-semibold text-white">
                   <AlertTriangle className="h-4 w-4 text-rose-400" />
                   Matriz de Riesgos (Impacto vs Probabilidad)
@@ -107,8 +107,8 @@ export default async function DashboardsPage({
               </div>
             </div>
 
-            <div className="flex flex-col overflow-hidden rounded-2xl border border-slate-800/80 bg-slate-900/60 shadow-sm backdrop-blur">
-              <div className="flex items-center justify-between border-b border-slate-800 p-5">
+            <div className="flex flex-col overflow-hidden rounded-2xl border border-border/80 bg-card/60 shadow-sm backdrop-blur">
+              <div className="flex items-center justify-between border-b border-border p-5">
                 <h3 className="flex items-center gap-2 font-semibold text-white">
                   <GitCompare className="h-4 w-4 text-blue-400" />
                   Gap Analysis (TI)
@@ -117,29 +117,29 @@ export default async function DashboardsPage({
               <div className="flex-1 space-y-6 p-6">
                 <div>
                   <div className="mb-2 flex justify-between text-sm">
-                    <span className="text-slate-400">Infraestructura On-Premise (AS-IS)</span>
+                    <span className="text-muted-foreground">Infraestructura On-Premise (AS-IS)</span>
                     <span className="font-medium text-indigo-400">AWS Cloud (TO-BE)</span>
                   </div>
-                  <div className="relative flex h-3 w-full overflow-hidden rounded-full bg-slate-800">
-                    <div className="h-full w-1/3 border-r border-slate-900 bg-slate-600" />
+                  <div className="relative flex h-3 w-full overflow-hidden rounded-full bg-secondary">
+                    <div className="h-full w-1/3 border-r border-background bg-muted-foreground/40" />
                     <div className="relative h-full w-1/3 overflow-hidden bg-indigo-500">
                       <div className="absolute inset-0 animate-pulse bg-white/20" />
                     </div>
                   </div>
-                  <p className="mt-2 text-center text-[10px] uppercase tracking-widest text-slate-500">
+                  <p className="mt-2 text-center text-[10px] uppercase tracking-widest text-muted-foreground">
                     Migración 66% Completada
                   </p>
                 </div>
 
-                <div className="rounded-lg border border-slate-800 bg-slate-950 p-4">
-                  <h4 className="mb-3 flex items-center gap-2 text-sm font-medium text-slate-300">
+                <div className="rounded-lg border border-border bg-background p-4">
+                  <h4 className="mb-3 flex items-center gap-2 text-sm font-medium text-foreground/90">
                     <Database className="h-4 w-4 text-emerald-400" /> CMDB Health
                   </h4>
-                  <ul className="space-y-2 text-xs text-slate-400">
-                    <li className="flex justify-between border-b border-slate-800/50 pb-1">
-                      <span>Servidores Mapeados:</span> <span className="text-slate-200">142 / 150</span>
+                  <ul className="space-y-2 text-xs text-muted-foreground">
+                    <li className="flex justify-between border-b border-border/50 pb-1">
+                      <span>Servidores Mapeados:</span> <span className="text-foreground">142 / 150</span>
                     </li>
-                    <li className="flex justify-between border-b border-slate-800/50 pb-1">
+                    <li className="flex justify-between border-b border-border/50 pb-1">
                       <span>Incidentes Críticos:</span> <span className="text-red-400">2</span>
                     </li>
                     <li className="flex justify-between pb-1">

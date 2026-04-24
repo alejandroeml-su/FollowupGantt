@@ -89,9 +89,9 @@ export function KPIFilters({ options }: Props) {
   }
 
   return (
-    <div className="rounded-2xl border border-slate-800/80 bg-gradient-to-br from-slate-900/80 to-slate-900/40 p-5 backdrop-blur">
+    <div className="rounded-2xl border border-border/80 bg-gradient-to-br from-slate-900/80 to-card/40 p-5 backdrop-blur">
       <div className="mb-4 flex items-center justify-between">
-        <div className="flex items-center gap-2 text-sm font-medium text-slate-300">
+        <div className="flex items-center gap-2 text-sm font-medium text-foreground/90">
           <SlidersHorizontal className="h-4 w-4 text-indigo-400" />
           <span>Filtros del portafolio</span>
           {activeCount > 0 && (
@@ -99,12 +99,12 @@ export function KPIFilters({ options }: Props) {
               {activeCount} activo{activeCount !== 1 ? 's' : ''}
             </span>
           )}
-          {isPending && <Loader2 className="h-3 w-3 animate-spin text-slate-500" />}
+          {isPending && <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />}
         </div>
         {activeCount > 0 && (
           <button
             onClick={clearAll}
-            className="flex items-center gap-1 rounded-md border border-slate-700/60 bg-slate-800/60 px-2.5 py-1 text-xs text-slate-300 transition hover:border-rose-500/40 hover:bg-rose-500/10 hover:text-rose-300"
+            className="flex items-center gap-1 rounded-md border border-border/60 bg-secondary/60 px-2.5 py-1 text-xs text-foreground/90 transition hover:border-rose-500/40 hover:bg-rose-500/10 hover:text-rose-300"
           >
             <X className="h-3 w-3" />
             Limpiar
@@ -181,14 +181,14 @@ function FilterSelect({
 }) {
   return (
     <label className="flex flex-col gap-1">
-      <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+      <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
         {label}
       </span>
       <select
         value={value}
         onChange={(e) => onChange(e.target.value)}
         disabled={disabled}
-        className="rounded-lg border border-slate-700/70 bg-slate-950/60 px-3 py-2 text-sm text-slate-200 transition focus:border-indigo-500/60 focus:outline-none focus:ring-1 focus:ring-indigo-500/40 disabled:cursor-not-allowed disabled:opacity-50"
+        className="rounded-lg border border-border/70 bg-background/80 px-3 py-2 text-sm text-foreground transition focus:border-indigo-500/60 focus:outline-none focus:ring-1 focus:ring-ring/40 disabled:cursor-not-allowed disabled:opacity-50"
       >
         <option value="">{placeholder}</option>
         {options.map((opt) => (

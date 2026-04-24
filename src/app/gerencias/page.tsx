@@ -31,7 +31,7 @@ export default async function GerenciasPage() {
   });
 
   return (
-    <div className="flex h-full flex-col bg-slate-950 overflow-y-auto p-8">
+    <div className="flex h-full flex-col bg-background overflow-y-auto p-8">
       <header className="mb-8 max-w-7xl mx-auto w-full">
         <div className="flex items-center justify-between">
           <div>
@@ -39,18 +39,18 @@ export default async function GerenciasPage() {
               <Building2 className="h-8 w-8 text-indigo-500" />
               Catálogo de Gerencias
             </h1>
-            <p className="mt-2 text-sm text-slate-400">
+            <p className="mt-2 text-sm text-muted-foreground">
               Estructura organizacional: Gerencia → Áreas → Proyectos. CRUD completo con Supabase + Prisma.
             </p>
           </div>
           <div className="flex items-center gap-3">
-            <div className="flex items-center gap-2 bg-slate-900 border border-slate-800 rounded-lg px-4 py-2">
+            <div className="flex items-center gap-2 bg-card border border-border rounded-lg px-4 py-2">
               <Building2 className="h-4 w-4 text-indigo-400" />
-              <span className="text-sm font-medium text-slate-300">{gerencias.length} Gerencias</span>
+              <span className="text-sm font-medium text-foreground/90">{gerencias.length} Gerencias</span>
             </div>
-            <div className="flex items-center gap-2 bg-slate-900 border border-slate-800 rounded-lg px-4 py-2">
+            <div className="flex items-center gap-2 bg-card border border-border rounded-lg px-4 py-2">
               <FolderTree className="h-4 w-4 text-emerald-400" />
-              <span className="text-sm font-medium text-slate-300">
+              <span className="text-sm font-medium text-foreground/90">
                 {gerencias.reduce((acc, g) => acc + g.areas.length, 0)} Áreas
               </span>
             </div>
@@ -60,8 +60,8 @@ export default async function GerenciasPage() {
 
       <div className="max-w-7xl mx-auto w-full space-y-8">
         {/* === CREAR GERENCIA === */}
-        <section className="bg-slate-900/50 border border-slate-800 rounded-2xl p-6">
-          <h2 className="text-base font-semibold text-slate-200 mb-4 flex items-center gap-2">
+        <section className="bg-subtle/50 border border-border rounded-2xl p-6">
+          <h2 className="text-base font-semibold text-foreground mb-4 flex items-center gap-2">
             <Plus className="h-5 w-5 text-indigo-400" />
             Nueva Gerencia
           </h2>
@@ -70,12 +70,12 @@ export default async function GerenciasPage() {
               name="name"
               required
               placeholder="Nombre de la Gerencia (Ej: TECNOLOGÍA)"
-              className="flex-1 rounded-lg border border-slate-700 bg-slate-950 py-2.5 px-4 text-sm text-white placeholder-slate-500 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500/30 transition-all"
+              className="flex-1 rounded-lg border border-border bg-background py-2.5 px-4 text-sm text-white focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-ring/30 transition-all"
             />
             <input
               name="description"
               placeholder="Descripción (opcional)"
-              className="flex-1 rounded-lg border border-slate-700 bg-slate-950 py-2.5 px-4 text-sm text-white placeholder-slate-500 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500/30 transition-all"
+              className="flex-1 rounded-lg border border-border bg-background py-2.5 px-4 text-sm text-white focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-ring/30 transition-all"
             />
             <button
               type="submit"
@@ -99,14 +99,14 @@ export default async function GerenciasPage() {
                 className={`bg-gradient-to-br ${color.bg} border ${color.border} rounded-2xl overflow-hidden transition-all hover:shadow-lg`}
               >
                 {/* Header de la Gerencia */}
-                <div className="px-6 py-5 flex items-center justify-between border-b border-slate-800/50">
+                <div className="px-6 py-5 flex items-center justify-between border-b border-border/50">
                   <div className="flex items-center gap-4">
-                    <div className={`h-12 w-12 rounded-xl bg-slate-900/80 flex items-center justify-center border border-slate-700/50`}>
+                    <div className={`h-12 w-12 rounded-xl bg-subtle/80 flex items-center justify-center border border-border/50`}>
                       <Building2 className={`h-6 w-6 ${color.icon}`} />
                     </div>
                     <div>
                       <h3 className="text-lg font-bold text-white tracking-wide">{gerencia.name}</h3>
-                      <p className="text-xs text-slate-400 mt-0.5">
+                      <p className="text-xs text-muted-foreground mt-0.5">
                         {gerencia.description || 'Sin descripción'} · {gerencia.areas.length} área(s) · {totalProjects} proyecto(s)
                       </p>
                     </div>
@@ -120,7 +120,7 @@ export default async function GerenciasPage() {
                       <input type="hidden" name="id" value={gerencia.id} />
                       <button
                         type="submit"
-                        className="p-2 hover:bg-red-500/20 rounded-lg text-slate-500 hover:text-red-400 transition-colors"
+                        className="p-2 hover:bg-red-500/20 rounded-lg text-muted-foreground hover:text-red-400 transition-colors"
                         title="Eliminar Gerencia"
                       >
                         <Trash2 className="h-4 w-4" />
@@ -132,7 +132,7 @@ export default async function GerenciasPage() {
                 {/* Áreas de esta Gerencia */}
                 <div className="px-6 py-4">
                   <div className="flex items-center justify-between mb-3">
-                    <h4 className="text-xs font-semibold text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                    <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-widest flex items-center gap-2">
                       <Layers className="h-3.5 w-3.5" />
                       Áreas Dependientes
                     </h4>
@@ -145,16 +145,16 @@ export default async function GerenciasPage() {
                       name="name"
                       required
                       placeholder={`Nueva área para ${gerencia.name}...`}
-                      className="flex-1 rounded-lg border border-slate-700/50 bg-slate-950/50 py-2 px-3 text-sm text-white placeholder-slate-600 focus:border-indigo-500 focus:outline-none transition-all"
+                      className="flex-1 rounded-lg border border-border/50 bg-background/95 py-2 px-3 text-sm text-white focus:border-indigo-500 focus:outline-none transition-all"
                     />
                     <input
                       name="description"
                       placeholder="Descripción (opcional)"
-                      className="flex-1 rounded-lg border border-slate-700/50 bg-slate-950/50 py-2 px-3 text-sm text-white placeholder-slate-600 focus:border-indigo-500 focus:outline-none transition-all"
+                      className="flex-1 rounded-lg border border-border/50 bg-background/95 py-2 px-3 text-sm text-white focus:border-indigo-500 focus:outline-none transition-all"
                     />
                     <button
                       type="submit"
-                      className="rounded-lg bg-slate-800 px-4 py-2 text-xs font-medium text-slate-300 hover:bg-slate-700 hover:text-white transition-colors flex items-center gap-1.5"
+                      className="rounded-lg bg-secondary px-4 py-2 text-xs font-medium text-foreground/90 hover:bg-secondary/80 hover:text-white transition-colors flex items-center gap-1.5"
                     >
                       <Plus className="h-3.5 w-3.5" />
                       Área
@@ -167,11 +167,11 @@ export default async function GerenciasPage() {
                       {gerencia.areas.map(area => (
                         <div
                           key={area.id}
-                          className="group flex items-center justify-between bg-slate-900/60 border border-slate-800/50 rounded-xl p-3.5 hover:border-slate-700 transition-all"
+                          className="group flex items-center justify-between bg-card/60 border border-border/50 rounded-xl p-3.5 hover:border-border transition-all"
                         >
                           <div className="flex-1 min-w-0">
-                            <p className="text-sm font-medium text-slate-200 truncate">{area.name}</p>
-                            <p className="text-[11px] text-slate-500 mt-0.5">
+                            <p className="text-sm font-medium text-foreground truncate">{area.name}</p>
+                            <p className="text-[11px] text-muted-foreground mt-0.5">
                               {area.projects.length} proyecto(s) — {area.description || 'Sin descripción'}
                             </p>
                           </div>
@@ -179,7 +179,7 @@ export default async function GerenciasPage() {
                             <input type="hidden" name="id" value={area.id} />
                             <button
                               type="submit"
-                              className="p-1.5 hover:bg-red-500/20 rounded-lg text-slate-600 hover:text-red-400 transition-colors opacity-0 group-hover:opacity-100"
+                              className="p-1.5 hover:bg-red-500/20 rounded-lg text-muted-foreground hover:text-red-400 transition-colors opacity-0 group-hover:opacity-100"
                               title="Eliminar Área"
                             >
                               <Trash2 className="h-3.5 w-3.5" />
@@ -189,7 +189,7 @@ export default async function GerenciasPage() {
                       ))}
                     </div>
                   ) : (
-                    <p className="text-xs text-slate-600 italic py-2">
+                    <p className="text-xs text-muted-foreground italic py-2">
                       No hay áreas asignadas a esta gerencia. Crea una arriba.
                     </p>
                   )}
@@ -199,10 +199,10 @@ export default async function GerenciasPage() {
           })}
 
           {gerencias.length === 0 && (
-            <div className="text-center py-16 bg-slate-900/30 border border-slate-800 border-dashed rounded-2xl">
-              <Building2 className="h-12 w-12 text-slate-700 mx-auto mb-4" />
-              <p className="text-sm text-slate-500 font-medium">No hay gerencias registradas.</p>
-              <p className="text-xs text-slate-600 mt-1">Crea tu primera gerencia usando el formulario de arriba.</p>
+            <div className="text-center py-16 bg-card/40 border border-border border-dashed rounded-2xl">
+              <Building2 className="h-12 w-12 text-foreground mx-auto mb-4" />
+              <p className="text-sm text-muted-foreground font-medium">No hay gerencias registradas.</p>
+              <p className="text-xs text-muted-foreground mt-1">Crea tu primera gerencia usando el formulario de arriba.</p>
             </div>
           )}
         </section>

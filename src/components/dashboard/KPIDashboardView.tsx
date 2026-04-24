@@ -46,7 +46,7 @@ const TONE_STYLES = {
     dot: 'bg-rose-400',
   },
   neutral: {
-    text: 'text-slate-300',
+    text: 'text-foreground/90',
     bg: 'bg-slate-500/10',
     border: 'border-slate-500/30',
     ring: 'ring-slate-500/30',
@@ -221,23 +221,23 @@ function HeroRow({
       {items.map((it) => (
         <div
           key={it.abbr}
-          className={`relative overflow-hidden rounded-2xl border border-slate-800/80 bg-slate-900/60 p-5 backdrop-blur`}
+          className={`relative overflow-hidden rounded-2xl border border-border/80 bg-card/60 p-5 backdrop-blur`}
         >
           <div className={`pointer-events-none absolute inset-0 bg-gradient-to-br ${it.accent}`} />
           <div className="relative">
             <div className="flex items-center justify-between">
-              <span className="text-[10px] font-semibold uppercase tracking-widest text-slate-500">
+              <span className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
                 {it.label}
               </span>
               <span
-                className={`flex h-7 w-7 items-center justify-center rounded-lg bg-slate-900/80 ${it.iconColor}`}
+                className={`flex h-7 w-7 items-center justify-center rounded-lg bg-subtle/80 ${it.iconColor}`}
               >
                 {it.icon}
               </span>
             </div>
             <div className="mt-3 flex items-baseline gap-2">
               <span className="text-3xl font-bold tracking-tight text-white">{it.value}</span>
-              <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">
+              <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
                 {it.abbr}
               </span>
             </div>
@@ -245,14 +245,14 @@ function HeroRow({
         </div>
       ))}
 
-      <div className="relative overflow-hidden rounded-2xl border border-slate-800/80 bg-slate-900/60 p-5 backdrop-blur">
+      <div className="relative overflow-hidden rounded-2xl border border-border/80 bg-card/60 p-5 backdrop-blur">
         <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-emerald-500/20 via-emerald-500/5 to-transparent" />
         <div className="relative">
           <div className="flex items-center justify-between">
-            <span className="text-[10px] font-semibold uppercase tracking-widest text-slate-500">
+            <span className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
               Alcance del portafolio
             </span>
-            <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-slate-900/80 text-emerald-300">
+            <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-subtle/80 text-emerald-300">
               <Briefcase className="h-4 w-4" />
             </span>
           </div>
@@ -270,9 +270,9 @@ function HeroRow({
 
 function Stat({ label, value }: { label: string; value: string }) {
   return (
-    <div className="flex items-baseline justify-between rounded-md bg-slate-950/40 px-2 py-1">
-      <span className="text-[10px] uppercase tracking-wider text-slate-500">{label}</span>
-      <span className="text-sm font-semibold text-slate-100">{value}</span>
+    <div className="flex items-baseline justify-between rounded-md bg-background/60 px-2 py-1">
+      <span className="text-[10px] uppercase tracking-wider text-muted-foreground">{label}</span>
+      <span className="text-sm font-semibold text-foreground">{value}</span>
     </div>
   )
 }
@@ -291,14 +291,14 @@ function SectionHeader({
   icon: React.ReactNode
 }) {
   return (
-    <div className="flex items-end justify-between border-b border-slate-800/60 pb-2">
+    <div className="flex items-end justify-between border-b border-border/60 pb-2">
       <div className="flex items-center gap-2">
         <span className="flex h-6 w-6 items-center justify-center rounded-md bg-indigo-500/15 text-indigo-300">
           {icon}
         </span>
         <div>
           <h2 className="text-sm font-semibold text-white">{title}</h2>
-          <p className="text-[11px] text-slate-500">{subtitle}</p>
+          <p className="text-[11px] text-muted-foreground">{subtitle}</p>
         </div>
       </div>
     </div>
@@ -330,16 +330,16 @@ function IndexCard({
 
   return (
     <div
-      className={`relative overflow-hidden rounded-2xl border bg-slate-900/60 p-5 backdrop-blur transition ${tone.border}`}
+      className={`relative overflow-hidden rounded-2xl border bg-card/60 p-5 backdrop-blur transition ${tone.border}`}
     >
       <div className={`pointer-events-none absolute inset-0 bg-gradient-to-br ${tone.accent}`} />
       <div className="relative">
         <div className="flex items-start justify-between">
           <div>
             <p className="text-lg font-bold tracking-tight text-white">{title}</p>
-            <p className="text-[11px] text-slate-500">{subtitle}</p>
+            <p className="text-[11px] text-muted-foreground">{subtitle}</p>
           </div>
-          <span className={`flex h-8 w-8 items-center justify-center rounded-lg bg-slate-950/60 ${tone.text}`}>
+          <span className={`flex h-8 w-8 items-center justify-center rounded-lg bg-background/80 ${tone.text}`}>
             {icon}
           </span>
         </div>
@@ -349,7 +349,7 @@ function IndexCard({
           <span className={`text-xs font-medium ${tone.text}`}>/ {benchmark.toFixed(2)}</span>
         </div>
 
-        <div className="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-slate-800/60">
+        <div className="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-secondary/60">
           <div
             className={`h-full rounded-full bg-gradient-to-r ${value.tone === 'success' ? 'from-emerald-500 to-emerald-400' : value.tone === 'warning' ? 'from-amber-500 to-amber-400' : value.tone === 'danger' ? 'from-rose-500 to-rose-400' : 'from-slate-500 to-slate-400'}`}
             style={{ width: `${gaugePct}%` }}
@@ -360,7 +360,7 @@ function IndexCard({
           <ToneIcon tone={value.tone} />
           {value.label}
         </div>
-        <p className="mt-2 text-[11px] text-slate-500">{value.hint}</p>
+        <p className="mt-2 text-[11px] text-muted-foreground">{value.hint}</p>
       </div>
     </div>
   )
@@ -385,15 +385,15 @@ function VarianceCard({
   const signed = value.value != null ? (value.value >= 0 ? '+' : '') + formatCurrency(value.value) : '—'
 
   return (
-    <div className={`relative overflow-hidden rounded-2xl border bg-slate-900/60 p-5 backdrop-blur transition ${tone.border}`}>
+    <div className={`relative overflow-hidden rounded-2xl border bg-card/60 p-5 backdrop-blur transition ${tone.border}`}>
       <div className={`pointer-events-none absolute inset-0 bg-gradient-to-br ${tone.accent}`} />
       <div className="relative">
         <div className="flex items-start justify-between">
           <div>
             <p className="text-lg font-bold tracking-tight text-white">{title}</p>
-            <p className="text-[11px] text-slate-500">{subtitle}</p>
+            <p className="text-[11px] text-muted-foreground">{subtitle}</p>
           </div>
-          <span className={`flex h-8 w-8 items-center justify-center rounded-lg bg-slate-950/60 ${tone.text}`}>
+          <span className={`flex h-8 w-8 items-center justify-center rounded-lg bg-background/80 ${tone.text}`}>
             {icon}
           </span>
         </div>
@@ -406,7 +406,7 @@ function VarianceCard({
           <ToneIcon tone={value.tone} />
           {value.label}
         </div>
-        <p className="mt-2 text-[11px] text-slate-500">{value.hint}</p>
+        <p className="mt-2 text-[11px] text-muted-foreground">{value.hint}</p>
       </div>
     </div>
   )
@@ -439,15 +439,15 @@ function MetricCard({
   const barPct = invertProgress ? Math.min(100, pct) : pct
 
   return (
-    <div className={`relative overflow-hidden rounded-2xl border bg-slate-900/60 p-5 backdrop-blur transition ${tone.border}`}>
+    <div className={`relative overflow-hidden rounded-2xl border bg-card/60 p-5 backdrop-blur transition ${tone.border}`}>
       <div className={`pointer-events-none absolute inset-0 bg-gradient-to-br ${tone.accent}`} />
       <div className="relative">
         <div className="flex items-start justify-between">
           <div>
             <p className="text-sm font-semibold text-white">{title}</p>
-            <p className="text-[11px] text-slate-500">{subtitle}</p>
+            <p className="text-[11px] text-muted-foreground">{subtitle}</p>
           </div>
-          <span className={`flex h-8 w-8 items-center justify-center rounded-lg bg-slate-950/60 ${tone.text}`}>
+          <span className={`flex h-8 w-8 items-center justify-center rounded-lg bg-background/80 ${tone.text}`}>
             {icon}
           </span>
         </div>
@@ -457,7 +457,7 @@ function MetricCard({
         </div>
 
         {showProgress && value.value != null && (
-          <div className="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-slate-800/60">
+          <div className="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-secondary/60">
             <div
               className={`h-full rounded-full bg-gradient-to-r ${value.tone === 'success' ? 'from-emerald-500 to-emerald-400' : value.tone === 'warning' ? 'from-amber-500 to-amber-400' : value.tone === 'danger' ? 'from-rose-500 to-rose-400' : 'from-slate-500 to-slate-400'}`}
               style={{ width: `${barPct}%` }}
@@ -469,7 +469,7 @@ function MetricCard({
           <ToneIcon tone={value.tone} />
           {value.label}
         </div>
-        <p className="mt-2 text-[11px] text-slate-500">{value.hint}</p>
+        <p className="mt-2 text-[11px] text-muted-foreground">{value.hint}</p>
       </div>
     </div>
   )
@@ -486,17 +486,17 @@ function PlannedVsActualCard({ data }: { data: KPIBundle['plannedVsActual'] }) {
   const actualPct = (data.actual / max) * 100
 
   return (
-    <div className="relative overflow-hidden rounded-2xl border border-slate-800/80 bg-slate-900/60 p-5 backdrop-blur">
+    <div className="relative overflow-hidden rounded-2xl border border-border/80 bg-card/60 p-5 backdrop-blur">
       <div className={`pointer-events-none absolute inset-0 bg-gradient-to-br ${tone.accent}`} />
       <div className="relative">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-slate-950/60 text-indigo-300">
+            <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-background/80 text-indigo-300">
               <CheckSquare className="h-4 w-4" />
             </span>
             <div>
               <h3 className="text-sm font-semibold text-white">Planned vs Actual</h3>
-              <p className="text-[11px] text-slate-500">Rendimiento de tareas en el periodo</p>
+              <p className="text-[11px] text-muted-foreground">Rendimiento de tareas en el periodo</p>
             </div>
           </div>
           <div className={`inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-[11px] font-semibold ${tone.bg} ${tone.text}`}>
@@ -508,26 +508,26 @@ function PlannedVsActualCard({ data }: { data: KPIBundle['plannedVsActual'] }) {
         <div className="mt-5 space-y-4">
           <div>
             <div className="mb-1.5 flex items-center justify-between text-xs">
-              <span className="flex items-center gap-1.5 text-slate-400">
+              <span className="flex items-center gap-1.5 text-muted-foreground">
                 <span className="h-2 w-2 rounded-full bg-indigo-400" />
                 Planificadas a la fecha
               </span>
-              <span className="font-semibold text-slate-200">{data.planned}</span>
+              <span className="font-semibold text-foreground">{data.planned}</span>
             </div>
-            <div className="h-2.5 w-full overflow-hidden rounded-full bg-slate-800/60">
+            <div className="h-2.5 w-full overflow-hidden rounded-full bg-secondary/60">
               <div className="h-full rounded-full bg-gradient-to-r from-indigo-500 to-indigo-400" style={{ width: `${plannedPct}%` }} />
             </div>
           </div>
 
           <div>
             <div className="mb-1.5 flex items-center justify-between text-xs">
-              <span className="flex items-center gap-1.5 text-slate-400">
+              <span className="flex items-center gap-1.5 text-muted-foreground">
                 <span className={`h-2 w-2 rounded-full ${tone.dot}`} />
                 Completadas
               </span>
-              <span className="font-semibold text-slate-200">{data.actual}</span>
+              <span className="font-semibold text-foreground">{data.actual}</span>
             </div>
-            <div className="h-2.5 w-full overflow-hidden rounded-full bg-slate-800/60">
+            <div className="h-2.5 w-full overflow-hidden rounded-full bg-secondary/60">
               <div
                 className={`h-full rounded-full bg-gradient-to-r ${data.ratio.tone === 'success' ? 'from-emerald-500 to-emerald-400' : data.ratio.tone === 'warning' ? 'from-amber-500 to-amber-400' : data.ratio.tone === 'danger' ? 'from-rose-500 to-rose-400' : 'from-slate-500 to-slate-400'}`}
                 style={{ width: `${actualPct}%` }}
@@ -535,10 +535,10 @@ function PlannedVsActualCard({ data }: { data: KPIBundle['plannedVsActual'] }) {
             </div>
           </div>
 
-          <div className="rounded-lg border border-slate-800/60 bg-slate-950/40 p-3">
-            <p className="text-[11px] text-slate-500">Cumplimiento</p>
+          <div className="rounded-lg border border-border/60 bg-background/60 p-3">
+            <p className="text-[11px] text-muted-foreground">Cumplimiento</p>
             <p className={`text-2xl font-bold ${tone.text}`}>{formatPercent(data.ratio.value, 1)}</p>
-            <p className="mt-1 text-[11px] text-slate-500">{data.ratio.hint}</p>
+            <p className="mt-1 text-[11px] text-muted-foreground">{data.ratio.hint}</p>
           </div>
         </div>
       </div>
@@ -585,17 +585,17 @@ function TrendCard({ trend }: { trend: KPIBundle['trend'] }) {
   const hasData = allValues.some((v) => v > 0)
 
   return (
-    <div className="relative overflow-hidden rounded-2xl border border-slate-800/80 bg-slate-900/60 p-5 backdrop-blur">
+    <div className="relative overflow-hidden rounded-2xl border border-border/80 bg-card/60 p-5 backdrop-blur">
       <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-indigo-500/10 via-transparent to-transparent" />
       <div className="relative">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-slate-950/60 text-indigo-300">
+            <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-background/80 text-indigo-300">
               <LineChart className="h-4 w-4" />
             </span>
             <div>
               <h3 className="text-sm font-semibold text-white">Tendencia EVM — Últimos 6 meses</h3>
-              <p className="text-[11px] text-slate-500">PV vs EV vs AC por mes de creación</p>
+              <p className="text-[11px] text-muted-foreground">PV vs EV vs AC por mes de creación</p>
             </div>
           </div>
           <div className="flex items-center gap-3 text-[11px]">
@@ -660,7 +660,7 @@ function TrendCard({ trend }: { trend: KPIBundle['trend'] }) {
             })}
           </svg>
         ) : (
-          <div className="mt-4 flex h-40 items-center justify-center rounded-lg border border-dashed border-slate-800 bg-slate-950/40 text-xs text-slate-500">
+          <div className="mt-4 flex h-40 items-center justify-center rounded-lg border border-dashed border-border bg-background/60 text-xs text-muted-foreground">
             Sin datos de EVM en el periodo
           </div>
         )}
@@ -671,7 +671,7 @@ function TrendCard({ trend }: { trend: KPIBundle['trend'] }) {
 
 function LegendDot({ color, label }: { color: string; label: string }) {
   return (
-    <span className="flex items-center gap-1.5 text-slate-400">
+    <span className="flex items-center gap-1.5 text-muted-foreground">
       <span className={`h-2 w-2 rounded-full ${color}`} />
       {label}
     </span>

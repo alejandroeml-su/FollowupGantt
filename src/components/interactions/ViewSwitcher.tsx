@@ -33,7 +33,7 @@ export function ViewSwitcher() {
     <nav
       role="tablist"
       aria-label="Cambiar vista"
-      className="inline-flex items-center gap-1 rounded-md border border-slate-700 bg-slate-900 p-1"
+      className="inline-flex items-center gap-1 rounded-md border border-border bg-card p-1"
     >
       {VIEWS.map((v) => {
         const active = pathname.startsWith(v.href)
@@ -48,7 +48,7 @@ export function ViewSwitcher() {
               'inline-flex items-center gap-1.5 rounded px-2.5 py-1 text-xs font-medium transition-colors',
               active
                 ? 'bg-indigo-600 text-white'
-                : 'text-slate-300 hover:bg-slate-800 hover:text-white',
+                : 'text-foreground/90 hover:bg-secondary hover:text-white',
             )}
           >
             <Icon className="h-3.5 w-3.5" aria-hidden />

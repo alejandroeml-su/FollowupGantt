@@ -232,16 +232,16 @@ export function GanttBoardClient({
         areas={areas}
         projects={projects}
         users={users}
-        className="rounded-lg mb-4 border border-slate-800"
+        className="rounded-lg mb-4 border border-border"
       />
-      <div className="rounded-xl border border-slate-800 bg-slate-900/80 shadow-sm">
+      <div className="rounded-xl border border-border bg-subtle/80 shadow-sm">
         {/* Header: etiquetas de nombre + escala de días */}
-        <div className="flex border-b border-slate-800">
-          <div className="flex w-64 shrink-0 items-center border-r border-slate-800 bg-slate-900 p-4 text-sm font-medium text-slate-300">
+        <div className="flex border-b border-border">
+          <div className="flex w-64 shrink-0 items-center border-r border-border bg-card p-4 text-sm font-medium text-foreground/90">
             Nombre de la Tarea
           </div>
           <div
-            className="flex overflow-x-auto bg-slate-950/50"
+            className="flex overflow-x-auto bg-background/95"
             style={{ minWidth: totalWidth }}
           >
             {days.map((d) => {
@@ -250,13 +250,13 @@ export function GanttBoardClient({
                 <div
                   key={d.toISOString()}
                   className={clsx(
-                    'shrink-0 border-r border-slate-800/50 p-2 text-center text-[10px] font-medium uppercase',
-                    isWeekend ? 'bg-slate-900/60 text-slate-600' : 'text-slate-500',
+                    'shrink-0 border-r border-border/50 p-2 text-center text-[10px] font-medium uppercase',
+                    isWeekend ? 'bg-card/60 text-muted-foreground' : 'text-muted-foreground',
                   )}
                   style={{ width: DAY_WIDTH }}
                 >
                   <div>{d.toLocaleDateString(undefined, { weekday: 'short' })}</div>
-                  <div className="text-slate-400">{d.getUTCDate()}</div>
+                  <div className="text-muted-foreground">{d.getUTCDate()}</div>
                 </div>
               )
             })}
@@ -264,9 +264,9 @@ export function GanttBoardClient({
         </div>
 
         {/* Filas de tareas */}
-        <div className="divide-y divide-slate-800/50">
+        <div className="divide-y divide-border/50">
           {visibleLocal.length === 0 && (
-            <div className="p-8 text-center text-sm text-slate-500">
+            <div className="p-8 text-center text-sm text-muted-foreground">
               {local.length === 0
                 ? 'No hay tareas planificadas en este rango.'
                 : 'Ninguna tarea coincide con los filtros.'}
@@ -305,7 +305,7 @@ export function GanttBoardClient({
             <>
               {drawerTask.project?.name}
               {' › '}
-              <span className="text-slate-300">
+              <span className="text-foreground/90">
                 #{drawerTask.id.substring(0, 6)}
               </span>
             </>
@@ -404,14 +404,14 @@ function GanttRow({
       <div
         className={clsx(
           'group flex transition-colors cursor-pointer',
-          focused ? 'bg-slate-800/60' : 'hover:bg-slate-800/30',
+          focused ? 'bg-secondary/60' : 'hover:bg-secondary/30',
         )}
         onClick={() => {
           onFocus()
           openDrawer(task.id)
         }}
       >
-        <div className="flex w-64 shrink-0 items-center gap-3 border-r border-slate-800 p-4">
+        <div className="flex w-64 shrink-0 items-center gap-3 border-r border-border p-4">
           <div
             className={clsx(
               'h-2 w-2 rounded-full',
@@ -419,13 +419,13 @@ function GanttRow({
             )}
           />
           <span
-            className="truncate text-sm font-medium text-slate-300 group-hover:text-white"
+            className="truncate text-sm font-medium text-foreground/90 group-hover:text-white"
             title={task.title}
           >
             {task.title}
           </span>
           {(task.comments?.length ?? 0) > 0 && (
-            <span className="flex flex-shrink-0 items-center gap-0.5 text-[10px] text-slate-500">
+            <span className="flex flex-shrink-0 items-center gap-0.5 text-[10px] text-muted-foreground">
               <MessageSquare className="h-3 w-3" />
               {task.comments?.length}
             </span>
@@ -441,14 +441,14 @@ function GanttRow({
             {Array.from({ length: rangeDays }).map((_, i) => (
               <div
                 key={i}
-                className="shrink-0 border-r border-slate-800/30"
+                className="shrink-0 border-r border-border/30"
                 style={{ width: DAY_WIDTH }}
               />
             ))}
           </div>
 
           {!hasDates && (
-            <div className="relative z-10 inline-flex items-center rounded border border-dashed border-slate-700 px-2 py-1 text-xs text-slate-500">
+            <div className="relative z-10 inline-flex items-center rounded border border-dashed border-border px-2 py-1 text-xs text-muted-foreground">
               Sin fechas
             </div>
           )}
