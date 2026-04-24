@@ -87,7 +87,7 @@ export default function Sidebar() {
   const currentUser = {
     roles: [
       { 
-        name: 'ADMIN', 
+        name: 'SUPER_ADMIN', 
         permissions: { allowedViews: ['list', 'kanban', 'gantt', 'table', 'docs', 'forms', 'gerencias', 'projects', 'workload', 'teams', 'roles', 'settings'] } 
       }
     ]
@@ -97,16 +97,14 @@ export default function Sidebar() {
   const isAdmin = currentUser.roles.some(r => r.name === 'ADMIN' || r.name === 'SUPER_ADMIN');
 
   // Filtrar rutas basadas en permisos
-  const filteredTopRoutes = topRoutes.filter(r => {
-    if (isAdmin) return true;
+  const filteredTopRoutes = isAdmin ? topRoutes : topRoutes.filter(r => {
     const viewName = r.path === '/' ? '' : r.path.replace('/', '');
     return allowedViews.includes(viewName);
   });
 
-  const filteredMenuGroups = menuGroups.map(group => ({
+  const filteredMenuGroups = isAdmin ? menuGroups : menuGroups.map(group => ({
     ...group,
     routes: group.routes.filter(r => {
-      if (isAdmin) return true;
       const viewName = r.path.split('/').pop() || '';
       return allowedViews.includes(viewName);
     })
