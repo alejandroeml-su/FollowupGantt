@@ -1,0 +1,34 @@
+# EPIC-001 · @SRE · Stack local (web + Postgres 16).
+# Uso: docker compose up -d
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: followup
+      POSTGRES_USER: followup
+      POSTGRES_PASSWORD: followup_dev
+    ports: ["5432:5432"]
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "followup"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  web:
+    build: .
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql://followup:followup_dev@db:5432/followup?schema=public
+      DIRECT_URL:   postgresql://followup:followup_dev@db:5432/followup?schema=public
+      NODE_ENV: production
+    ports: ["3000:3000"]
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  pgdata:

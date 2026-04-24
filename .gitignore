@@ -12,6 +12,17 @@
 
 # testing
 /coverage
+/playwright-report
+/test-results
+/playwright/.cache
+
+# editor
+/.vscode
+/.idea
+
+# python tooling locals
+__pycache__/
+*.pyc
 
 # next.js
 /.next/
