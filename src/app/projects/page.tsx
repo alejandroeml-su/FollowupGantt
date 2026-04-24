@@ -155,9 +155,17 @@ export default async function ProjectsMaintenance() {
   );
 }
 
-function ProjectCard({ project }: { project: Record<string, any> }) {
+type ProjectCardData = {
+  id: string;
+  name: string;
+  status: string;
+  manager?: { name?: string | null } | null;
+  tasks?: { status: string }[];
+};
+
+function ProjectCard({ project }: { project: ProjectCardData }) {
   const taskCount = project.tasks?.length || 0;
-  const doneTasks = project.tasks?.filter((t: Record<string, unknown>) => (t as { status: string }).status === 'DONE').length || 0;
+  const doneTasks = project.tasks?.filter((t) => t.status === 'DONE').length || 0;
   const progress = taskCount > 0 ? Math.round((doneTasks / taskCount) * 100) : 0;
 
   const statusStyle =

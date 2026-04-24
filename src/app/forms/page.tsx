@@ -122,7 +122,7 @@ export default function FormsPage() {
                 <div className="pt-4 border-t border-slate-800">
                   <label className="flex items-center gap-2 cursor-pointer">
                     <input type="checkbox" className="form-checkbox bg-slate-950 border-slate-700 text-indigo-500 rounded" defaultChecked />
-                    <span className="text-sm text-slate-300">Marcar tareas como "URGENTE"</span>
+                    <span className="text-sm text-slate-300">Marcar tareas como &quot;URGENTE&quot;</span>
                   </label>
                 </div>
               </div>

@@ -2,6 +2,13 @@
 
 import prisma from '@/lib/prisma'
 import { revalidatePath } from 'next/cache'
+import type {
+  ProjectStatus,
+  TaskStatus,
+  Priority,
+  TaskType,
+  Role,
+} from '@prisma/client'
 
 // =============================================
 // CRUD: GERENCIAS
@@ -62,7 +69,7 @@ export async function createProject(formData: FormData) {
   if (!name) throw new Error('El nombre del proyecto es requerido')
 
   await prisma.project.create({
-    data: { name, description, status: status as any, areaId: areaId || null }
+    data: { name, description, status: status as ProjectStatus, areaId: areaId || null }
   })
   revalidatePath('/projects')
   revalidatePath('/')
@@ -78,7 +85,7 @@ export async function updateProject(formData: FormData) {
 
   await prisma.project.update({
     where: { id },
-    data: { name, description, status: status as any }
+    data: { name, description, status: status as ProjectStatus }
   })
   revalidatePath('/projects')
   revalidatePath('/')
@@ -115,9 +122,9 @@ export async function createTask(formData: FormData) {
       title,
       description,
       projectId,
-      status: status as any,
-      priority: priority as any,
-      type: type as any,
+      status: status as TaskStatus,
+      priority: priority as Priority,
+      type: type as TaskType,
       parentId: parentId || null,
       assigneeId: assigneeId || null,
       endDate: endDateStr ? new Date(endDateStr) : null,
@@ -176,7 +183,7 @@ export async function deleteTask(formData: FormData) {
 export async function updateTaskStatus(id: string, status: string) {
   await prisma.task.update({
     where: { id },
-    data: { status: status as any }
+    data: { status: status as TaskStatus }
   })
   revalidatePath('/list')
   revalidatePath('/kanban')
@@ -194,7 +201,7 @@ export async function createUser(formData: FormData) {
   if (!name || !email) throw new Error('Nombre y email son requeridos')
 
   await prisma.user.create({
-    data: { name, email, role: role as any }
+    data: { name, email, role: role as Role }
   })
   revalidatePath('/workload')
 }
