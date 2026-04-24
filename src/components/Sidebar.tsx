@@ -66,14 +66,15 @@ const menuGroups: RouteGroup[] = [
       { name: 'Equipos', path: '/settings/teams', icon: Users },
       { name: 'Gerencias', path: '/gerencias', icon: Building2 },
       { name: 'Proyectos', path: '/projects', icon: FolderKanban },
-      { name: 'Usuarios', path: '/workload', icon: Users },
+      { name: 'Usuarios', path: '/settings/users', icon: Users },
+      { name: 'Capacidad (WIP)', path: '/workload', icon: ClipboardList },
     ],
   },
 ];
 
 import { useUIStore } from '@/lib/stores/ui';
 import { ThemeToggle } from './ThemeToggle';
-import { X } from 'lucide-react';
+import { X, ShieldAlert, ShieldCheck, UserCog } from 'lucide-react';
 
 // ─── Sidebar ─────────────────────────────────────────────────────
 
@@ -82,31 +83,24 @@ export default function Sidebar() {
   const mobileOpen = useUIStore((s) => s.mobileSidebarOpen);
   const setMobileOpen = useUIStore((s) => s.setMobileSidebarOpen);
 
-  // ─── Simulación de Usuario y Roles (Mapeo de Vistas) ────────────────
-  // En producción, esto vendría de la base de datos (prisma.user.findUnique...)
-  const currentUser = {
-    roles: [
-      { 
-        name: 'SUPER_ADMIN', 
-        permissions: { allowedViews: ['list', 'kanban', 'gantt', 'table', 'docs', 'forms', 'gerencias', 'projects', 'workload', 'teams', 'roles', 'settings'] } 
-      }
-    ]
-  };
+  // ─── Control de Roles para Pruebas ────────────────────────────────
+  const [debugRole, setDebugRole] = useState<'SUPER_ADMIN' | 'ADMIN' | 'AGENTE'>('SUPER_ADMIN');
 
-  const allowedViews = currentUser.roles.flatMap(r => r.permissions?.allowedViews || []);
-  const isAdmin = currentUser.roles.some(r => r.name === 'ADMIN' || r.name === 'SUPER_ADMIN');
+  const isAdmin = debugRole === 'ADMIN' || debugRole === 'SUPER_ADMIN';
 
-  // Filtrar rutas basadas en permisos
-  const filteredTopRoutes = isAdmin ? topRoutes : topRoutes.filter(r => {
-    const viewName = r.path === '/' ? '' : r.path.replace('/', '');
-    return allowedViews.includes(viewName);
+  // Filtrar rutas (Si es SUPER_ADMIN, no hay filtros)
+  const filteredTopRoutes = debugRole === 'SUPER_ADMIN' ? topRoutes : topRoutes.filter(r => {
+    // Lógica de permisos simplificada para la demo
+    if (debugRole === 'ADMIN') return true;
+    return r.path === '/' || r.path === '/list' || r.path === '/kanban';
   });
 
-  const filteredMenuGroups = isAdmin ? menuGroups : menuGroups.map(group => ({
+  const filteredMenuGroups = debugRole === 'SUPER_ADMIN' ? menuGroups : menuGroups.map(group => ({
     ...group,
     routes: group.routes.filter(r => {
-      const viewName = r.path.split('/').pop() || '';
-      return allowedViews.includes(viewName);
+      if (debugRole === 'ADMIN') return true;
+      // Agente solo ve lo básico
+      return ['list', 'kanban', 'table'].includes(r.path.split('/').pop() || '');
     })
   })).filter(group => group.routes.length > 0);
 
@@ -143,7 +137,7 @@ export default function Sidebar() {
         <div className="flex h-16 shrink-0 items-center justify-between px-6 border-b border-border bg-muted/30">
           <div className="flex items-center">
             <Target className="h-6 w-6 text-primary mr-3" />
-            <span className="text-lg font-bold text-foreground tracking-wide">Avante Orq</span>
+            <span className="text-lg font-bold text-foreground tracking-wide">Avante Orq PRO</span>
           </div>
           <button 
             className="p-1.5 rounded-lg hover:bg-accent lg:hidden"
@@ -220,19 +214,45 @@ export default function Sidebar() {
           </nav>
         </div>
 
-        {/* ── User footer ──────────────────────────────────── */}
+        {/* ── User footer & Debug ──────────────────────────── */}
         <div className="p-4 border-t border-border bg-muted/10 space-y-4">
+          <div className="flex flex-col gap-2 p-2 rounded-lg bg-primary/5 border border-primary/20">
+             <div className="flex items-center gap-2 text-[10px] font-bold text-primary uppercase tracking-tighter">
+                <ShieldAlert className="h-3 w-3" />
+                Debug Role Switcher
+             </div>
+             <div className="flex gap-1">
+                {(['SUPER_ADMIN', 'ADMIN', 'AGENTE'] as const).map(r => (
+                  <button
+                    key={r}
+                    onClick={() => setDebugRole(r)}
+                    className={clsx(
+                      'flex-1 text-[9px] font-bold py-1 px-1 rounded border transition-all',
+                      debugRole === r 
+                        ? 'bg-primary text-primary-foreground border-primary shadow-sm' 
+                        : 'bg-background text-muted-foreground border-border hover:border-primary/50'
+                    )}
+                  >
+                    {r.replace('_', ' ')}
+                  </button>
+                ))}
+             </div>
+          </div>
+
           <div className="flex items-center justify-between px-2">
              <span className="text-xs font-semibold text-muted-foreground uppercase tracking-widest">Tema</span>
              <ThemeToggle />
           </div>
           <div className="flex items-center gap-3 px-2 py-2 rounded-lg bg-accent/40 border border-border/50">
             <div className="h-8 w-8 rounded-full bg-primary flex items-center justify-center text-sm font-bold text-primary-foreground shadow-md">
-              EM
+              {debugRole === 'AGENTE' ? 'AG' : debugRole === 'ADMIN' ? 'AD' : 'SA'}
             </div>
-            <div className="flex flex-col">
-              <span className="text-xs font-medium text-foreground">Edwin Martinez</span>
-              <span className="text-[10px] text-muted-foreground">PM Híbrido</span>
+            <div className="flex flex-col overflow-hidden">
+              <span className="text-xs font-medium text-foreground truncate">Edwin Martinez</span>
+              <span className="text-[10px] text-muted-foreground flex items-center gap-1">
+                 {debugRole === 'SUPER_ADMIN' ? <ShieldCheck className="h-3 w-3 text-emerald-500" /> : <UserCog className="h-3 w-3 text-indigo-400" />}
+                 {debugRole}
+              </span>
             </div>
           </div>
         </div>
@@ -240,6 +260,7 @@ export default function Sidebar() {
     </>
   );
 }
+
 
 // ─── Reusable nav link ───────────────────────────────────────────
 
