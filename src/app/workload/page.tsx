@@ -6,6 +6,7 @@ export const dynamic = "force-dynamic";
 export default async function WorkloadPage() {
   const users = await prisma.user.findMany({
     include: {
+      roles: { include: { role: true } },
       tasks: {
         where: { status: { not: 'DONE' } },
         include: { project: true }
@@ -47,7 +48,9 @@ export default async function WorkloadPage() {
                     </div>
                     <div>
                       <h3 className="font-semibold text-white">{user.name}</h3>
-                      <p className="text-xs text-slate-400">{user.role}</p>
+                      <p className="text-xs text-slate-400">
+                        {user.roles.map(r => r.role.name).join(', ') || 'Sin Rol'}
+                      </p>
                     </div>
                   </div>
                   <div className="flex flex-col items-end gap-1">

@@ -84,7 +84,6 @@ async function main() {
       id: FIXED.userId,
       name: 'Alpha Tester',
       email: 'alpha.tester@avante.test',
-      role: 'PROJECT_MANAGER',
     },
   })
 
