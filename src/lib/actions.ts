@@ -281,7 +281,9 @@ export async function createRole(formData: FormData) {
     data: { 
       name: name.toUpperCase(), 
       description,
-      permissions: allowedViews ? { allowedViews: JSON.parse(allowedViews) } : null
+      permissions: allowedViews 
+        ? { allowedViews: JSON.parse(allowedViews) } 
+        : undefined
     }
   })
   revalidatePath('/settings/roles')
