@@ -4,6 +4,9 @@ import prisma from '@/lib/prisma'
 import { revalidatePath } from 'next/cache'
 import type {
   TaskType,
+  ProjectStatus,
+  Priority,
+  TaskStatus,
 } from '@prisma/client'
 
 // =============================================
