@@ -260,6 +260,7 @@ export async function createUser(formData: FormData) {
     }
   })
   revalidatePath('/workload')
+  revalidatePath('/settings/users')
 }
 
 // =============================================
@@ -337,6 +338,7 @@ export async function deleteUser(formData: FormData) {
 
   await prisma.user.delete({ where: { id } })
   revalidatePath('/workload')
+  revalidatePath('/settings/users')
 }
 
 // =============================================
