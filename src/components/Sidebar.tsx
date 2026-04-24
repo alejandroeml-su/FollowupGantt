@@ -62,11 +62,11 @@ const menuGroups: RouteGroup[] = [
     icon: Settings,
     color: 'text-violet-400',
     routes: [
+      { name: 'Roles & Permisos', path: '/settings/roles', icon: Settings },
+      { name: 'Equipos', path: '/settings/teams', icon: Users },
       { name: 'Gerencias', path: '/gerencias', icon: Building2 },
       { name: 'Proyectos', path: '/projects', icon: FolderKanban },
       { name: 'Usuarios', path: '/workload', icon: Users },
-      { name: 'Equipos', path: '/settings/teams', icon: Users },
-      { name: 'Roles & Permisos', path: '/settings/roles', icon: Settings },
     ],
   },
 ];
