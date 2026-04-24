@@ -46,6 +46,8 @@ import { TaskDrawerContent } from './TaskDrawerContent'
 
 type Props = {
   tasks: (SerializedTask & { subtasks?: SerializedTask[] })[]
+  projects: { id: string; name: string }[]
+  users: { id: string; name: string }[]
 }
 
 const STATUS_ICON: Record<string, React.ReactNode> = {
@@ -67,7 +69,7 @@ const PRIORITY_COLOR: Record<string, string> = {
   CRITICAL: 'text-red-400',
 }
 
-export function ListBoardClient({ tasks }: Props) {
+export function ListBoardClient({ tasks, projects, users }: Props) {
   const [items, setItems] = useState(tasks)
   const [activeId, setActiveId] = useState<string | null>(null)
   const [focusedId, setFocusedId] = useState<string | null>(tasks[0]?.id ?? null)
@@ -261,7 +263,13 @@ export function ListBoardClient({ tasks }: Props) {
           if (prev) useUIStore.getState().openDrawer(prev)
         }}
       >
-        {drawerTask ? <TaskDrawerContent task={drawerTask} /> : null}
+        {drawerTask ? (
+          <TaskDrawerContent 
+            task={drawerTask} 
+            projects={projects} 
+            users={users} 
+          />
+        ) : null}
       </TaskDrawer>
     </>
   )

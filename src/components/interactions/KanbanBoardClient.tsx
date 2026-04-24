@@ -49,8 +49,14 @@ type Column = {
 }
 
 type Props = {
-  columns: Column[]
+  columns: ReadonlyArray<{
+    id: string
+    title: string
+    wipLimit: number | null
+  }>
   tasksByColumn: Record<string, SerializedTask[]>
+  projects: { id: string; name: string }[]
+  users: { id: string; name: string }[]
 }
 
 const TYPE_COLOR: Record<string, string> = {
@@ -73,7 +79,12 @@ function parseActionError(err: unknown): { code: string; detail: string } {
   return m ? { code: m[1], detail: m[2] } : { code: 'UNKNOWN', detail: msg }
 }
 
-export function KanbanBoardClient({ columns, tasksByColumn }: Props) {
+export function KanbanBoardClient({
+  columns,
+  tasksByColumn,
+  projects,
+  users,
+}: Props) {
   const [local, setLocal] = useState(tasksByColumn)
   const [activeId, setActiveId] = useState<string | null>(null)
 
@@ -297,7 +308,13 @@ export function KanbanBoardClient({ columns, tasksByColumn }: Props) {
           if (prev) useUIStore.getState().openDrawer(prev)
         }}
       >
-        {drawerTask ? <TaskDrawerContent task={drawerTask} /> : null}
+        {drawerTask ? (
+          <TaskDrawerContent 
+            task={drawerTask} 
+            projects={projects} 
+            users={users} 
+          />
+        ) : null}
       </TaskDrawer>
     </>
   )

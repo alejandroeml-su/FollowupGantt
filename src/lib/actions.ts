@@ -144,19 +144,27 @@ export async function updateTask(formData: FormData) {
   const title = formData.get('title') as string
   const status = formData.get('status') as string
   const priority = formData.get('priority') as string
+  const type = formData.get('type') as string
   const assigneeId = formData.get('assigneeId') as string || undefined
   const endDateStr = formData.get('endDate') as string
   const description = formData.get('description') as string || undefined
+  const progress = formData.get('progress') ? Number(formData.get('progress')) : undefined
+  const plannedValue = formData.get('plannedValue') ? Number(formData.get('plannedValue')) : undefined
+  const actualCost = formData.get('actualCost') ? Number(formData.get('actualCost')) : undefined
 
   if (!id) throw new Error('ID es requerido')
 
   const data: Record<string, unknown> = {}
   if (title) data.title = title
-  if (status) data.status = status
-  if (priority) data.priority = priority
+  if (status) data.status = status as TaskStatus
+  if (priority) data.priority = priority as Priority
+  if (type) data.type = type as TaskType
   if (description !== undefined) data.description = description
-  if (assigneeId) data.assigneeId = assigneeId
+  if (assigneeId !== undefined) data.assigneeId = assigneeId || null
   if (endDateStr) data.endDate = new Date(endDateStr)
+  if (progress !== undefined) data.progress = progress
+  if (plannedValue !== undefined) data.plannedValue = plannedValue
+  if (actualCost !== undefined) data.actualCost = actualCost
 
   await prisma.task.update({ where: { id }, data })
   revalidatePath('/list')

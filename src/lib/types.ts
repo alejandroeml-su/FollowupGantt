@@ -47,6 +47,10 @@ export interface SerializedTask {
   comments?: SerializedComment[];
   createdAt?: string | null;
   updatedAt?: string | null;
+  parentId?: string | null;
+  plannedValue?: number | null;
+  actualCost?: number | null;
+  tags?: string[];
 }
 
 // ─── Serialization Utility ───────────────────────────────────────
@@ -80,6 +84,10 @@ type RawTask = {
     createdAt?: DateLike;
     author?: RawPerson | null;
   }>;
+  parentId?: string | null;
+  plannedValue?: number | null;
+  actualCost?: number | null;
+  tags?: string[];
 }
 
 function toISO(d: DateLike): string | null {
@@ -109,6 +117,10 @@ export function serializeTask(task: Record<string, unknown>): SerializedTask {
     endDate: t.endDate ? toISO(t.endDate) : null,
     createdAt: toISO(t.createdAt),
     updatedAt: toISO(t.updatedAt),
+    parentId: t.parentId ?? null,
+    plannedValue: t.plannedValue ?? null,
+    actualCost: t.actualCost ?? null,
+    tags: Array.isArray(t.tags) ? (t.tags as string[]) : [],
     assignee: t.assignee ? { id: t.assignee.id, name: t.assignee.name } : null,
     project: t.project ? { id: t.project.id, name: t.project.name } : null,
     subtasks: Array.isArray(t.subtasks) ? t.subtasks.map((s) => serializeTask(s as Record<string, unknown>)) : [],

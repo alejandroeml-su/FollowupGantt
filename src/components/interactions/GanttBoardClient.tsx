@@ -19,6 +19,8 @@ type Props = {
   rangeStart: string
   /** Días a mostrar */
   rangeDays: number
+  projects: { id: string; name: string }[]
+  users: { id: string; name: string }[]
 }
 
 const DAY_WIDTH = 40 // px por día — balance legibilidad / densidad
@@ -62,7 +64,13 @@ function parseActionError(err: unknown): { code: string; detail: string } {
   return m ? { code: m[1], detail: m[2] } : { code: 'UNKNOWN', detail: msg }
 }
 
-export function GanttBoardClient({ tasks, rangeStart, rangeDays }: Props) {
+export function GanttBoardClient({
+  tasks,
+  rangeStart,
+  rangeDays,
+  projects,
+  users,
+}: Props) {
   const start = useMemo(() => new Date(rangeStart), [rangeStart])
   const days = useMemo(
     () =>
@@ -291,7 +299,13 @@ export function GanttBoardClient({ tasks, rangeStart, rangeDays }: Props) {
           if (p) useUIStore.getState().openDrawer(p)
         }}
       >
-        {drawerTask ? <TaskDrawerContent task={drawerTask} /> : null}
+        {drawerTask ? (
+          <TaskDrawerContent 
+            task={drawerTask} 
+            projects={projects} 
+            users={users} 
+          />
+        ) : null}
       </TaskDrawer>
     </>
   )

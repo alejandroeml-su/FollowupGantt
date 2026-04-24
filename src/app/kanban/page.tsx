@@ -32,6 +32,11 @@ export default async function KanbanBoard() {
     ]),
   )
 
+  const [projects, users] = await Promise.all([
+    prisma.project.findMany({ orderBy: { name: 'asc' } }),
+    prisma.user.findMany({ orderBy: { name: 'asc' } }),
+  ])
+
   return (
     <div className="flex h-full flex-col bg-slate-950">
       <header className="flex shrink-0 items-center justify-between border-b border-slate-800 bg-slate-900/50 px-8 py-4">
@@ -67,7 +72,12 @@ export default async function KanbanBoard() {
         </div>
       </header>
 
-      <KanbanBoardClient columns={[...COLUMNS]} tasksByColumn={tasksByColumn} />
+      <KanbanBoardClient 
+        columns={[...COLUMNS]} 
+        tasksByColumn={tasksByColumn} 
+        projects={projects} 
+        users={users} 
+      />
     </div>
   )
 }

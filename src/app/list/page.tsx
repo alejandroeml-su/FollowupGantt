@@ -68,7 +68,7 @@ export default async function ListViewPage() {
             <div className="col-span-1 text-center">ID</div>
           </div>
 
-          <ListBoardClient tasks={tasks} />
+          <ListBoardClient tasks={tasks} projects={projects} users={users} />
         </div>
       </div>
     </div>
