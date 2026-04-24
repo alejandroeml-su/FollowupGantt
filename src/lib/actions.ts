@@ -151,22 +151,47 @@ export async function updateTask(formData: FormData) {
   const progress = formData.get('progress') ? Number(formData.get('progress')) : undefined
   const plannedValue = formData.get('plannedValue') ? Number(formData.get('plannedValue')) : undefined
   const actualCost = formData.get('actualCost') ? Number(formData.get('actualCost')) : undefined
+  const userId = formData.get('userId') as string || undefined // ID del usuario que hace el cambio
 
   if (!id) throw new Error('ID es requerido')
 
-  const data: Record<string, unknown> = {}
-  if (title) data.title = title
-  if (status) data.status = status as TaskStatus
-  if (priority) data.priority = priority as Priority
-  if (type) data.type = type as TaskType
-  if (description !== undefined) data.description = description
-  if (assigneeId !== undefined) data.assigneeId = assigneeId || null
-  if (endDateStr) data.endDate = new Date(endDateStr)
-  if (progress !== undefined) data.progress = progress
-  if (plannedValue !== undefined) data.plannedValue = plannedValue
-  if (actualCost !== undefined) data.actualCost = actualCost
+  // Obtener estado anterior para el historial
+  const oldTask = await prisma.task.findUnique({ where: { id } })
+  if (!oldTask) throw new Error('Tarea no encontrada')
 
-  await prisma.task.update({ where: { id }, data })
+  const data: Record<string, unknown> = {}
+  const historyEntries: any[] = []
+
+  const checkChange = (field: string, newValue: any, oldValue: any) => {
+    if (newValue !== undefined && String(newValue) !== String(oldValue)) {
+      data[field] = newValue
+      historyEntries.push({
+        field,
+        oldValue: String(oldValue ?? ''),
+        newValue: String(newValue ?? ''),
+        userId: userId || null
+      })
+    }
+  }
+
+  if (title) checkChange('title', title, oldTask.title)
+  if (status) checkChange('status', status as TaskStatus, oldTask.status)
+  if (priority) checkChange('priority', priority as Priority, oldTask.priority)
+  if (type) checkChange('type', type as TaskType, oldTask.type)
+  if (description !== undefined) checkChange('description', description, oldTask.description)
+  if (assigneeId !== undefined) checkChange('assigneeId', assigneeId || null, oldTask.assigneeId)
+  if (endDateStr) checkChange('endDate', new Date(endDateStr), oldTask.endDate)
+  if (progress !== undefined) checkChange('progress', progress, oldTask.progress)
+  if (plannedValue !== undefined) checkChange('plannedValue', plannedValue, oldTask.plannedValue)
+  if (actualCost !== undefined) checkChange('actualCost', actualCost, oldTask.actualCost)
+
+  await prisma.$transaction([
+    prisma.task.update({ where: { id }, data }),
+    ...(historyEntries.length > 0 ? [prisma.taskHistory.createMany({
+      data: historyEntries.map(h => ({ ...h, taskId: id }))
+    })] : [])
+  ])
+
   revalidatePath('/list')
   revalidatePath('/kanban')
   revalidatePath('/gantt')
@@ -322,23 +347,70 @@ export async function getAreasByGerencia(gerenciaId: string) {
 // CRUD: COMENTARIOS / SEGUIMIENTO
 // =============================================
 
+/**
+ * Simula el envío de un correo electrónico cuando se menciona a alguien.
+ * En producción, esto se integraría con Resend, SendGrid, etc.
+ */
+async function sendMentionEmail(userEmail: string, taskTitle: string, commentContent: string) {
+  console.log(`[EMAIL SIMULATION] Sending to ${userEmail}:`)
+  console.log(`Subject: Has sido mencionado en la tarea: ${taskTitle}`)
+  console.log(`Body: ${commentContent}`)
+}
+
 export async function createComment(formData: FormData) {
   const content = formData.get('content') as string
   const taskId = formData.get('taskId') as string
   const authorId = formData.get('authorId') as string || undefined
+  const isInternal = formData.get('isInternal') === 'true'
 
   if (!content || !taskId) throw new Error('Contenido y tarea son requeridos')
 
-  await prisma.comment.create({
-    data: { content, taskId, authorId: authorId || null }
+  const comment = await prisma.comment.create({
+    data: { 
+      content, 
+      taskId, 
+      authorId: authorId || null,
+      isInternal
+    },
+    include: { task: true }
   })
+
+  // Lógica de menciones: Buscar @email.com o @nombre
+  const mentions = content.match(/@[\w.-]+@[\w.-]+\.\w+|@[\w.-]+/g)
+  if (mentions) {
+    for (const mention of mentions) {
+      const target = mention.substring(1) // Quitar el @
+      // Buscar usuario por email o nombre
+      const user = await prisma.user.findFirst({
+        where: { OR: [{ email: target }, { name: target }] }
+      })
+      if (user) {
+        await sendMentionEmail(user.email, comment.task.title, content)
+      }
+    }
+  }
+
   revalidatePath('/list')
   revalidatePath('/kanban')
   revalidatePath('/gantt')
   revalidatePath('/table')
 }
 
-export async function getTaskWithComments(taskId: string) {
+export async function createAttachment(formData: FormData) {
+  const taskId = formData.get('taskId') as string
+  const filename = formData.get('filename') as string
+  const url = formData.get('url') as string
+  const userId = formData.get('userId') as string || undefined
+
+  if (!taskId || !filename || !url) throw new Error('Datos incompletos para el adjunto')
+
+  await prisma.attachment.create({
+    data: { taskId, filename, url, userId: userId || null }
+  })
+  revalidatePath('/list')
+}
+
+export async function getTaskWithDetails(taskId: string) {
   return prisma.task.findUnique({
     where: { id: taskId },
     include: {
@@ -349,6 +421,14 @@ export async function getTaskWithComments(taskId: string) {
         include: { author: true },
         orderBy: { createdAt: 'desc' },
       },
+      history: {
+        include: { user: true },
+        orderBy: { createdAt: 'desc' }
+      },
+      attachments: {
+        include: { user: true },
+        orderBy: { createdAt: 'desc' }
+      }
     },
   })
 }

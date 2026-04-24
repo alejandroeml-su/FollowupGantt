@@ -21,6 +21,8 @@ export default async function KanbanBoard() {
       assignee: true,
       project: true,
       comments: { include: { author: true }, orderBy: { createdAt: 'desc' } },
+      history: { include: { user: true }, orderBy: { createdAt: 'desc' } },
+      attachments: { include: { user: true }, orderBy: { createdAt: 'desc' } },
     },
     orderBy: [{ position: 'asc' }, { priority: 'desc' }],
   })

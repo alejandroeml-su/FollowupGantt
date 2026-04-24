@@ -70,6 +70,8 @@ export default async function GanttTimeline({
       assignee: true,
       project: true,
       comments: { include: { author: true }, orderBy: { createdAt: 'desc' } },
+      history: { include: { user: true }, orderBy: { createdAt: 'desc' } },
+      attachments: { include: { user: true }, orderBy: { createdAt: 'desc' } },
     },
     orderBy: [{ startDate: 'asc' }, { createdAt: 'asc' }],
   })

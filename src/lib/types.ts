@@ -21,10 +21,31 @@ export type TaskWithAssignee = Prisma.TaskGetPayload<{
   };
 }>;
 
+/** Serialized history entry */
+export interface SerializedHistoryEntry {
+  id: string;
+  field: string;
+  oldValue?: string | null;
+  newValue?: string | null;
+  createdAt: string;
+  user?: { id: string; name: string } | null;
+}
+
+/** Serialized attachment */
+export interface SerializedAttachment {
+  id: string;
+  filename: string;
+  url: string;
+  size?: number | null;
+  createdAt: string;
+  user?: { id: string; name: string } | null;
+}
+
 /** Serialized comment for client components (Date → string) */
 export interface SerializedComment {
   id: string;
   content: string;
+  isInternal: boolean;
   createdAt: string;
   author?: { id: string; name: string } | null;
 }
@@ -45,6 +66,8 @@ export interface SerializedTask {
   project?: { id: string; name: string } | null;
   subtasks?: SerializedTask[];
   comments?: SerializedComment[];
+  history?: SerializedHistoryEntry[];
+  attachments?: SerializedAttachment[];
   createdAt?: string | null;
   updatedAt?: string | null;
   parentId?: string | null;
@@ -81,8 +104,25 @@ type RawTask = {
   comments?: Array<{
     id: string;
     content: string;
+    isInternal?: boolean;
     createdAt?: DateLike;
     author?: RawPerson | null;
+  }>;
+  history?: Array<{
+    id: string;
+    field: string;
+    oldValue?: string | null;
+    newValue?: string | null;
+    createdAt?: DateLike;
+    user?: RawPerson | null;
+  }>;
+  attachments?: Array<{
+    id: string;
+    filename: string;
+    url: string;
+    size?: number | null;
+    createdAt?: DateLike;
+    user?: RawPerson | null;
   }>;
   parentId?: string | null;
   plannedValue?: number | null;
@@ -127,8 +167,25 @@ export function serializeTask(task: Record<string, unknown>): SerializedTask {
     comments: Array.isArray(t.comments) ? t.comments.map((c) => ({
       id: c.id,
       content: c.content,
+      isInternal: !!c.isInternal,
       createdAt: toISO(c.createdAt) ?? '',
       author: c.author ? { id: c.author.id, name: c.author.name } : null,
+    })) : [],
+    history: Array.isArray(t.history) ? t.history.map((h) => ({
+      id: h.id,
+      field: h.field,
+      oldValue: h.oldValue,
+      newValue: h.newValue,
+      createdAt: toISO(h.createdAt) ?? '',
+      user: h.user ? { id: h.user.id, name: h.user.name } : null,
+    })) : [],
+    attachments: Array.isArray(t.attachments) ? t.attachments.map((a) => ({
+      id: a.id,
+      filename: a.filename,
+      url: a.url,
+      size: a.size,
+      createdAt: toISO(a.createdAt) ?? '',
+      user: a.user ? { id: a.user.id, name: a.user.name } : null,
     })) : [],
   };
 }

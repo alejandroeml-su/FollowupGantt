@@ -10,7 +10,9 @@ export default async function TableDBPage() {
       include: {
         project: true,
         assignee: true,
-        comments: { select: { id: true } },
+        comments: { include: { author: true }, orderBy: { createdAt: 'desc' } },
+        history: { include: { user: true }, orderBy: { createdAt: 'desc' } },
+        attachments: { include: { user: true }, orderBy: { createdAt: 'desc' } },
       },
       orderBy: { createdAt: 'desc' }
     }),

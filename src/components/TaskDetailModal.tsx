@@ -6,7 +6,7 @@ import {
   CheckCircle2, Circle, AlertCircle, Send, Layers, Tag,
   ChevronRight, FileText
 } from 'lucide-react';
-import { createComment, getTaskWithComments } from '@/lib/actions';
+import { createComment, getTaskWithDetails } from '@/lib/actions';
 
 // ─── Types ───────────────────────────────────────────────────────
 
@@ -115,7 +115,7 @@ export default function TaskDetailModal({
       await createComment(fd);
 
       // Refresh comments
-      const updated = await getTaskWithComments(task.id);
+      const updated = await getTaskWithDetails(task.id);
       if (updated?.comments) {
         setComments(updated.comments.map((c: { id: string; content: string; createdAt: Date; author?: { id: string; name: string } | null }) => ({
           id: c.id,

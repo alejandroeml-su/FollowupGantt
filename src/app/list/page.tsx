@@ -14,19 +14,17 @@ export default async function ListViewPage() {
       subtasks: {
         include: {
           assignee: true,
-          comments: {
-            include: { author: true },
-            orderBy: { createdAt: 'desc' },
-          },
+          comments: { include: { author: true }, orderBy: { createdAt: 'desc' } },
+          history: { include: { user: true }, orderBy: { createdAt: 'desc' } },
+          attachments: { include: { user: true }, orderBy: { createdAt: 'desc' } },
         },
         orderBy: [{ position: 'asc' }, { createdAt: 'asc' }],
       },
       assignee: true,
       project: true,
-      comments: {
-        include: { author: true },
-        orderBy: { createdAt: 'desc' },
-      },
+      comments: { include: { author: true }, orderBy: { createdAt: 'desc' } },
+      history: { include: { user: true }, orderBy: { createdAt: 'desc' } },
+      attachments: { include: { user: true }, orderBy: { createdAt: 'desc' } },
     },
     orderBy: [{ position: 'asc' }, { createdAt: 'desc' }],
   })
