@@ -26,12 +26,15 @@ export default defineConfig({
     { name: 'webkit', use: { ...devices['Desktop Safari'] } },
     { name: 'mobile', use: { ...devices['Pixel 7'] } },
   ],
+  // En CI, el workflow arranca Next.js manualmente (para orquestar el orden
+  // con `prisma db push` y `tsx prisma/seed.ts`). Reusamos el server existente
+  // y no lo arrancamos desde Playwright.
   webServer: process.env.CI
     ? {
         command: 'npm run start',
         url: BASE_URL,
         timeout: 120_000,
-        reuseExistingServer: !process.env.CI,
+        reuseExistingServer: true,
       }
     : undefined,
 })
