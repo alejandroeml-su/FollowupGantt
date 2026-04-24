@@ -1,7 +1,8 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  /* config options here */
+  // Requerido para la imagen Docker multi-stage (@SRE)
+  output: "standalone",
 };
 
 export default nextConfig;

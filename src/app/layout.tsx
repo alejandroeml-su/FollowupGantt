@@ -18,6 +18,7 @@ export const metadata: Metadata = {
 };
 
 import Sidebar from "@/components/Sidebar";
+import { AppInteractionShell } from "@/components/interactions/AppInteractionShell";
 
 export default function RootLayout({
   children,
@@ -31,6 +32,7 @@ export default function RootLayout({
         <main className="flex-1 flex flex-col overflow-hidden">
           {children}
         </main>
+        <AppInteractionShell />
       </body>
     </html>
   );

@@ -1,66 +1,166 @@
 'use client';
 
+import { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { LayoutDashboard, Columns, CalendarDays, Target, FolderKanban } from 'lucide-react';
+import { 
+  LayoutDashboard, Columns, CalendarDays, Target, FolderKanban, Building2,
+  List, Users, Table, Network, FileText, ClipboardList, 
+  Zap, LayoutTemplate, Sparkles, ChevronDown, Eye, Settings, Briefcase,
+  type LucideIcon
+} from 'lucide-react';
 import { clsx } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 
-const routes = [
+// ─── Route types ─────────────────────────────────────────────────
+interface RouteItem {
+  name: string;
+  path: string;
+  icon: LucideIcon;
+}
+
+interface RouteGroup {
+  label: string;
+  icon: LucideIcon;
+  color: string;       // accent color class for the group icon
+  routes: RouteItem[];
+}
+
+// ─── Navigation structure ────────────────────────────────────────
+
+const topRoutes: RouteItem[] = [
   { name: 'Dashboard', path: '/', icon: LayoutDashboard },
-  { name: 'Gestión Proyectos', path: '/projects', icon: FolderKanban },
-  { name: 'Kanban Board', path: '/kanban', icon: Columns },
-  { name: 'Gantt Timeline', path: '/gantt', icon: CalendarDays },
+  { name: 'Avante Brain AI', path: '/brain', icon: Sparkles },
 ];
+
+const menuGroups: RouteGroup[] = [
+  {
+    label: 'Vistas',
+    icon: Eye,
+    color: 'text-cyan-400',
+    routes: [
+      { name: 'Lista', path: '/list', icon: List },
+      { name: 'Kanban', path: '/kanban', icon: Columns },
+      { name: 'Gantt', path: '/gantt', icon: CalendarDays },
+      { name: 'Tabla', path: '/table', icon: Table },
+      { name: 'Mind Maps', path: '/mindmaps', icon: Network },
+    ],
+  },
+  {
+    label: 'Gestión',
+    icon: Briefcase,
+    color: 'text-amber-400',
+    routes: [
+      { name: 'Docs & Wiki', path: '/docs', icon: FileText },
+      { name: 'Formularios', path: '/forms', icon: ClipboardList },
+      { name: 'Automatizaciones', path: '/automations', icon: Zap },
+      { name: 'Dashboards KPI', path: '/dashboards', icon: LayoutTemplate },
+    ],
+  },
+  {
+    label: 'Configuración',
+    icon: Settings,
+    color: 'text-violet-400',
+    routes: [
+      { name: 'Gerencias', path: '/gerencias', icon: Building2 },
+      { name: 'Proyectos', path: '/projects', icon: FolderKanban },
+      { name: 'Usuarios', path: '/workload', icon: Users },
+    ],
+  },
+];
+
+// ─── Sidebar ─────────────────────────────────────────────────────
 
 export default function Sidebar() {
   const pathname = usePathname();
 
+  // Determine which groups should start open (if a child is active)
+  const initialOpen = menuGroups.reduce<Record<string, boolean>>((acc, group) => {
+    acc[group.label] = group.routes.some(r => r.path === pathname);
+    return acc;
+  }, {});
+
+  const [openGroups, setOpenGroups] = useState<Record<string, boolean>>(initialOpen);
+
+  const toggle = (label: string) =>
+    setOpenGroups(prev => ({ ...prev, [label]: !prev[label] }));
+
   return (
     <div className="flex h-screen w-64 flex-col bg-slate-900 text-slate-300 border-r border-slate-800">
+      {/* ── Logo ─────────────────────────────────────────── */}
       <div className="flex h-16 shrink-0 items-center px-6 border-b border-slate-800 bg-slate-950/50">
         <Target className="h-6 w-6 text-indigo-500 mr-3" />
         <span className="text-lg font-bold text-white tracking-wide">Avante Orq</span>
       </div>
-      
-      <div className="flex flex-1 flex-col overflow-y-auto pt-6 px-4">
-        <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-4 px-2">
+
+      {/* ── Navigation ───────────────────────────────────── */}
+      <div className="flex flex-1 flex-col overflow-y-auto pt-5 px-3">
+        {/* Section label */}
+        <div className="text-[10px] font-semibold text-slate-600 uppercase tracking-[0.15em] mb-3 px-2">
           Orquestación Híbrida
         </div>
-        <nav className="flex-1 space-y-1">
-          {routes.map((route) => {
-            const isActive = pathname === route.path;
-            const Icon = route.icon;
-            
+
+        <nav className="flex-1 space-y-0.5">
+          {/* ── Top-level routes ──────────────────────────── */}
+          {topRoutes.map(route => (
+            <NavLink key={route.path} route={route} pathname={pathname} />
+          ))}
+
+          {/* ── Divider ──────────────────────────────────── */}
+          <div className="!my-3 border-t border-slate-800/60" />
+
+          {/* ── Collapsible groups ────────────────────────── */}
+          {menuGroups.map(group => {
+            const isOpen = openGroups[group.label] ?? false;
+            const hasActiveChild = group.routes.some(r => r.path === pathname);
+            const GroupIcon = group.icon;
+
             return (
-              <Link
-                key={route.name}
-                href={route.path}
-                className={twMerge(
-                  clsx(
-                    'group flex items-center px-3 py-2.5 text-sm font-medium rounded-lg transition-all duration-200',
-                    isActive
-                      ? 'bg-indigo-500/10 text-indigo-400'
-                      : 'text-slate-400 hover:bg-slate-800 hover:text-white'
-                  )
-                )}
-              >
-                <Icon
+              <div key={group.label} className="mb-1">
+                {/* Group header (toggle) */}
+                <button
+                  onClick={() => toggle(group.label)}
                   className={twMerge(
                     clsx(
-                      'mr-3 h-5 w-5 flex-shrink-0 transition-colors duration-200',
-                      isActive ? 'text-indigo-400' : 'text-slate-500 group-hover:text-white'
+                      'w-full flex items-center justify-between px-3 py-2 text-[13px] font-semibold rounded-lg transition-all duration-200 select-none',
+                      hasActiveChild
+                        ? 'text-white bg-slate-800/60'
+                        : 'text-slate-400 hover:text-white hover:bg-slate-800/40'
                     )
                   )}
-                  aria-hidden="true"
-                />
-                {route.name}
-              </Link>
+                >
+                  <span className="flex items-center gap-2.5">
+                    <GroupIcon className={clsx('h-4 w-4 flex-shrink-0', group.color)} />
+                    {group.label}
+                  </span>
+                  <ChevronDown
+                    className={clsx(
+                      'h-3.5 w-3.5 text-slate-500 transition-transform duration-200',
+                      isOpen && 'rotate-180'
+                    )}
+                  />
+                </button>
+
+                {/* Sub-routes with animated collapse */}
+                <div
+                  className={clsx(
+                    'overflow-hidden transition-all duration-200 ease-in-out',
+                    isOpen ? 'max-h-[500px] opacity-100' : 'max-h-0 opacity-0'
+                  )}
+                >
+                  <div className="ml-2 mt-0.5 space-y-0.5 border-l border-slate-800/50 pl-2">
+                    {group.routes.map(route => (
+                      <NavLink key={route.path} route={route} pathname={pathname} compact />
+                    ))}
+                  </div>
+                </div>
+              </div>
             );
           })}
         </nav>
       </div>
 
+      {/* ── User footer ──────────────────────────────────── */}
       <div className="p-4 border-t border-slate-800">
         <div className="flex items-center gap-3 px-2 py-2 rounded-lg bg-slate-800/50">
           <div className="h-8 w-8 rounded-full bg-indigo-600 flex items-center justify-center text-sm font-bold text-white shadow-lg">
@@ -73,5 +173,47 @@ export default function Sidebar() {
         </div>
       </div>
     </div>
+  );
+}
+
+// ─── Reusable nav link ───────────────────────────────────────────
+
+function NavLink({
+  route,
+  pathname,
+  compact = false,
+}: {
+  route: RouteItem;
+  pathname: string;
+  compact?: boolean;
+}) {
+  const isActive = pathname === route.path;
+  const Icon = route.icon;
+
+  return (
+    <Link
+      href={route.path}
+      className={twMerge(
+        clsx(
+          'group flex items-center rounded-lg transition-all duration-200',
+          compact ? 'px-2.5 py-1.5 text-[13px]' : 'px-3 py-2.5 text-sm font-medium',
+          isActive
+            ? 'bg-indigo-500/10 text-indigo-400'
+            : 'text-slate-400 hover:bg-slate-800 hover:text-white'
+        )
+      )}
+    >
+      <Icon
+        className={twMerge(
+          clsx(
+            'flex-shrink-0 transition-colors duration-200',
+            compact ? 'mr-2.5 h-4 w-4' : 'mr-3 h-5 w-5',
+            isActive ? 'text-indigo-400' : 'text-slate-500 group-hover:text-white'
+          )
+        )}
+        aria-hidden="true"
+      />
+      {route.name}
+    </Link>
   );
 }

@@ -66,16 +66,32 @@ model User {
   // Relaciones
   managedProjects Project[] @relation("ProjectManager")
   tasks          Task[]    @relation("TaskAssignee")
+  comments       Comment[] @relation("CommentAuthor")
   
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
 }
 
 // Módulo de Estructura Organizacional
+model Gerencia {
+  id             String    @id @default(uuid())
+  name           String    @unique // Ejemplo: "OPERACIONES", "FINANZAS"
+  description    String?
+  
+  areas          Area[]
+
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+}
+
 model Area {
   id             String    @id @default(uuid())
-  name           String    // Ejemplo: "Gerencia de TI", "Operaciones"
+  name           String    // Ejemplo: "Desarrollo", "Infraestructura"
   description    String?
+  
+  // Relación con Gerencia (obligatoria)
+  gerenciaId     String
+  gerencia       Gerencia  @relation(fields: [gerenciaId], references: [id], onDelete: Cascade)
   
   projects       Project[]
 
@@ -209,9 +225,39 @@ model Task {
   plannedValue   Float?    // PV: Valor Planificado (Costo o esfuerzo base)
   actualCost     Float?    // AC: Costo/Esfuerzo real incurrido
   earnedValue    Float?    // EV: Valor Ganado (PV * progress/100)
-  
+
+  // Ordenamiento visual en List/Kanban (ADR-001 fractional indexing)
+  position       Float     @default(0)
+
+  // Soft archive para acción "Archivar" del menú contextual
+  archivedAt     DateTime?
+
+  // Etiquetas libres para filtros/búsqueda
+  tags           String[]  @default([])
+
+  // Seguimiento y comentarios
+  comments       Comment[]
+
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
+
+  @@index([projectId, columnId, position])
+  @@index([projectId, parentId, position])
+  @@index([archivedAt])
+}
+
+// Comentarios / Seguimiento de tareas
+model Comment {
+  id             String    @id @default(uuid())
+  content        String
+  
+  taskId         String
+  task           Task      @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  
+  authorId       String?
+  author         User?     @relation("CommentAuthor", fields: [authorId], references: [id])
+  
+  createdAt      DateTime  @default(now())
 }
 
 // Dependencias entre tareas (FS, SS, FF, SF)

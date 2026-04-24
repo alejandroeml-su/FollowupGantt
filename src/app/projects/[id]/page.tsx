@@ -50,8 +50,10 @@ export default function ProjectDetailManagement({ params }: { params: { id: stri
   // Form states
   const [selectedParentId, setSelectedParentId] = useState<string | null>(null);
 
+  interface MockTask { id: string; title: string; type: string; start: string; end: string; progress: number; subtasks?: MockTask[] }
+
   // Render Recursivo de Tareas (WBS)
-  const renderTaskRow = (task: any, level = 0) => {
+  const renderTaskRow = (task: MockTask, level = 0) => {
     return (
       <div key={task.id} className="flex flex-col">
         <div className={`flex items-center group hover:bg-slate-800/50 border-b border-slate-800/50 py-3 px-4 transition-colors ${level === 0 ? 'bg-slate-900/40' : ''}`}>
@@ -100,7 +102,7 @@ export default function ProjectDetailManagement({ params }: { params: { id: stri
           </div>
         </div>
         
-        {task.subtasks && task.subtasks.map((sub: any) => renderTaskRow(sub, level + 1))}
+        {task.subtasks && task.subtasks.map((sub: MockTask) => renderTaskRow(sub, level + 1))}
       </div>
     );
   };
