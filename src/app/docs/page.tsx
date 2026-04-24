@@ -97,7 +97,7 @@ export default function DocsPage() {
               </ul>
 
               <div className="bg-slate-900 border border-slate-800 rounded-lg p-4 my-6 text-sm text-slate-400 font-mono">
-                $ terraform apply -var-file="prod.tfvars"
+                $ terraform apply -var-file=&quot;prod.tfvars&quot;
               </div>
             </div>
             

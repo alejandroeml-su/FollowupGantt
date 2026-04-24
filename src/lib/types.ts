@@ -55,8 +55,47 @@ export interface SerializedTask {
  * Converts Prisma Task (with Date objects) into a plain JSON-safe object
  * for passing from Server Components to Client Components.
  */
+type DateLike = { toISOString?: () => string } | string | number | Date | null | undefined
+
+type RawPerson = { id: string; name: string }
+type RawTask = {
+  id: string;
+  title: string;
+  description?: string | null;
+  status: string;
+  priority: string;
+  type: string;
+  progress?: number;
+  isMilestone?: boolean;
+  startDate?: DateLike;
+  endDate?: DateLike;
+  createdAt?: DateLike;
+  updatedAt?: DateLike;
+  assignee?: RawPerson | null;
+  project?: { id: string; name: string } | null;
+  subtasks?: unknown[];
+  comments?: Array<{
+    id: string;
+    content: string;
+    createdAt?: DateLike;
+    author?: RawPerson | null;
+  }>;
+}
+
+function toISO(d: DateLike): string | null {
+  if (!d) return null;
+  if (typeof d === 'object' && 'toISOString' in d && typeof d.toISOString === 'function') {
+    return d.toISOString();
+  }
+  try {
+    return new Date(d as string | number | Date).toISOString();
+  } catch {
+    return null;
+  }
+}
+
 export function serializeTask(task: Record<string, unknown>): SerializedTask {
-  const t = task as Record<string, any>;
+  const t = task as unknown as RawTask;
   return {
     id: t.id,
     title: t.title,
@@ -66,17 +105,17 @@ export function serializeTask(task: Record<string, unknown>): SerializedTask {
     type: t.type,
     progress: t.progress ?? 0,
     isMilestone: t.isMilestone ?? false,
-    startDate: t.startDate ? new Date(t.startDate).toISOString() : null,
-    endDate: t.endDate ? new Date(t.endDate).toISOString() : null,
-    createdAt: t.createdAt?.toISOString?.() ?? null,
-    updatedAt: t.updatedAt?.toISOString?.() ?? null,
+    startDate: t.startDate ? toISO(t.startDate) : null,
+    endDate: t.endDate ? toISO(t.endDate) : null,
+    createdAt: toISO(t.createdAt),
+    updatedAt: toISO(t.updatedAt),
     assignee: t.assignee ? { id: t.assignee.id, name: t.assignee.name } : null,
     project: t.project ? { id: t.project.id, name: t.project.name } : null,
-    subtasks: Array.isArray(t.subtasks) ? t.subtasks.map((s: Record<string, unknown>) => serializeTask(s)) : [],
-    comments: Array.isArray(t.comments) ? t.comments.map((c: Record<string, any>) => ({
+    subtasks: Array.isArray(t.subtasks) ? t.subtasks.map((s) => serializeTask(s as Record<string, unknown>)) : [],
+    comments: Array.isArray(t.comments) ? t.comments.map((c) => ({
       id: c.id,
       content: c.content,
-      createdAt: c.createdAt?.toISOString?.() ?? null,
+      createdAt: toISO(c.createdAt) ?? '',
       author: c.author ? { id: c.author.id, name: c.author.name } : null,
     })) : [],
   };

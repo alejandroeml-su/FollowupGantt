@@ -100,7 +100,7 @@ export default function BrainAIPage() {
                    <div className="space-y-4 text-sm text-slate-300">
                      <p>Basado en la actividad de Prisma de las últimas 24h:</p>
                      <ul className="list-disc pl-5 space-y-2 text-slate-400">
-                       <li><strong className="text-slate-200">Edwin Martinez</strong> completó 1 tarea ("Configuración VPC") y tiene 1 en progreso ("Security Groups").</li>
+                       <li><strong className="text-slate-200">Edwin Martinez</strong> completó 1 tarea (&quot;Configuración VPC&quot;) y tiene 1 en progreso (&quot;Security Groups&quot;).</li>
                        <li>El proyecto <strong className="text-indigo-400">Infraestructura Cloud Avante</strong> avanzó un 15% global.</li>
                        <li>No hay cuellos de botella detectados para hoy.</li>
                      </ul>
@@ -117,7 +117,7 @@ export default function BrainAIPage() {
                      <p>La IA ha detectado una desviación potencial en el cronograma:</p>
                      <div className="bg-slate-950 rounded-lg p-3 border border-slate-800">
                        <p className="text-red-400 font-medium mb-1">Riesgo Alto: Retraso de 2 días proyectado</p>
-                       <p className="text-xs text-slate-500">La tarea "Validación de Security Groups" lleva 24h en IN_PROGRESS y está en la ruta crítica del Gantt. Si no se cierra mañana, el SPI caerá a 0.94.</p>
+                       <p className="text-xs text-slate-500">La tarea &quot;Validación de Security Groups&quot; lleva 24h en IN_PROGRESS y está en la ruta crítica del Gantt. Si no se cierra mañana, el SPI caerá a 0.94.</p>
                      </div>
                      <button className="w-full mt-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs py-2 rounded-lg font-medium transition-colors">
                        Auto-Reasignar Recursos
@@ -149,9 +149,9 @@ export default function BrainAIPage() {
                  <div className="flex-1 p-6 relative">
                    <div className="absolute inset-0 bg-gradient-to-b from-transparent to-slate-900/80 pointer-events-none" />
                    
-                   <p className="text-sm text-slate-500 mb-2 font-mono">// Texto original proporcionado por el usuario:</p>
+                   <p className="text-sm text-slate-500 mb-2 font-mono">{'// Texto original proporcionado por el usuario:'}</p>
                    <p className="text-slate-300 bg-slate-950 p-3 rounded-lg border border-slate-800 mb-6">
-                     "Hacer la integracion con supabase para que se guarden las tareas y se vean en la lista"
+                     &quot;Hacer la integracion con supabase para que se guarden las tareas y se vean en la lista&quot;
                    </p>
 
                    <div className="flex items-center gap-2 mb-2 text-indigo-400 text-sm font-semibold">
@@ -160,7 +160,7 @@ export default function BrainAIPage() {
                    <div className="prose prose-invert prose-sm">
                      <p className="bg-indigo-500/10 p-4 rounded-lg border border-indigo-500/20 text-slate-200">
                        <strong>Título:</strong> Integración de ORM Prisma y Supabase para Persistencia de Tareas<br/><br/>
-                       <strong>Descripción:</strong> Como Desarrollador Backend, quiero conectar el módulo de "List View" con la base de datos PostgreSQL alojada en Supabase utilizando Prisma, para asegurar que todas las tareas se guarden y recuperen de manera persistente.<br/><br/>
+                       <strong>Descripción:</strong> Como Desarrollador Backend, quiero conectar el módulo de &quot;List View&quot; con la base de datos PostgreSQL alojada en Supabase utilizando Prisma, para asegurar que todas las tareas se guarden y recuperen de manera persistente.<br/><br/>
                        <strong>Criterios de Aceptación:</strong><br/>
                        1. El cliente Prisma está inicializado en <code>src/lib/prisma.ts</code>.<br/>
                        2. El Server Component recupera datos usando <code>prisma.task.findMany()</code>.<br/>
