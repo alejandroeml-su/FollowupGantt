@@ -69,10 +69,16 @@ const menuGroups: RouteGroup[] = [
   },
 ];
 
+import { useUIStore } from '@/lib/stores/ui';
+import { ThemeToggle } from './ThemeToggle';
+import { X } from 'lucide-react';
+
 // ─── Sidebar ─────────────────────────────────────────────────────
 
 export default function Sidebar() {
   const pathname = usePathname();
+  const mobileOpen = useUIStore((s) => s.mobileSidebarOpen);
+  const setMobileOpen = useUIStore((s) => s.setMobileSidebarOpen);
 
   // Determine which groups should start open (if a child is active)
   const initialOpen = menuGroups.reduce<Record<string, boolean>>((acc, group) => {
@@ -86,93 +92,120 @@ export default function Sidebar() {
     setOpenGroups(prev => ({ ...prev, [label]: !prev[label] }));
 
   return (
-    <div className="flex h-screen w-64 flex-col bg-slate-900 text-slate-300 border-r border-slate-800">
-      {/* ── Logo ─────────────────────────────────────────── */}
-      <div className="flex h-16 shrink-0 items-center px-6 border-b border-slate-800 bg-slate-950/50">
-        <Target className="h-6 w-6 text-indigo-500 mr-3" />
-        <span className="text-lg font-bold text-white tracking-wide">Avante Orq</span>
-      </div>
+    <>
+      {/* Backdrop (Mobile only) */}
+      {mobileOpen && (
+        <div 
+          className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm lg:hidden transition-opacity duration-300" 
+          onClick={() => setMobileOpen(false)}
+        />
+      )}
 
-      {/* ── Navigation ───────────────────────────────────── */}
-      <div className="flex flex-1 flex-col overflow-y-auto pt-5 px-3">
-        {/* Section label */}
-        <div className="text-[10px] font-semibold text-slate-600 uppercase tracking-[0.15em] mb-3 px-2">
-          Orquestación Híbrida
+      <div className={twMerge(
+        clsx(
+          "fixed inset-y-0 left-0 z-50 flex w-72 flex-col bg-card text-foreground border-r border-border transition-all duration-300 ease-in-out lg:static lg:translate-x-0",
+          mobileOpen ? "translate-x-0" : "-translate-x-full"
+        )
+      )}>
+        {/* ── Logo ─────────────────────────────────────────── */}
+        <div className="flex h-16 shrink-0 items-center justify-between px-6 border-b border-border bg-muted/30">
+          <div className="flex items-center">
+            <Target className="h-6 w-6 text-primary mr-3" />
+            <span className="text-lg font-bold text-foreground tracking-wide">Avante Orq</span>
+          </div>
+          <button 
+            className="p-1.5 rounded-lg hover:bg-accent lg:hidden"
+            onClick={() => setMobileOpen(false)}
+          >
+            <X className="h-5 w-5 text-muted-foreground" />
+          </button>
         </div>
 
-        <nav className="flex-1 space-y-0.5">
-          {/* ── Top-level routes ──────────────────────────── */}
-          {topRoutes.map(route => (
-            <NavLink key={route.path} route={route} pathname={pathname} />
-          ))}
+        {/* ── Navigation ───────────────────────────────────── */}
+        <div className="flex flex-1 flex-col overflow-y-auto pt-5 px-3 custom-scrollbar">
+          {/* Section label */}
+          <div className="text-[10px] font-semibold text-muted-foreground uppercase tracking-[0.15em] mb-3 px-2">
+            Orquestación Híbrida
+          </div>
 
-          {/* ── Divider ──────────────────────────────────── */}
-          <div className="!my-3 border-t border-slate-800/60" />
+          <nav className="flex-1 space-y-0.5">
+            {/* ── Top-level routes ──────────────────────────── */}
+            {topRoutes.map(route => (
+              <NavLink key={route.path} route={route} pathname={pathname} onClick={() => setMobileOpen(false)} />
+            ))}
 
-          {/* ── Collapsible groups ────────────────────────── */}
-          {menuGroups.map(group => {
-            const isOpen = openGroups[group.label] ?? false;
-            const hasActiveChild = group.routes.some(r => r.path === pathname);
-            const GroupIcon = group.icon;
+            {/* ── Divider ──────────────────────────────────── */}
+            <div className="!my-3 border-t border-border/60" />
 
-            return (
-              <div key={group.label} className="mb-1">
-                {/* Group header (toggle) */}
-                <button
-                  onClick={() => toggle(group.label)}
-                  className={twMerge(
-                    clsx(
-                      'w-full flex items-center justify-between px-3 py-2 text-[13px] font-semibold rounded-lg transition-all duration-200 select-none',
-                      hasActiveChild
-                        ? 'text-white bg-slate-800/60'
-                        : 'text-slate-400 hover:text-white hover:bg-slate-800/40'
-                    )
-                  )}
-                >
-                  <span className="flex items-center gap-2.5">
-                    <GroupIcon className={clsx('h-4 w-4 flex-shrink-0', group.color)} />
-                    {group.label}
-                  </span>
-                  <ChevronDown
-                    className={clsx(
-                      'h-3.5 w-3.5 text-slate-500 transition-transform duration-200',
-                      isOpen && 'rotate-180'
+            {/* ── Collapsible groups ────────────────────────── */}
+            {menuGroups.map(group => {
+              const isOpen = openGroups[group.label] ?? false;
+              const hasActiveChild = group.routes.some(r => r.path === pathname);
+              const GroupIcon = group.icon;
+
+              return (
+                <div key={group.label} className="mb-1">
+                  {/* Group header (toggle) */}
+                  <button
+                    onClick={() => toggle(group.label)}
+                    className={twMerge(
+                      clsx(
+                        'w-full flex items-center justify-between px-3 py-2 text-[13px] font-semibold rounded-lg transition-all duration-200 select-none',
+                        hasActiveChild
+                          ? 'text-foreground bg-accent/60 shadow-sm'
+                          : 'text-muted-foreground hover:text-foreground hover:bg-accent/40'
+                      )
                     )}
-                  />
-                </button>
+                  >
+                    <span className="flex items-center gap-2.5">
+                      <GroupIcon className={clsx('h-4 w-4 flex-shrink-0', group.color)} />
+                      {group.label}
+                    </span>
+                    <ChevronDown
+                      className={clsx(
+                        'h-3.5 w-3.5 text-muted-foreground transition-transform duration-200',
+                        isOpen && 'rotate-180'
+                      )}
+                    />
+                  </button>
 
-                {/* Sub-routes with animated collapse */}
-                <div
-                  className={clsx(
-                    'overflow-hidden transition-all duration-200 ease-in-out',
-                    isOpen ? 'max-h-[500px] opacity-100' : 'max-h-0 opacity-0'
-                  )}
-                >
-                  <div className="ml-2 mt-0.5 space-y-0.5 border-l border-slate-800/50 pl-2">
-                    {group.routes.map(route => (
-                      <NavLink key={route.path} route={route} pathname={pathname} compact />
-                    ))}
+                  {/* Sub-routes with animated collapse */}
+                  <div
+                    className={clsx(
+                      'overflow-hidden transition-all duration-200 ease-in-out',
+                      isOpen ? 'max-h-[500px] opacity-100' : 'max-h-0 opacity-0'
+                    )}
+                  >
+                    <div className="ml-2 mt-0.5 space-y-0.5 border-l border-border/50 pl-2">
+                      {group.routes.map(route => (
+                        <NavLink key={route.path} route={route} pathname={pathname} compact onClick={() => setMobileOpen(false)} />
+                      ))}
+                    </div>
                   </div>
                 </div>
-              </div>
-            );
-          })}
-        </nav>
-      </div>
+              );
+            })}
+          </nav>
+        </div>
 
-      {/* ── User footer ──────────────────────────────────── */}
-      <div className="p-4 border-t border-slate-800">
-        <div className="flex items-center gap-3 px-2 py-2 rounded-lg bg-slate-800/50">
-          <div className="h-8 w-8 rounded-full bg-indigo-600 flex items-center justify-center text-sm font-bold text-white shadow-lg">
-            EM
+        {/* ── User footer ──────────────────────────────────── */}
+        <div className="p-4 border-t border-border bg-muted/10 space-y-4">
+          <div className="flex items-center justify-between px-2">
+             <span className="text-xs font-semibold text-muted-foreground uppercase tracking-widest">Tema</span>
+             <ThemeToggle />
           </div>
-          <div className="flex flex-col">
-            <span className="text-xs font-medium text-white">Edwin Martinez</span>
-            <span className="text-[10px] text-slate-400">PM Híbrido</span>
+          <div className="flex items-center gap-3 px-2 py-2 rounded-lg bg-accent/40 border border-border/50">
+            <div className="h-8 w-8 rounded-full bg-primary flex items-center justify-center text-sm font-bold text-primary-foreground shadow-md">
+              EM
+            </div>
+            <div className="flex flex-col">
+              <span className="text-xs font-medium text-foreground">Edwin Martinez</span>
+              <span className="text-[10px] text-muted-foreground">PM Híbrido</span>
+            </div>
           </div>
         </div>
       </div>
-    </div>
+    </>
   );
 }
 
@@ -182,10 +215,12 @@ function NavLink({
   route,
   pathname,
   compact = false,
+  onClick,
 }: {
   route: RouteItem;
   pathname: string;
   compact?: boolean;
+  onClick?: () => void;
 }) {
   const isActive = pathname === route.path;
   const Icon = route.icon;
@@ -193,13 +228,14 @@ function NavLink({
   return (
     <Link
       href={route.path}
+      onClick={onClick}
       className={twMerge(
         clsx(
           'group flex items-center rounded-lg transition-all duration-200',
           compact ? 'px-2.5 py-1.5 text-[13px]' : 'px-3 py-2.5 text-sm font-medium',
           isActive
-            ? 'bg-indigo-500/10 text-indigo-400'
-            : 'text-slate-400 hover:bg-slate-800 hover:text-white'
+            ? 'bg-primary/10 text-primary shadow-sm'
+            : 'text-muted-foreground hover:bg-accent hover:text-foreground'
         )
       )}
     >
@@ -208,7 +244,7 @@ function NavLink({
           clsx(
             'flex-shrink-0 transition-colors duration-200',
             compact ? 'mr-2.5 h-4 w-4' : 'mr-3 h-5 w-5',
-            isActive ? 'text-indigo-400' : 'text-slate-500 group-hover:text-white'
+            isActive ? 'text-primary' : 'text-muted-foreground group-hover:text-foreground'
           )
         )}
         aria-hidden="true"

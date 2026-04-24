@@ -18,6 +18,7 @@ type UIState = {
   shortcutsOverlayOpen: boolean
   currentView: View
   columnPrefs: Record<string, ColumnPrefs>
+  mobileSidebarOpen: boolean
 
   toggleSelection: (id: string, additive?: boolean) => void
   selectRange: (ids: string[]) => void
@@ -29,6 +30,7 @@ type UIState = {
   setView: (v: View) => void
   setColumnPrefs: (id: string, patch: Partial<ColumnPrefs>) => void
   resetColumnPrefs: (id: string) => void
+  setMobileSidebarOpen: (open: boolean) => void
 }
 
 export const useUIStore = create<UIState>()(
@@ -40,6 +42,7 @@ export const useUIStore = create<UIState>()(
       shortcutsOverlayOpen: false,
       currentView: 'list',
       columnPrefs: {},
+      mobileSidebarOpen: false,
 
       toggleSelection: (id, additive = false) =>
         set((s) => {
@@ -70,6 +73,7 @@ export const useUIStore = create<UIState>()(
           delete next[id]
           return { columnPrefs: next }
         }),
+      setMobileSidebarOpen: (open) => set({ mobileSidebarOpen: open }),
     }),
     {
       name: 'followup-ui',

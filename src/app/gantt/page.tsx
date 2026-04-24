@@ -84,41 +84,41 @@ export default async function GanttTimeline({
   ])
 
   return (
-    <div className="flex h-full flex-col bg-slate-950">
-      <header className="flex shrink-0 items-center justify-between border-b border-slate-800 bg-slate-900/50 px-8 py-4">
+    <div className="flex h-full flex-col bg-background transition-colors duration-300">
+      <header className="flex shrink-0 items-center justify-between border-b border-border bg-card/50 px-8 py-4">
         <div>
           <GlobalBreadcrumbs />
-          <h1 className="mt-1 text-xl font-semibold text-white">
+          <h1 className="mt-1 text-xl font-semibold text-foreground">
             Cronograma · Drag horizontal y resize
           </h1>
-          <p className="mt-1 text-xs text-slate-400">
+          <p className="mt-1 text-xs text-muted-foreground">
             Arrastra el cuerpo para desplazar; los bordes para redimensionar.
             Teclado: ←/→ desplaza, Shift+← /→ cambia fin, Alt+← /→ cambia inicio.
           </p>
         </div>
         <div className="flex items-center gap-3">
           <ViewSwitcher />
-          <div className="flex items-center rounded-md bg-slate-800 p-1">
+          <div className="flex items-center rounded-md bg-muted p-1">
             <Link
               href={`?month=${win.prev}`}
-              className="rounded p-1 text-slate-400 transition-colors hover:bg-slate-700 hover:text-white"
+              className="rounded p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
               aria-label="Mes anterior"
             >
               <ChevronLeft className="h-4 w-4" />
             </Link>
-            <span className="flex items-center gap-2 px-3 text-sm font-medium capitalize text-slate-200">
+            <span className="flex items-center gap-2 px-3 text-sm font-medium capitalize text-foreground">
               <Calendar className="h-4 w-4" />
               {win.label}
             </span>
             <Link
               href={`?month=${win.next}`}
-              className="rounded p-1 text-slate-400 transition-colors hover:bg-slate-700 hover:text-white"
+              className="rounded p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
               aria-label="Mes siguiente"
             >
               <ChevronRight className="h-4 w-4" />
             </Link>
           </div>
-          <button className="flex items-center gap-2 rounded-md border border-slate-700 bg-slate-800 px-3 py-1.5 text-sm font-medium text-slate-300 transition-colors hover:bg-slate-700">
+          <button className="flex items-center gap-2 rounded-md border border-border bg-card px-3 py-1.5 text-sm font-medium text-foreground transition-colors hover:bg-accent">
             <Filter className="h-4 w-4" />
             Filtros
           </button>

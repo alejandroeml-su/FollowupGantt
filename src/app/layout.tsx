@@ -19,6 +19,8 @@ export const metadata: Metadata = {
 
 import Sidebar from "@/components/Sidebar";
 import { AppInteractionShell } from "@/components/interactions/AppInteractionShell";
+import { ThemeProvider } from "@/components/ThemeProvider";
+import { MobileHeader } from "@/components/MobileHeader";
 
 export default function RootLayout({
   children,
@@ -26,13 +28,18 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="es" className={`${geistSans.variable} ${geistMono.variable} h-full antialiased dark`}>
-      <body className="flex h-full bg-slate-950 text-slate-200 overflow-hidden">
-        <Sidebar />
-        <main className="flex-1 flex flex-col overflow-hidden">
-          {children}
-        </main>
-        <AppInteractionShell />
+    <html lang="es" suppressHydrationWarning className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}>
+      <body className="flex h-full bg-background text-foreground overflow-hidden transition-colors duration-300">
+        <ThemeProvider attribute="class" defaultTheme="dark" enableSystem>
+          <div className="flex h-full w-full flex-col lg:flex-row overflow-hidden">
+            <MobileHeader />
+            <Sidebar />
+            <main className="flex-1 flex flex-col overflow-hidden relative">
+              {children}
+            </main>
+          </div>
+          <AppInteractionShell />
+        </ThemeProvider>
       </body>
     </html>
   );

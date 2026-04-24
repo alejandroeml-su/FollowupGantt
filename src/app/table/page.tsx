@@ -26,7 +26,7 @@ export default async function TableDBPage() {
   }));
 
   return (
-    <div className="flex h-full flex-col bg-slate-950">
+    <div className="flex h-full flex-col bg-background transition-colors duration-300">
       <TableBoardClient tasks={tasks} projects={projects} users={users} />
     </div>
   );

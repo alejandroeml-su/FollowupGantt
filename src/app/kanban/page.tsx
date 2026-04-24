@@ -40,14 +40,14 @@ export default async function KanbanBoard() {
   ])
 
   return (
-    <div className="flex h-full flex-col bg-slate-950">
-      <header className="flex shrink-0 items-center justify-between border-b border-slate-800 bg-slate-900/50 px-8 py-4">
+    <div className="flex h-full flex-col bg-background transition-colors duration-300">
+      <header className="flex shrink-0 items-center justify-between border-b border-border bg-card/50 px-8 py-4">
         <div>
           <GlobalBreadcrumbs />
-          <h1 className="mt-1 text-xl font-semibold text-white">
+          <h1 className="mt-1 text-xl font-semibold text-foreground">
             Tablero Kanban · DnD + Menú contextual
           </h1>
-          <div className="mt-1 flex items-center gap-4 text-xs text-slate-400">
+          <div className="mt-1 flex items-center gap-4 text-xs text-muted-foreground">
             <span className="flex items-center">
               <div className="mr-1.5 h-2 w-2 rounded-full bg-indigo-500"></div>{' '}
               Agile Story
@@ -60,14 +60,14 @@ export default async function KanbanBoard() {
               <div className="mr-1.5 h-2 w-2 rounded-full bg-rose-500"></div>{' '}
               ITIL Ticket
             </span>
-            <span className="ml-4 rounded bg-slate-800 px-2 py-0.5 text-[10px] text-slate-400">
+            <span className="ml-4 rounded bg-muted px-2 py-0.5 text-[10px] text-muted-foreground">
               Shift + / para atajos
             </span>
           </div>
         </div>
         <div className="flex items-center gap-3">
           <ViewSwitcher />
-          <button className="flex items-center gap-2 rounded-md bg-indigo-600 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-indigo-500">
+          <button className="flex items-center gap-2 rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground transition-colors hover:opacity-90">
             <Plus className="h-4 w-4" />
             Nueva Tarea
           </button>
