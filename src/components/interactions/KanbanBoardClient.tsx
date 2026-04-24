@@ -365,7 +365,7 @@ function BoardColumn({
   selectedIds: Set<string>
   onToggleSelect: (id: string, additive?: boolean) => void
   onOpenDrawer: (id: string) => void
-  columns: Column[]
+  columns: readonly Column[]
   collapsed: boolean
   accent?: string
   effectiveWip: number | null
@@ -521,7 +521,7 @@ function SortableKanbanCard({
   focused: boolean
   onToggleSelect: (id: string, additive?: boolean) => void
   onOpenDrawer: (id: string) => void
-  columns: Column[]
+  columns: readonly Column[]
 }) {
   const {
     attributes,
