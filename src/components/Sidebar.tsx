@@ -3,10 +3,11 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { 
+import {
   LayoutDashboard, Columns, CalendarDays, Target, FolderKanban, Building2,
-  List, Users, Table, Network, FileText, ClipboardList, 
+  List, Users, Table, Network, FileText, ClipboardList,
   Zap, LayoutTemplate, Sparkles, ChevronDown, Eye, Settings, Briefcase,
+  Menu, PanelLeftClose,
   type LucideIcon
 } from 'lucide-react';
 import { clsx } from 'clsx';
@@ -82,6 +83,8 @@ export default function Sidebar() {
   const pathname = usePathname();
   const mobileOpen = useUIStore((s) => s.mobileSidebarOpen);
   const setMobileOpen = useUIStore((s) => s.setMobileSidebarOpen);
+  const collapsed = useUIStore((s) => s.sidebarCollapsed);
+  const toggleCollapsed = useUIStore((s) => s.toggleSidebarCollapsed);
 
   // ─── Control de Roles para Pruebas ────────────────────────────────
   const [debugRole, setDebugRole] = useState<'SUPER_ADMIN' | 'ADMIN' | 'AGENTE'>('SUPER_ADMIN');
@@ -129,35 +132,72 @@ export default function Sidebar() {
 
       <div className={twMerge(
         clsx(
-          "fixed inset-y-0 left-0 z-50 flex w-72 flex-col bg-card text-foreground border-r border-border transition-all duration-300 ease-in-out lg:static lg:translate-x-0",
+          "fixed inset-y-0 left-0 z-50 flex flex-col bg-card text-foreground border-r border-border transition-all duration-300 ease-in-out lg:static lg:translate-x-0",
+          // En mobile siempre usamos ancho pleno (w-72). En desktop (lg) respetamos colapso.
+          "w-72",
+          collapsed ? "lg:w-16" : "lg:w-72",
           mobileOpen ? "translate-x-0" : "-translate-x-full"
         )
       )}>
         {/* ── Logo ─────────────────────────────────────────── */}
-        <div className="flex h-16 shrink-0 items-center justify-between px-6 border-b border-border bg-muted/30">
-          <div className="flex items-center">
-            <Target className="h-6 w-6 text-primary mr-3" />
-            <span className="text-lg font-bold text-foreground tracking-wide">Avante Orq PRO</span>
+        <div className={clsx(
+          "flex h-16 shrink-0 items-center border-b border-border bg-muted/30 transition-all duration-300",
+          collapsed ? "lg:px-0 lg:justify-center px-6 justify-between" : "px-6 justify-between"
+        )}>
+          {/* Logo + título (oculto en colapsado desktop) */}
+          <div className={clsx(
+            "flex items-center overflow-hidden",
+            collapsed && "lg:hidden"
+          )}>
+            <Target className="h-6 w-6 text-primary flex-shrink-0 mr-3" />
+            <span className="text-lg font-bold text-foreground tracking-wide whitespace-nowrap">
+              Avante Orq PRO
+            </span>
           </div>
-          <button 
+
+          {/* Cerrar (sólo mobile) */}
+          <button
             className="p-1.5 rounded-lg hover:bg-accent lg:hidden"
             onClick={() => setMobileOpen(false)}
+            aria-label="Cerrar menú"
           >
             <X className="h-5 w-5 text-muted-foreground" />
+          </button>
+
+          {/* Botón hamburguesa / colapsar (sólo desktop) */}
+          <button
+            className="hidden lg:flex items-center justify-center p-1.5 rounded-lg hover:bg-accent text-muted-foreground transition-colors"
+            onClick={() => toggleCollapsed()}
+            aria-label={collapsed ? 'Expandir menú' : 'Colapsar menú'}
+            title={collapsed ? 'Expandir menú' : 'Colapsar menú'}
+          >
+            {collapsed ? <Menu className="h-5 w-5" /> : <PanelLeftClose className="h-5 w-5" />}
           </button>
         </div>
 
         {/* ── Navigation ───────────────────────────────────── */}
-        <div className="flex flex-1 flex-col overflow-y-auto pt-5 px-3 custom-scrollbar">
+        <div className={clsx(
+          "flex flex-1 flex-col overflow-y-auto pt-5 custom-scrollbar",
+          collapsed ? "lg:px-2 px-3" : "px-3"
+        )}>
           {/* Section label */}
-          <div className="text-[10px] font-semibold text-muted-foreground uppercase tracking-[0.15em] mb-3 px-2">
+          <div className={clsx(
+            "text-[10px] font-semibold text-muted-foreground uppercase tracking-[0.15em] mb-3 px-2",
+            collapsed && "lg:hidden"
+          )}>
             Orquestación Híbrida
           </div>
 
           <nav className="flex-1 space-y-0.5">
             {/* ── Top-level routes ──────────────────────────── */}
             {filteredTopRoutes.map(route => (
-              <NavLink key={route.path} route={route} pathname={pathname} onClick={() => setMobileOpen(false)} />
+              <NavLink
+                key={route.path}
+                route={route}
+                pathname={pathname}
+                collapsed={collapsed}
+                onClick={() => setMobileOpen(false)}
+              />
             ))}
 
             {/* ── Divider ──────────────────────────────────── */}
@@ -168,6 +208,25 @@ export default function Sidebar() {
               const isOpen = openGroups[group.label] ?? false;
               const hasActiveChild = group.routes.some(r => r.path === pathname);
               const GroupIcon = group.icon;
+
+              // En modo colapsado (desktop) renderizamos los íconos de rutas
+              // directamente, sin cabecera de grupo ni sub-colapsables.
+              if (collapsed) {
+                return (
+                  <div key={group.label} className="hidden lg:block mb-1">
+                    <div className="my-1 border-t border-border/40" />
+                    {group.routes.map(route => (
+                      <NavLink
+                        key={route.path}
+                        route={route}
+                        pathname={pathname}
+                        collapsed
+                        onClick={() => setMobileOpen(false)}
+                      />
+                    ))}
+                  </div>
+                );
+              }
 
               return (
                 <div key={group.label} className="mb-1">
@@ -204,7 +263,13 @@ export default function Sidebar() {
                   >
                     <div className="ml-2 mt-0.5 space-y-0.5 border-l border-border/50 pl-2">
                       {group.routes.map(route => (
-                        <NavLink key={route.path} route={route} pathname={pathname} compact onClick={() => setMobileOpen(false)} />
+                        <NavLink
+                          key={route.path}
+                          route={route}
+                          pathname={pathname}
+                          compact
+                          onClick={() => setMobileOpen(false)}
+                        />
                       ))}
                     </div>
                   </div>
@@ -215,8 +280,15 @@ export default function Sidebar() {
         </div>
 
         {/* ── User footer & Debug ──────────────────────────── */}
-        <div className="p-4 border-t border-border bg-muted/10 space-y-4">
-          <div className="flex flex-col gap-2 p-2 rounded-lg bg-primary/5 border border-primary/20">
+        <div className={clsx(
+          "border-t border-border bg-muted/10 transition-all duration-300",
+          collapsed ? "lg:p-2 lg:space-y-2 p-4 space-y-4" : "p-4 space-y-4"
+        )}>
+          {/* Debug role switcher (oculto en colapsado desktop) */}
+          <div className={clsx(
+            "flex flex-col gap-2 p-2 rounded-lg bg-primary/5 border border-primary/20",
+            collapsed && "lg:hidden"
+          )}>
              <div className="flex items-center gap-2 text-[10px] font-bold text-primary uppercase tracking-tighter">
                 <ShieldAlert className="h-3 w-3" />
                 Debug Role Switcher
@@ -228,8 +300,8 @@ export default function Sidebar() {
                     onClick={() => setDebugRole(r)}
                     className={clsx(
                       'flex-1 text-[9px] font-bold py-1 px-1 rounded border transition-all',
-                      debugRole === r 
-                        ? 'bg-primary text-primary-foreground border-primary shadow-sm' 
+                      debugRole === r
+                        ? 'bg-primary text-primary-foreground border-primary shadow-sm'
                         : 'bg-background text-muted-foreground border-border hover:border-primary/50'
                     )}
                   >
@@ -239,15 +311,32 @@ export default function Sidebar() {
              </div>
           </div>
 
-          <div className="flex items-center justify-between px-2">
-             <span className="text-xs font-semibold text-muted-foreground uppercase tracking-widest">Tema</span>
+          {/* Tema */}
+          <div className={clsx(
+            "flex items-center px-2",
+            collapsed ? "lg:justify-center lg:px-0 justify-between" : "justify-between"
+          )}>
+             <span className={clsx(
+               "text-xs font-semibold text-muted-foreground uppercase tracking-widest",
+               collapsed && "lg:hidden"
+             )}>
+               Tema
+             </span>
              <ThemeToggle />
           </div>
-          <div className="flex items-center gap-3 px-2 py-2 rounded-lg bg-accent/40 border border-border/50">
-            <div className="h-8 w-8 rounded-full bg-primary flex items-center justify-center text-sm font-bold text-primary-foreground shadow-md">
+
+          {/* Usuario */}
+          <div
+            className={clsx(
+              "flex items-center rounded-lg bg-accent/40 border border-border/50",
+              collapsed ? "lg:justify-center lg:p-1 lg:border-0 lg:bg-transparent gap-3 px-2 py-2" : "gap-3 px-2 py-2"
+            )}
+            title={collapsed ? `Edwin Martinez — ${debugRole}` : undefined}
+          >
+            <div className="h-8 w-8 rounded-full bg-primary flex items-center justify-center text-sm font-bold text-primary-foreground shadow-md flex-shrink-0">
               {debugRole === 'AGENTE' ? 'AG' : debugRole === 'ADMIN' ? 'AD' : 'SA'}
             </div>
-            <div className="flex flex-col overflow-hidden">
+            <div className={clsx("flex flex-col overflow-hidden", collapsed && "lg:hidden")}>
               <span className="text-xs font-medium text-foreground truncate">Edwin Martinez</span>
               <span className="text-[10px] text-muted-foreground flex items-center gap-1">
                  {debugRole === 'SUPER_ADMIN' ? <ShieldCheck className="h-3 w-3 text-emerald-500" /> : <UserCog className="h-3 w-3 text-indigo-400" />}
@@ -268,11 +357,13 @@ function NavLink({
   route,
   pathname,
   compact = false,
+  collapsed = false,
   onClick,
 }: {
   route: RouteItem;
   pathname: string;
   compact?: boolean;
+  collapsed?: boolean;
   onClick?: () => void;
 }) {
   const isActive = pathname === route.path;
@@ -282,10 +373,16 @@ function NavLink({
     <Link
       href={route.path}
       onClick={onClick}
+      title={collapsed ? route.name : undefined}
+      aria-label={collapsed ? route.name : undefined}
       className={twMerge(
         clsx(
           'group flex items-center rounded-lg transition-all duration-200',
-          compact ? 'px-2.5 py-1.5 text-[13px]' : 'px-3 py-2.5 text-sm font-medium',
+          collapsed
+            ? 'lg:justify-center lg:px-2 lg:py-2.5 px-3 py-2.5 text-sm font-medium'
+            : compact
+              ? 'px-2.5 py-1.5 text-[13px]'
+              : 'px-3 py-2.5 text-sm font-medium',
           isActive
             ? 'bg-primary/10 text-primary shadow-sm'
             : 'text-muted-foreground hover:bg-accent hover:text-foreground'
@@ -296,13 +393,17 @@ function NavLink({
         className={twMerge(
           clsx(
             'flex-shrink-0 transition-colors duration-200',
-            compact ? 'mr-2.5 h-4 w-4' : 'mr-3 h-5 w-5',
+            collapsed
+              ? 'lg:mr-0 mr-3 h-5 w-5'
+              : compact
+                ? 'mr-2.5 h-4 w-4'
+                : 'mr-3 h-5 w-5',
             isActive ? 'text-primary' : 'text-muted-foreground group-hover:text-foreground'
           )
         )}
         aria-hidden="true"
       />
-      {route.name}
+      <span className={clsx(collapsed && 'lg:hidden')}>{route.name}</span>
     </Link>
   );
 }

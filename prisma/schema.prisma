@@ -232,6 +232,7 @@ model BoardColumn {
 // Tarea Universal: Soporta Story (Agile), Hito/Tarea (Gantt) y Ticket (ITIL)
 model Task {
   id             String    @id @default(uuid())
+  mnemonic       String?   // Ejemplo: "PROJ-1"
   title          String
   description    String?
   type           TaskType  @default(AGILE_STORY)

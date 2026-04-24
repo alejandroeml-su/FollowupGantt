@@ -19,6 +19,7 @@ type UIState = {
   currentView: View
   columnPrefs: Record<string, ColumnPrefs>
   mobileSidebarOpen: boolean
+  sidebarCollapsed: boolean
 
   toggleSelection: (id: string, additive?: boolean) => void
   selectRange: (ids: string[]) => void
@@ -31,6 +32,7 @@ type UIState = {
   setColumnPrefs: (id: string, patch: Partial<ColumnPrefs>) => void
   resetColumnPrefs: (id: string) => void
   setMobileSidebarOpen: (open: boolean) => void
+  toggleSidebarCollapsed: (collapsed?: boolean) => void
 }
 
 export const useUIStore = create<UIState>()(
@@ -43,6 +45,7 @@ export const useUIStore = create<UIState>()(
       currentView: 'list',
       columnPrefs: {},
       mobileSidebarOpen: false,
+      sidebarCollapsed: false,
 
       toggleSelection: (id, additive = false) =>
         set((s) => {
@@ -74,12 +77,15 @@ export const useUIStore = create<UIState>()(
           return { columnPrefs: next }
         }),
       setMobileSidebarOpen: (open) => set({ mobileSidebarOpen: open }),
+      toggleSidebarCollapsed: (collapsed) =>
+        set((s) => ({ sidebarCollapsed: collapsed ?? !s.sidebarCollapsed })),
     }),
     {
       name: 'followup-ui',
       storage: createJSONStorage(() => localStorage),
       // Sólo persistimos preferencias visuales, no la selección ni el drawer.
-      partialize: (s) => ({ columnPrefs: s.columnPrefs }) as Partial<UIState>,
+      partialize: (s) =>
+        ({ columnPrefs: s.columnPrefs, sidebarCollapsed: s.sidebarCollapsed }) as Partial<UIState>,
     },
   ),
 )

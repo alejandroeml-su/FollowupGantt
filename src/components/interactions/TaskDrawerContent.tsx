@@ -23,23 +23,27 @@ import {
   Send,
   FileIcon,
   ShieldCheck,
-  Globe
+  Globe,
+  GitBranch,
+  Trash2,
+  Plus
 } from 'lucide-react'
 import type { SerializedTask } from '@/lib/types'
 import StatusSelector from '@/components/StatusSelector'
 import { TaskBreadcrumbs } from './TaskDrawer'
-import { updateTask, createComment, createAttachment } from '@/lib/actions'
+import { updateTask, createComment, createAttachment, addDependency, removeDependency } from '@/lib/actions'
 import { toast } from './Toaster'
 
 type Props = {
   task: SerializedTask
   projects: { id: string; name: string }[]
   users: { id: string; name: string }[]
+  allTasks?: SerializedTask[]
 }
 
-type Tab = 'detail' | 'tracking' | 'history' | 'attachments'
+type Tab = 'detail' | 'tracking' | 'history' | 'attachments' | 'relations'
 
-export function TaskDrawerContent({ task, projects, users }: Props) {
+export function TaskDrawerContent({ task, projects, users, allTasks = [] }: Props) {
   const [activeTab, setActiveTab] = useState<Tab>('detail')
   const [isEditing, setIsEditing] = useState(false)
   const [isPending, startTransition] = useTransition()
@@ -72,17 +76,35 @@ export function TaskDrawerContent({ task, projects, users }: Props) {
         fd.set('priority', priority)
         fd.set('type', type)
         fd.set('assigneeId', assigneeId)
+        fd.set('startDate', startDate)
         fd.set('endDate', endDate)
         fd.set('progress', String(progress))
         fd.set('plannedValue', String(plannedValue))
         fd.set('actualCost', String(actualCost))
-        fd.set('userId', users[0]?.id || '') // Simulación: primer usuario como autor del cambio
-        
+        fd.set('userId', users[0]?.id || '')
+
         await updateTask(fd)
         setIsEditing(false)
         toast.success('Tarea actualizada correctamente')
       } catch (err) {
         toast.error('Error al actualizar la tarea')
+      }
+    })
+  }
+
+  // Guardado inline (sin pulsar "Editar") para campos cuantitativos:
+  // fechas, estimado y costo real — tanto para tareas padre como subtareas.
+  const saveField = (field: 'startDate' | 'endDate' | 'plannedValue' | 'actualCost', value: string | number) => {
+    startTransition(async () => {
+      try {
+        const fd = new FormData()
+        fd.set('id', task.id)
+        fd.set(field, String(value ?? ''))
+        fd.set('userId', users[0]?.id || '')
+        await updateTask(fd)
+        toast.success('Campo actualizado')
+      } catch {
+        toast.error('No se pudo guardar el cambio')
       }
     })
   }
@@ -95,7 +117,7 @@ export function TaskDrawerContent({ task, projects, users }: Props) {
         fd.set('content', comment)
         fd.set('taskId', task.id)
         fd.set('isInternal', String(isInternal))
-        fd.set('authorId', users[0]?.id || '') // Simulación
+        fd.set('authorId', users[0]?.id || '') 
         await createComment(fd)
         setComment('')
         toast.success('Seguimiento agregado')
@@ -120,10 +142,26 @@ export function TaskDrawerContent({ task, projects, users }: Props) {
     })
   }
 
-  const startDateStr = task.startDate ? new Date(task.startDate).toLocaleDateString() : 'Sin definir'
-  const endDateStr = task.endDate ? new Date(task.endDate).toLocaleDateString() : 'Sin definir'
-  
+  const handleAddDependencyFn = (predecessorId: string) => {
+    if (!predecessorId) return
+    startTransition(async () => {
+      try {
+        const fd = new FormData()
+        fd.set('predecessorId', predecessorId)
+        fd.set('successorId', task.id)
+        await addDependency(fd)
+        toast.success('Relación añadida')
+      } catch (err) {
+        toast.error('Error al añadir relación')
+      }
+    })
+  }
+
   const progressColor = progress === 100 ? 'bg-emerald-500' : 'bg-indigo-500'
+
+  // Cálculos de alcance
+  const difference = plannedValue - actualCost
+  const diffColor = difference >= 0 ? 'text-emerald-400' : 'text-rose-400'
 
   return (
     <article aria-labelledby={`drawer-title-${task.id}`} className="flex flex-col h-full overflow-hidden">
@@ -133,7 +171,7 @@ export function TaskDrawerContent({ task, projects, users }: Props) {
         <TaskBreadcrumbs
           segments={[
             ...(task.project ? [{ label: task.project.name }] : []),
-            { label: `Tarea #${task.id.substring(0, 6)}` },
+            { label: `Tarea #${task.mnemonic || task.id.substring(0, 6)}` },
           ]}
         />
         <div className="flex items-center gap-2">
@@ -171,6 +209,7 @@ export function TaskDrawerContent({ task, projects, users }: Props) {
         {[
           { id: 'detail', label: 'Detalle', icon: Briefcase },
           { id: 'tracking', label: 'Seguimiento', icon: MessageSquare },
+          { id: 'relations', label: 'Relaciones', icon: GitBranch },
           { id: 'history', label: 'Historial', icon: History },
           { id: 'attachments', label: 'Adjuntos', icon: Paperclip },
         ].map((t) => (
@@ -198,12 +237,12 @@ export function TaskDrawerContent({ task, projects, users }: Props) {
             <section className="space-y-3">
               <div>
                 <div className="flex items-center gap-2 mb-1">
-                  <span className="inline-flex items-center gap-1 rounded bg-slate-800 px-2 py-0.5 text-xs font-mono font-medium text-slate-400">
+                  <span className="inline-flex items-center gap-1 rounded bg-indigo-500/20 px-2 py-0.5 text-xs font-black tracking-tighter text-indigo-400 border border-indigo-500/30">
                     <Hash className="h-3 w-3" />
-                    {task.id.substring(0, 8).toUpperCase()}
+                    {task.mnemonic || task.id.substring(0, 8).toUpperCase()}
                   </span>
                   {task.parentId && (
-                    <span className="inline-flex items-center gap-1 rounded bg-indigo-500/10 border border-indigo-500/20 px-2 py-0.5 text-xs font-medium text-indigo-400 cursor-pointer hover:bg-indigo-500/20 transition-colors">
+                    <span className="inline-flex items-center gap-1 rounded bg-slate-800 border border-slate-700 px-2 py-0.5 text-xs font-medium text-slate-400 cursor-pointer hover:bg-slate-700 transition-colors">
                       <Link2 className="h-3 w-3" />
                       Subtarea de #{task.parentId.substring(0, 6)}
                     </span>
@@ -269,6 +308,45 @@ export function TaskDrawerContent({ task, projects, users }: Props) {
                         'bg-slate-800 text-slate-400 border-slate-700'
                       }`}>{task.priority}</span>}</dd>
                     </div>
+                    <div>
+                      <dt className="text-slate-500 mb-1 text-xs uppercase tracking-wider font-semibold flex items-center gap-1">
+                        <Calendar className="h-3 w-3 text-indigo-400" /> Fechas (Cronograma)
+                      </dt>
+                      <dd>
+                        <div className="grid grid-cols-2 gap-2">
+                          <div className="flex flex-col gap-0.5">
+                            <label className="text-[9px] text-slate-600 uppercase tracking-wider">Inicio</label>
+                            <input
+                              type="date"
+                              value={startDate}
+                              onChange={(e) => setStartDate(e.target.value)}
+                              onBlur={(e) => {
+                                if (e.target.value !== (task.startDate ? task.startDate.split('T')[0] : '')) {
+                                  saveField('startDate', e.target.value)
+                                }
+                              }}
+                              disabled={isPending}
+                              className="bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-white focus:outline-none focus:ring-1 focus:ring-indigo-500 disabled:opacity-60"
+                            />
+                          </div>
+                          <div className="flex flex-col gap-0.5">
+                            <label className="text-[9px] text-slate-600 uppercase tracking-wider">Fin</label>
+                            <input
+                              type="date"
+                              value={endDate}
+                              onChange={(e) => setEndDate(e.target.value)}
+                              onBlur={(e) => {
+                                if (e.target.value !== (task.endDate ? task.endDate.split('T')[0] : '')) {
+                                  saveField('endDate', e.target.value)
+                                }
+                              }}
+                              disabled={isPending}
+                              className="bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-white focus:outline-none focus:ring-1 focus:ring-indigo-500 disabled:opacity-60"
+                            />
+                          </div>
+                        </div>
+                      </dd>
+                    </div>
                   </dl>
                </div>
                <div className="space-y-4">
@@ -317,17 +395,148 @@ export function TaskDrawerContent({ task, projects, users }: Props) {
                   </div>
                   <div className="grid grid-cols-2 gap-3">
                       <div className="bg-slate-900/50 p-2 rounded border border-slate-800">
-                        <span className="block text-[10px] text-slate-500 uppercase font-bold mb-1">Estimado</span>
-                        <span className="text-sm font-mono text-slate-200">{task.plannedValue || 0}h</span>
+                        <span className="block text-[10px] text-slate-500 uppercase font-bold mb-1">Estimado (Hrs)</span>
+                        <input
+                          type="number"
+                          min={0}
+                          step="0.5"
+                          value={plannedValue}
+                          onChange={(e) => setPlannedValue(Number(e.target.value))}
+                          onBlur={(e) => {
+                            const v = Number(e.target.value)
+                            if (v !== (task.plannedValue ?? 0)) saveField('plannedValue', v)
+                          }}
+                          disabled={isPending}
+                          className="w-full bg-slate-950 border border-slate-700 rounded px-2 py-0.5 text-sm text-white focus:outline-none focus:ring-1 focus:ring-indigo-500 disabled:opacity-60"
+                        />
                       </div>
-                      <div className="bg-slate-900/50 p-2 rounded border border-slate-800">
-                        <span className="block text-[10px] text-slate-500 uppercase font-bold mb-1">Invertido</span>
-                        <span className="text-sm font-mono text-slate-200">{task.actualCost || 0}h</span>
+                      <div className="bg-slate-900/50 p-2 rounded border border-slate-800 relative">
+                        <span className="block text-[10px] text-slate-500 uppercase font-bold mb-1">Invertido (Hrs)</span>
+                        <input
+                          type="number"
+                          min={0}
+                          step="0.5"
+                          value={actualCost}
+                          onChange={(e) => setActualCost(Number(e.target.value))}
+                          onBlur={(e) => {
+                            const v = Number(e.target.value)
+                            if (v !== (task.actualCost ?? 0)) saveField('actualCost', v)
+                          }}
+                          disabled={isPending}
+                          className="w-full bg-slate-950 border border-slate-700 rounded px-2 py-0.5 text-sm text-white focus:outline-none focus:ring-1 focus:ring-indigo-500 disabled:opacity-60"
+                        />
+                        <span className={`absolute top-2 right-2 text-[9px] font-bold ${diffColor}`}>
+                          {difference >= 0 ? '+' : ''}{difference}h
+                        </span>
                       </div>
                   </div>
                </div>
             </section>
           </>
+        )}
+
+        {activeTab === 'relations' && (
+          <section className="space-y-8">
+            <div className="space-y-4">
+              <h3 className="text-sm font-bold text-slate-300 flex items-center gap-2">
+                <ChevronRight className="h-4 w-4 text-indigo-500 rotate-90" />
+                Predecesoras (Tareas que bloquean a esta)
+              </h3>
+              <div className="space-y-2">
+                {task.predecessors?.map((p: any) => (
+                  <div key={p.id} className="flex items-center justify-between p-3 bg-slate-900/50 border border-slate-800 rounded-lg group">
+                    <div className="flex items-center gap-3">
+                      <span className="text-[10px] font-bold text-indigo-400 bg-indigo-500/10 px-1.5 py-0.5 rounded border border-indigo-500/20">
+                        {p.predecessor.mnemonic || p.predecessor.id.substring(0, 6)}
+                      </span>
+                      <span className="text-sm text-slate-300">{p.predecessor.title}</span>
+                    </div>
+                    <button 
+                      onClick={() => {
+                        const fd = new FormData()
+                        fd.set('predecessorId', p.predecessorId)
+                        fd.set('successorId', task.id)
+                        startTransition(() => removeDependency(fd))
+                      }}
+                      className="p-1.5 text-slate-600 hover:text-rose-400 transition-colors opacity-0 group-hover:opacity-100"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  </div>
+                ))}
+                {(!task.predecessors || task.predecessors.length === 0) && (
+                  <p className="text-xs text-slate-600 italic pl-6">No hay predecesoras definidas.</p>
+                )}
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              <h3 className="text-sm font-bold text-slate-300 flex items-center gap-2">
+                <ChevronRight className="h-4 w-4 text-indigo-500" />
+                Sucesoras (Tareas bloqueadas por esta)
+              </h3>
+              <div className="space-y-2">
+                {task.successors?.map((s: any) => (
+                  <div key={s.id} className="flex items-center justify-between p-3 bg-slate-900/50 border border-slate-800 rounded-lg group">
+                    <div className="flex items-center gap-3">
+                      <span className="text-[10px] font-bold text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded border border-emerald-500/20">
+                        {s.successor.mnemonic || s.successor.id.substring(0, 6)}
+                      </span>
+                      <span className="text-sm text-slate-300">{s.successor.title}</span>
+                    </div>
+                    <button 
+                      onClick={() => {
+                        const fd = new FormData()
+                        fd.set('predecessorId', task.id)
+                        fd.set('successorId', s.successorId)
+                        startTransition(() => removeDependency(fd))
+                      }}
+                      className="p-1.5 text-slate-600 hover:text-rose-400 transition-colors opacity-0 group-hover:opacity-100"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  </div>
+                ))}
+                {(!task.successors || task.successors.length === 0) && (
+                  <p className="text-xs text-slate-600 italic pl-6">No hay sucesoras definidas.</p>
+                )}
+              </div>
+            </div>
+
+            <div className="pt-4 border-t border-slate-800">
+               <p className="text-[10px] text-slate-500 uppercase font-black mb-4 tracking-widest">Añadir nueva relación</p>
+               <div className="flex gap-2">
+                  <select 
+                    id="new-dep-select"
+                    className="flex-1 bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-slate-300 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                    onChange={(e) => {
+                      if (e.target.value) {
+                        handleAddDependencyFn(e.target.value)
+                        e.target.value = ""
+                      }
+                    }}
+                  >
+                    <option value="">Seleccionar tarea...</option>
+                    {allTasks
+                      .filter(t => t.id !== task.id)
+                      .map(t => (
+                        <option key={t.id} value={t.id}>
+                          {t.mnemonic || t.id.substring(0,6)} - {t.title}
+                        </option>
+                      ))}
+                  </select>
+                  <button 
+                    onClick={() => {
+                      const sel = document.getElementById('new-dep-select') as HTMLSelectElement
+                      if (sel.value) handleAddDependencyFn(sel.value)
+                    }}
+                    className="bg-indigo-600 hover:bg-indigo-500 text-white px-3 py-2 rounded-lg text-xs font-bold transition-all"
+                  >
+                    <Plus className="h-4 w-4" />
+                  </button>
+               </div>
+            </div>
+          </section>
         )}
 
         {activeTab === 'tracking' && (

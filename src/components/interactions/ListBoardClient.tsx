@@ -268,6 +268,7 @@ export function ListBoardClient({ tasks, projects, users }: Props) {
             task={drawerTask} 
             projects={projects} 
             users={users} 
+            allTasks={items}
           />
         ) : null}
       </TaskDrawer>

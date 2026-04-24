@@ -7,6 +7,7 @@ import type {
   ProjectStatus,
   Priority,
   TaskStatus,
+  DependencyType,
 } from '@prisma/client'
 
 // =============================================
@@ -116,9 +117,16 @@ export async function createTask(formData: FormData) {
 
   if (!title || !projectId) throw new Error('Título y proyecto son requeridos')
 
+  // Generar mnemónico automático: PRIM-1, INFRA-1...
+  const project = await prisma.project.findUnique({ where: { id: projectId } })
+  const prefix = project?.name.split(' ').map(w => w[0]).join('').substring(0, 4).toUpperCase() || 'TASK'
+  const count = await prisma.task.count({ where: { projectId } })
+  const mnemonic = `${prefix}-${count + 1}`
+
   await prisma.task.create({
     data: {
       title,
+      mnemonic,
       description,
       projectId,
       status: status as TaskStatus,
@@ -126,6 +134,7 @@ export async function createTask(formData: FormData) {
       type: type as TaskType,
       parentId: parentId || null,
       assigneeId: assigneeId || null,
+      startDate: formData.get('startDate') ? new Date(formData.get('startDate') as string) : null,
       endDate: endDateStr ? new Date(endDateStr) : null,
     }
   })
@@ -150,6 +159,7 @@ export async function updateTask(formData: FormData) {
   const progress = formData.get('progress') ? Number(formData.get('progress')) : undefined
   const plannedValue = formData.get('plannedValue') ? Number(formData.get('plannedValue')) : undefined
   const actualCost = formData.get('actualCost') ? Number(formData.get('actualCost')) : undefined
+  const startDateStr = formData.get('startDate') as string
   const userId = formData.get('userId') as string || undefined // ID del usuario que hace el cambio
   const userRoles = formData.get('userRoles') as string // JSON array de roles del usuario
 
@@ -200,7 +210,8 @@ export async function updateTask(formData: FormData) {
   if (type) checkChange('type', type as TaskType, oldTask.type)
   if (description !== undefined) checkChange('description', description, oldTask.description)
   if (assigneeId !== undefined) checkChange('assigneeId', assigneeId || null, oldTask.assigneeId)
-  if (endDateStr) checkChange('endDate', new Date(endDateStr), oldTask.endDate)
+  if (startDateStr !== undefined) checkChange('startDate', startDateStr ? new Date(startDateStr) : null, oldTask.startDate)
+  if (endDateStr !== undefined) checkChange('endDate', endDateStr ? new Date(endDateStr) : null, oldTask.endDate)
   if (progress !== undefined) checkChange('progress', progress, oldTask.progress)
   if (plannedValue !== undefined) checkChange('plannedValue', plannedValue, oldTask.plannedValue)
   if (actualCost !== undefined) checkChange('actualCost', actualCost, oldTask.actualCost)
@@ -231,6 +242,29 @@ export async function deleteTask(formData: FormData) {
   revalidatePath('/table')
   revalidatePath('/workload')
   revalidatePath('/mindmaps')
+}
+
+export async function addDependency(formData: FormData) {
+  const predecessorId = formData.get('predecessorId') as string
+  const successorId = formData.get('successorId') as string
+  const type = (formData.get('type') as string) || 'FINISH_TO_START'
+
+  await prisma.taskDependency.upsert({
+    where: { predecessorId_successorId: { predecessorId, successorId } },
+    update: { type: type as DependencyType },
+    create: { predecessorId, successorId, type: type as DependencyType }
+  })
+  revalidatePath('/gantt')
+}
+
+export async function removeDependency(formData: FormData) {
+  const predecessorId = formData.get('predecessorId') as string
+  const successorId = formData.get('successorId') as string
+
+  await prisma.taskDependency.delete({
+    where: { predecessorId_successorId: { predecessorId, successorId } }
+  })
+  revalidatePath('/gantt')
 }
 
 export async function updateTaskStatus(id: string, status: string) {
@@ -527,7 +561,9 @@ export async function getTaskWithDetails(taskId: string) {
       attachments: {
         include: { user: true },
         orderBy: { createdAt: 'desc' }
-      }
+      },
+      predecessors: { include: { predecessor: true } },
+      successors: { include: { successor: true } },
     },
   })
 }

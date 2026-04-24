@@ -95,9 +95,18 @@ export default function TaskForm({ projects, users }: TaskFormProps) {
             </select>
           </div>
 
-          {/* Fecha Límite */}
+          {/* Fechas */}
           <div>
-            <label className="block text-xs font-medium text-slate-400 mb-1">Fecha Límite</label>
+            <label className="block text-xs font-medium text-slate-400 mb-1">Fecha Inicio</label>
+            <input 
+              name="startDate" 
+              type="date"
+              className="w-full rounded-md border border-slate-700 bg-slate-950 py-2 px-3 text-sm text-white focus:border-indigo-500 focus:outline-none"
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-slate-400 mb-1">Fecha Final</label>
             <input 
               name="endDate" 
               type="date"

@@ -313,6 +313,7 @@ export function KanbanBoardClient({
             task={drawerTask} 
             projects={projects} 
             users={users} 
+            allTasks={Object.values(local).flat()}
           />
         ) : null}
       </TaskDrawer>

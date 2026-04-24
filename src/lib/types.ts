@@ -53,6 +53,7 @@ export interface SerializedComment {
 /** Serialized task for client components (Date → string) */
 export interface SerializedTask {
   id: string;
+  mnemonic?: string | null;
   title: string;
   description?: string | null;
   status: string;
@@ -74,6 +75,8 @@ export interface SerializedTask {
   plannedValue?: number | null;
   actualCost?: number | null;
   tags?: string[];
+  predecessors?: any[];
+  successors?: any[];
 }
 
 // ─── Serialization Utility ───────────────────────────────────────
@@ -87,6 +90,7 @@ type DateLike = { toISOString?: () => string } | string | number | Date | null |
 type RawPerson = { id: string; name: string }
 type RawTask = {
   id: string;
+  mnemonic?: string | null;
   title: string;
   description?: string | null;
   status: string;
@@ -128,6 +132,8 @@ type RawTask = {
   plannedValue?: number | null;
   actualCost?: number | null;
   tags?: string[];
+  predecessors?: any[];
+  successors?: any[];
 }
 
 function toISO(d: DateLike): string | null {
@@ -146,6 +152,7 @@ export function serializeTask(task: Record<string, unknown>): SerializedTask {
   const t = task as unknown as RawTask;
   return {
     id: t.id,
+    mnemonic: t.mnemonic ?? null,
     title: t.title,
     description: t.description ?? null,
     status: t.status,
@@ -187,5 +194,7 @@ export function serializeTask(task: Record<string, unknown>): SerializedTask {
       createdAt: toISO(a.createdAt) ?? '',
       user: a.user ? { id: a.user.id, name: a.user.name } : null,
     })) : [],
+    predecessors: Array.isArray(t.predecessors) ? t.predecessors : [],
+    successors: Array.isArray(t.successors) ? t.successors : [],
   };
 }
