@@ -1,9 +1,9 @@
-import { Plus } from 'lucide-react'
 import prisma from '@/lib/prisma'
 import { serializeTask } from '@/lib/types'
 import { KanbanBoardClient } from '@/components/interactions/KanbanBoardClient'
 import { GlobalBreadcrumbs } from '@/components/interactions/GlobalBreadcrumbs'
 import { ViewSwitcher } from '@/components/interactions/ViewSwitcher'
+import { NewTaskButton } from '@/components/interactions/NewTaskButton'
 
 export const dynamic = 'force-dynamic'
 
@@ -19,7 +19,7 @@ export default async function KanbanBoard() {
     where: { parentId: null, archivedAt: null },
     include: {
       assignee: true,
-      project: true,
+      project: { include: { area: { include: { gerencia: true } } } },
       comments: { include: { author: true }, orderBy: { createdAt: 'desc' } },
       history: { include: { user: true }, orderBy: { createdAt: 'desc' } },
       attachments: { include: { user: true }, orderBy: { createdAt: 'desc' } },
@@ -34,9 +34,16 @@ export default async function KanbanBoard() {
     ]),
   )
 
-  const [projects, users] = await Promise.all([
-    prisma.project.findMany({ orderBy: { name: 'asc' } }),
+  const [projects, users, allTasksRaw, gerencias, areas] = await Promise.all([
+    prisma.project.findMany({ select: { id: true, name: true, areaId: true }, orderBy: { name: 'asc' } }),
     prisma.user.findMany({ orderBy: { name: 'asc' } }),
+    prisma.task.findMany({
+      where: { archivedAt: null },
+      select: { id: true, title: true, mnemonic: true, projectId: true, project: { select: { id: true, name: true } } },
+      orderBy: [{ project: { name: 'asc' } }, { title: 'asc' }],
+    }),
+    prisma.gerencia.findMany({ select: { id: true, name: true }, orderBy: { name: 'asc' } }),
+    prisma.area.findMany({ select: { id: true, name: true, gerenciaId: true }, orderBy: { name: 'asc' } }),
   ])
 
   return (
@@ -67,18 +74,18 @@ export default async function KanbanBoard() {
         </div>
         <div className="flex items-center gap-3">
           <ViewSwitcher />
-          <button className="flex items-center gap-2 rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground transition-colors hover:opacity-90">
-            <Plus className="h-4 w-4" />
-            Nueva Tarea
-          </button>
+          <NewTaskButton projects={projects} users={users} allTasks={allTasksRaw} />
         </div>
       </header>
 
-      <KanbanBoardClient 
-        columns={[...COLUMNS]} 
-        tasksByColumn={tasksByColumn} 
-        projects={projects} 
-        users={users} 
+      <KanbanBoardClient
+        columns={[...COLUMNS]}
+        tasksByColumn={tasksByColumn}
+        projects={projects}
+        users={users}
+        gerencias={gerencias}
+        areas={areas}
+        allTasks={allTasksRaw}
       />
     </div>
   )

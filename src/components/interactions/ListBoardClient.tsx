@@ -43,11 +43,15 @@ import StatusSelector from '@/components/StatusSelector'
 import { TaskWithContextMenu } from './TaskContextMenuItems'
 import { TaskDrawer } from './TaskDrawer'
 import { TaskDrawerContent } from './TaskDrawerContent'
+import { TaskFiltersBar } from './TaskFiltersBar'
+import { EMPTY_TASK_FILTERS, filterTasksWithSubtasks, type TaskFilters } from '@/lib/taskFilters'
 
 type Props = {
   tasks: (SerializedTask & { subtasks?: SerializedTask[] })[]
-  projects: { id: string; name: string }[]
+  projects: { id: string; name: string; areaId?: string | null }[]
   users: { id: string; name: string }[]
+  gerencias?: { id: string; name: string }[]
+  areas?: { id: string; name: string; gerenciaId?: string | null }[]
 }
 
 const STATUS_ICON: Record<string, React.ReactNode> = {
@@ -69,13 +73,21 @@ const PRIORITY_COLOR: Record<string, string> = {
   CRITICAL: 'text-red-400',
 }
 
-export function ListBoardClient({ tasks, projects, users }: Props) {
+export function ListBoardClient({
+  tasks,
+  projects,
+  users,
+  gerencias = [],
+  areas = [],
+}: Props) {
   const [items, setItems] = useState(tasks)
   const [activeId, setActiveId] = useState<string | null>(null)
   const [focusedId, setFocusedId] = useState<string | null>(tasks[0]?.id ?? null)
   const [expanded, setExpanded] = useState<Set<string>>(
     () => new Set(tasks.filter((t) => t.subtasks?.length).map((t) => t.id)),
   )
+  const [filters, setFilters] = useState<TaskFilters>(EMPTY_TASK_FILTERS)
+  const visibleItems = useMemo(() => filterTasksWithSubtasks(items, filters), [items, filters])
 
   const selectedIds = useUIStore((s) => s.selectedIds)
   const toggleSelection = useUIStore((s) => s.toggleSelection)
@@ -157,6 +169,14 @@ export function ListBoardClient({ tasks, projects, users }: Props) {
 
   return (
     <>
+      <TaskFiltersBar
+        value={filters}
+        onChange={setFilters}
+        gerencias={gerencias}
+        areas={areas}
+        projects={projects}
+        users={users}
+      />
       <div className="divide-y divide-slate-800/50">
         <div className="flex items-center bg-slate-800/20 px-4 py-2">
           <ChevronDown className="mr-2 h-4 w-4 text-slate-400" />
@@ -164,16 +184,18 @@ export function ListBoardClient({ tasks, projects, users }: Props) {
             ALL TASKS
           </span>
           <span className="ml-2 text-xs text-slate-500">
-            {items.length} tareas
+            {visibleItems.length} de {items.length} tareas
           </span>
           <span className="ml-auto text-[10px] text-slate-500">
             Shift + / atajos · / buscar · T nueva tarea
           </span>
         </div>
 
-        {items.length === 0 && (
+        {visibleItems.length === 0 && (
           <div className="px-4 py-8 text-center text-sm text-slate-500">
-            No hay tareas. Usa el formulario de arriba para crear la primera.
+            {items.length === 0
+              ? 'No hay tareas. Crea la primera desde "Nueva Tarea".'
+              : 'Ninguna tarea coincide con los filtros.'}
           </div>
         )}
 
@@ -184,10 +206,10 @@ export function ListBoardClient({ tasks, projects, users }: Props) {
           onDragEnd={handleDragEnd}
         >
           <SortableContext
-            items={items.map((i) => i.id)}
+            items={visibleItems.map((i) => i.id)}
             strategy={verticalListSortingStrategy}
           >
-            {items.map((task) => (
+            {visibleItems.map((task) => (
               <SortableListRow
                 key={task.id}
                 task={task}

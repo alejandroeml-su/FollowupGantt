@@ -5,6 +5,7 @@ import { serializeTask } from '@/lib/types'
 import { GanttBoardClient } from '@/components/interactions/GanttBoardClient'
 import { GlobalBreadcrumbs } from '@/components/interactions/GlobalBreadcrumbs'
 import { ViewSwitcher } from '@/components/interactions/ViewSwitcher'
+import { NewTaskButton } from '@/components/interactions/NewTaskButton'
 
 export const dynamic = 'force-dynamic'
 
@@ -68,7 +69,7 @@ export default async function GanttTimeline({
     },
     include: {
       assignee: true,
-      project: true,
+      project: { include: { area: { include: { gerencia: true } } } },
       comments: { include: { author: true }, orderBy: { createdAt: 'desc' } },
       history: { include: { user: true }, orderBy: { createdAt: 'desc' } },
       attachments: { include: { user: true }, orderBy: { createdAt: 'desc' } },
@@ -78,9 +79,16 @@ export default async function GanttTimeline({
 
   const tasks = dbTasks.map((t) => serializeTask(t))
 
-  const [projects, users] = await Promise.all([
-    prisma.project.findMany({ orderBy: { name: 'asc' } }),
+  const [projects, users, allTasksRaw, gerencias, areas] = await Promise.all([
+    prisma.project.findMany({ select: { id: true, name: true, areaId: true }, orderBy: { name: 'asc' } }),
     prisma.user.findMany({ orderBy: { name: 'asc' } }),
+    prisma.task.findMany({
+      where: { archivedAt: null },
+      select: { id: true, title: true, mnemonic: true, projectId: true, project: { select: { id: true, name: true } } },
+      orderBy: [{ project: { name: 'asc' } }, { title: 'asc' }],
+    }),
+    prisma.gerencia.findMany({ select: { id: true, name: true }, orderBy: { name: 'asc' } }),
+    prisma.area.findMany({ select: { id: true, name: true, gerenciaId: true }, orderBy: { name: 'asc' } }),
   ])
 
   return (
@@ -122,6 +130,7 @@ export default async function GanttTimeline({
             <Filter className="h-4 w-4" />
             Filtros
           </button>
+          <NewTaskButton projects={projects} users={users} allTasks={allTasksRaw} />
         </div>
       </header>
 
@@ -132,6 +141,9 @@ export default async function GanttTimeline({
           rangeDays={win.days}
           projects={projects}
           users={users}
+          gerencias={gerencias}
+          areas={areas}
+          allTasks={allTasksRaw}
         />
       </div>
     </div>

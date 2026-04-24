@@ -41,11 +41,18 @@ import { TaskDrawerContent } from './TaskDrawerContent'
 import { useUIStore } from '@/lib/stores/ui'
 import { useTaskShortcuts } from '@/lib/hooks/useTaskShortcuts'
 import { toast } from './Toaster'
+import { TaskFiltersBar } from './TaskFiltersBar'
+import { EMPTY_TASK_FILTERS, filterTasks, type TaskFilters } from '@/lib/taskFilters'
 
 type Column = {
   id: string        // TaskStatus literal (TODO, IN_PROGRESS, …)
   title: string
   wipLimit: number | null
+}
+
+type ParentOption = Pick<SerializedTask, 'id' | 'title' | 'mnemonic'> & {
+  project?: { id: string; name: string } | null
+  projectId?: string
 }
 
 type Props = {
@@ -55,8 +62,11 @@ type Props = {
     wipLimit: number | null
   }>
   tasksByColumn: Record<string, SerializedTask[]>
-  projects: { id: string; name: string }[]
+  projects: { id: string; name: string; areaId?: string | null }[]
   users: { id: string; name: string }[]
+  gerencias?: { id: string; name: string }[]
+  areas?: { id: string; name: string; gerenciaId?: string | null }[]
+  allTasks?: ParentOption[]
 }
 
 const TYPE_COLOR: Record<string, string> = {
@@ -84,9 +94,21 @@ export function KanbanBoardClient({
   tasksByColumn,
   projects,
   users,
+  gerencias = [],
+  areas = [],
+  allTasks = [],
 }: Props) {
   const [local, setLocal] = useState(tasksByColumn)
   const [activeId, setActiveId] = useState<string | null>(null)
+  const [filters, setFilters] = useState<TaskFilters>(EMPTY_TASK_FILTERS)
+
+  const visibleByColumn = useMemo(() => {
+    const out: Record<string, SerializedTask[]> = {}
+    for (const [colId, list] of Object.entries(local)) {
+      out[colId] = filterTasks(list, filters)
+    }
+    return out
+  }, [local, filters])
 
   const selectedIds = useUIStore((s) => s.selectedIds)
   const toggleSelection = useUIStore((s) => s.toggleSelection)
@@ -245,6 +267,14 @@ export function KanbanBoardClient({
 
   return (
     <>
+      <TaskFiltersBar
+        value={filters}
+        onChange={setFilters}
+        gerencias={gerencias}
+        areas={areas}
+        projects={projects}
+        users={users}
+      />
       <DndContext
         sensors={sensors}
         collisionDetection={closestCenter}
@@ -258,7 +288,7 @@ export function KanbanBoardClient({
               <BoardColumn
                 key={col.id}
                 column={col}
-                tasks={local[col.id] ?? []}
+                tasks={visibleByColumn[col.id] ?? []}
                 selectedIds={selectedIds}
                 onToggleSelect={toggleSelection}
                 onOpenDrawer={openDrawer}
@@ -309,11 +339,11 @@ export function KanbanBoardClient({
         }}
       >
         {drawerTask ? (
-          <TaskDrawerContent 
-            task={drawerTask} 
-            projects={projects} 
-            users={users} 
-            allTasks={Object.values(local).flat()}
+          <TaskDrawerContent
+            task={drawerTask}
+            projects={projects}
+            users={users}
+            allTasks={allTasks.length > 0 ? (allTasks as SerializedTask[]) : Object.values(local).flat()}
           />
         ) : null}
       </TaskDrawer>

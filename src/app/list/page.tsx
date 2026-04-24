@@ -1,9 +1,9 @@
 import prisma from '@/lib/prisma'
-import TaskForm from '@/components/TaskForm'
 import { serializeTask, type SerializedTask } from '@/lib/types'
 import { ListBoardClient } from '@/components/interactions/ListBoardClient'
 import { GlobalBreadcrumbs } from '@/components/interactions/GlobalBreadcrumbs'
 import { ViewSwitcher } from '@/components/interactions/ViewSwitcher'
+import { NewTaskButton } from '@/components/interactions/NewTaskButton'
 
 export const dynamic = 'force-dynamic'
 
@@ -14,6 +14,7 @@ export default async function ListViewPage() {
       subtasks: {
         include: {
           assignee: true,
+          project: { include: { area: { include: { gerencia: true } } } },
           comments: { include: { author: true }, orderBy: { createdAt: 'desc' } },
           history: { include: { user: true }, orderBy: { createdAt: 'desc' } },
           attachments: { include: { user: true }, orderBy: { createdAt: 'desc' } },
@@ -21,7 +22,7 @@ export default async function ListViewPage() {
         orderBy: [{ position: 'asc' }, { createdAt: 'asc' }],
       },
       assignee: true,
-      project: true,
+      project: { include: { area: { include: { gerencia: true } } } },
       comments: { include: { author: true }, orderBy: { createdAt: 'desc' } },
       history: { include: { user: true }, orderBy: { createdAt: 'desc' } },
       attachments: { include: { user: true }, orderBy: { createdAt: 'desc' } },
@@ -29,9 +30,16 @@ export default async function ListViewPage() {
     orderBy: [{ position: 'asc' }, { createdAt: 'desc' }],
   })
 
-  const [projects, users] = await Promise.all([
-    prisma.project.findMany({ orderBy: { name: 'asc' } }),
+  const [projects, users, allTasksRaw, gerencias, areas] = await Promise.all([
+    prisma.project.findMany({ select: { id: true, name: true, areaId: true }, orderBy: { name: 'asc' } }),
     prisma.user.findMany({ orderBy: { name: 'asc' } }),
+    prisma.task.findMany({
+      where: { archivedAt: null },
+      select: { id: true, title: true, mnemonic: true, projectId: true, project: { select: { id: true, name: true } } },
+      orderBy: [{ project: { name: 'asc' } }, { title: 'asc' }],
+    }),
+    prisma.gerencia.findMany({ select: { id: true, name: true }, orderBy: { name: 'asc' } }),
+    prisma.area.findMany({ select: { id: true, name: true, gerenciaId: true }, orderBy: { name: 'asc' } }),
   ])
 
   const tasks: (SerializedTask & { subtasks: SerializedTask[] })[] = dbTasks.map(
@@ -50,10 +58,11 @@ export default async function ListViewPage() {
             List View · DnD, atajos y panel lateral
           </h1>
         </div>
-        <ViewSwitcher />
+        <div className="flex items-center gap-3">
+          <ViewSwitcher />
+          <NewTaskButton projects={projects} users={users} allTasks={allTasksRaw} />
+        </div>
       </header>
-
-      <TaskForm projects={projects} users={users} />
 
       <div className="flex-1 overflow-auto px-6 pb-6 custom-scrollbar">
         <div className="min-w-[900px] rounded-lg border border-border bg-card shadow-sm">
@@ -66,7 +75,13 @@ export default async function ListViewPage() {
             <div className="col-span-1 text-center">ID</div>
           </div>
 
-          <ListBoardClient tasks={tasks} projects={projects} users={users} />
+          <ListBoardClient
+            tasks={tasks}
+            projects={projects}
+            users={users}
+            gerencias={gerencias}
+            areas={areas}
+          />
         </div>
       </div>
     </div>

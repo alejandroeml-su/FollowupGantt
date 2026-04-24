@@ -12,6 +12,13 @@ import { TaskDrawerContent } from './TaskDrawerContent'
 import { useUIStore } from '@/lib/stores/ui'
 import { useTaskShortcuts } from '@/lib/hooks/useTaskShortcuts'
 import { toast } from './Toaster'
+import { TaskFiltersBar } from './TaskFiltersBar'
+import { EMPTY_TASK_FILTERS, filterTasks, type TaskFilters } from '@/lib/taskFilters'
+
+type ParentOption = Pick<SerializedTask, 'id' | 'title' | 'mnemonic'> & {
+  project?: { id: string; name: string } | null
+  projectId?: string
+}
 
 type Props = {
   tasks: SerializedTask[]
@@ -19,8 +26,11 @@ type Props = {
   rangeStart: string
   /** Días a mostrar */
   rangeDays: number
-  projects: { id: string; name: string }[]
+  projects: { id: string; name: string; areaId?: string | null }[]
   users: { id: string; name: string }[]
+  gerencias?: { id: string; name: string }[]
+  areas?: { id: string; name: string; gerenciaId?: string | null }[]
+  allTasks?: ParentOption[]
 }
 
 const DAY_WIDTH = 40 // px por día — balance legibilidad / densidad
@@ -70,6 +80,8 @@ export function GanttBoardClient({
   rangeDays,
   projects,
   users,
+  gerencias = [],
+  areas = [],
 }: Props) {
   const start = useMemo(() => new Date(rangeStart), [rangeStart])
   const days = useMemo(
@@ -82,6 +94,8 @@ export function GanttBoardClient({
   )
 
   const [local, setLocal] = useState(tasks)
+  const [filters, setFilters] = useState<TaskFilters>(EMPTY_TASK_FILTERS)
+  const visibleLocal = useMemo(() => filterTasks(local, filters), [local, filters])
   // Re-sync con el snapshot del server tras revalidatePath (patrón RSC).
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -89,7 +103,7 @@ export function GanttBoardClient({
   }, [tasks])
 
   const [focusedId, setFocusedId] = useState<string | null>(local[0]?.id ?? null)
-  const orderedIds = useMemo(() => local.map((t) => t.id), [local])
+  const orderedIds = useMemo(() => visibleLocal.map((t) => t.id), [visibleLocal])
 
   const drawerTaskId = useUIStore((s) => s.drawerTaskId)
   const drawerTask = useMemo(
@@ -211,6 +225,15 @@ export function GanttBoardClient({
 
   return (
     <>
+      <TaskFiltersBar
+        value={filters}
+        onChange={setFilters}
+        gerencias={gerencias}
+        areas={areas}
+        projects={projects}
+        users={users}
+        className="rounded-lg mb-4 border border-slate-800"
+      />
       <div className="rounded-xl border border-slate-800 bg-slate-900/80 shadow-sm">
         {/* Header: etiquetas de nombre + escala de días */}
         <div className="flex border-b border-slate-800">
@@ -242,12 +265,14 @@ export function GanttBoardClient({
 
         {/* Filas de tareas */}
         <div className="divide-y divide-slate-800/50">
-          {local.length === 0 && (
+          {visibleLocal.length === 0 && (
             <div className="p-8 text-center text-sm text-slate-500">
-              No hay tareas planificadas en este rango.
+              {local.length === 0
+                ? 'No hay tareas planificadas en este rango.'
+                : 'Ninguna tarea coincide con los filtros.'}
             </div>
           )}
-          {local.map((task) => (
+          {visibleLocal.map((task) => (
             <GanttRow
               key={task.id}
               task={task}

@@ -1,28 +1,52 @@
 'use client'
 
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { Table as TableIcon, Download, Search, MessageSquare, ChevronRight } from 'lucide-react'
-import { serializeTask, type SerializedTask } from '@/lib/types'
+import { type SerializedTask } from '@/lib/types'
 import { useUIStore } from '@/lib/stores/ui'
 import { TaskDrawer } from './TaskDrawer'
 import { TaskDrawerContent } from './TaskDrawerContent'
+import { NewTaskButton } from './NewTaskButton'
+import { TaskFiltersBar } from './TaskFiltersBar'
+import { EMPTY_TASK_FILTERS, filterTasks, type TaskFilters } from '@/lib/taskFilters'
+
+type ParentOption = Pick<SerializedTask, 'id' | 'title' | 'mnemonic'> & {
+  project?: { id: string; name: string } | null
+  projectId?: string
+}
 
 type Props = {
   tasks: (SerializedTask & { commentCount: number })[]
-  projects: { id: string; name: string }[]
+  projects: { id: string; name: string; areaId?: string | null }[]
   users: { id: string; name: string }[]
+  allTasks?: ParentOption[]
+  gerencias?: { id: string; name: string }[]
+  areas?: { id: string; name: string; gerenciaId?: string | null }[]
 }
 
-export function TableBoardClient({ tasks, projects, users }: Props) {
+export function TableBoardClient({
+  tasks,
+  projects,
+  users,
+  allTasks = [],
+  gerencias = [],
+  areas = [],
+}: Props) {
   const [search, setSearch] = useState('')
+  const [filters, setFilters] = useState<TaskFilters>(EMPTY_TASK_FILTERS)
   const drawerTaskId = useUIStore((s) => s.drawerTaskId)
   const openDrawer = useUIStore((s) => s.openDrawer)
 
-  const filtered = tasks.filter(t => 
-    t.title.toLowerCase().includes(search.toLowerCase()) ||
-    t.id.toLowerCase().includes(search.toLowerCase()) ||
-    t.project?.name.toLowerCase().includes(search.toLowerCase())
-  )
+  const filtered = useMemo(() => {
+    const afterFilters = filterTasks(tasks, filters)
+    if (!search.trim()) return afterFilters
+    const q = search.toLowerCase()
+    return afterFilters.filter(t =>
+      t.title.toLowerCase().includes(q) ||
+      t.id.toLowerCase().includes(q) ||
+      (t.project?.name.toLowerCase().includes(q) ?? false)
+    )
+  }, [tasks, filters, search])
 
   const drawerTask = tasks.find(t => t.id === drawerTaskId)
 
@@ -51,8 +75,18 @@ export function TableBoardClient({ tasks, projects, users }: Props) {
             <Download className="h-4 w-4" />
             Exportar CSV
           </button>
+          <NewTaskButton projects={projects} users={users} allTasks={allTasks} />
         </div>
       </header>
+
+      <TaskFiltersBar
+        value={filters}
+        onChange={setFilters}
+        gerencias={gerencias}
+        areas={areas}
+        projects={projects}
+        users={users}
+      />
 
       <div className="flex-1 overflow-auto p-6">
         <div className="rounded-xl border border-slate-800 bg-slate-900 shadow-sm overflow-hidden">

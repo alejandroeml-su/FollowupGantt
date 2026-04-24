@@ -65,6 +65,12 @@ export interface SerializedTask {
   isMilestone?: boolean;
   assignee?: { id: string; name: string } | null;
   project?: { id: string; name: string } | null;
+  projectId?: string | null;
+  assigneeId?: string | null;
+  areaId?: string | null;
+  areaName?: string | null;
+  gerenciaId?: string | null;
+  gerenciaName?: string | null;
   subtasks?: SerializedTask[];
   comments?: SerializedComment[];
   history?: SerializedHistoryEntry[];
@@ -103,7 +109,19 @@ type RawTask = {
   createdAt?: DateLike;
   updatedAt?: DateLike;
   assignee?: RawPerson | null;
-  project?: { id: string; name: string } | null;
+  assigneeId?: string | null;
+  projectId?: string | null;
+  project?: {
+    id: string;
+    name: string;
+    areaId?: string | null;
+    area?: {
+      id: string;
+      name: string;
+      gerenciaId?: string | null;
+      gerencia?: { id: string; name: string } | null;
+    } | null;
+  } | null;
   subtasks?: unknown[];
   comments?: Array<{
     id: string;
@@ -169,7 +187,13 @@ export function serializeTask(task: Record<string, unknown>): SerializedTask {
     actualCost: t.actualCost ?? null,
     tags: Array.isArray(t.tags) ? (t.tags as string[]) : [],
     assignee: t.assignee ? { id: t.assignee.id, name: t.assignee.name } : null,
+    assigneeId: t.assigneeId ?? t.assignee?.id ?? null,
     project: t.project ? { id: t.project.id, name: t.project.name } : null,
+    projectId: t.projectId ?? t.project?.id ?? null,
+    areaId: t.project?.areaId ?? t.project?.area?.id ?? null,
+    areaName: t.project?.area?.name ?? null,
+    gerenciaId: t.project?.area?.gerenciaId ?? t.project?.area?.gerencia?.id ?? null,
+    gerenciaName: t.project?.area?.gerencia?.name ?? null,
     subtasks: Array.isArray(t.subtasks) ? t.subtasks.map((s) => serializeTask(s as Record<string, unknown>)) : [],
     comments: Array.isArray(t.comments) ? t.comments.map((c) => ({
       id: c.id,

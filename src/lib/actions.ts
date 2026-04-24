@@ -340,14 +340,52 @@ export async function createTeam(formData: FormData) {
   if (!name) throw new Error('El nombre del equipo es requerido')
 
   await prisma.team.create({
-    data: { name, description }
+    data: { name: name.trim(), description }
   })
   revalidatePath('/settings/teams')
 }
 
-export async function addMemberToTeam(teamId: string, userId: string) {
+export async function updateTeam(formData: FormData) {
+  const id = formData.get('id') as string
+  const name = formData.get('name') as string
+  const description = formData.get('description') as string || null
+
+  if (!id) throw new Error('ID es requerido')
+  if (!name) throw new Error('El nombre del equipo es requerido')
+
+  await prisma.team.update({
+    where: { id },
+    data: { name: name.trim(), description }
+  })
+  revalidatePath('/settings/teams')
+}
+
+export async function deleteTeam(formData: FormData) {
+  const id = formData.get('id') as string
+  if (!id) throw new Error('ID es requerido')
+
+  await prisma.team.delete({ where: { id } })
+  revalidatePath('/settings/teams')
+}
+
+export async function addMemberToTeam(formData: FormData) {
+  const teamId = formData.get('teamId') as string
+  const userId = formData.get('userId') as string
+  if (!teamId || !userId) throw new Error('teamId y userId son requeridos')
+
   await prisma.teamMember.create({
     data: { teamId, userId }
+  })
+  revalidatePath('/settings/teams')
+}
+
+export async function removeMemberFromTeam(formData: FormData) {
+  const teamId = formData.get('teamId') as string
+  const userId = formData.get('userId') as string
+  if (!teamId || !userId) throw new Error('teamId y userId son requeridos')
+
+  await prisma.teamMember.delete({
+    where: { teamId_userId: { teamId, userId } }
   })
   revalidatePath('/settings/teams')
 }
