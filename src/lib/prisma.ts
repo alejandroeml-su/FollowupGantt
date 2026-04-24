@@ -11,8 +11,12 @@ const prismaClientSingleton = () => {
     );
   }
 
-  // PrismaPg requires a pg.Pool instance, not a generic object
-  const pool = new Pool({ connectionString: process.env.DATABASE_URL })
+  // PrismaPg requires a pg.Pool instance. 
+  // We limit 'max: 1' to prevent exhausting Supabase connections in serverless environments.
+  const pool = new Pool({ 
+    connectionString: process.env.DATABASE_URL,
+    max: 1 
+  })
   const adapter = new PrismaPg(pool)
   return new PrismaClient({ adapter })
 }
