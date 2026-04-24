@@ -31,10 +31,16 @@ export const SHORTCUTS = {
 
 export type ShortcutKey = keyof typeof SHORTCUTS
 
-// Prettifier para overlays de ayuda (? )
+// Prettifier para overlays de ayuda (? ).
+// SSR-safe: durante el prerender `navigator` no existe, así que asumimos
+// no-Mac y lo corregiremos en el primer render cliente.
 export function displayShortcut(raw: string): string {
+  const isMac =
+    typeof navigator !== 'undefined' &&
+    typeof navigator.platform === 'string' &&
+    navigator.platform.includes('Mac')
   return raw
-    .replace(/mod/gi, navigator.platform.includes('Mac') ? '⌘' : 'Ctrl')
+    .replace(/mod/gi, isMac ? '⌘' : 'Ctrl')
     .replace(/\+/g, ' + ')
     .replace(/\bup\b/i, '↑')
     .replace(/\bdown\b/i, '↓')
