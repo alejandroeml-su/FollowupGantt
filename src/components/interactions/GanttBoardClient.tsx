@@ -378,10 +378,13 @@ function GanttRow({
     <TaskWithContextMenu ctx={{ taskId: task.id }}>
       <div
         className={clsx(
-          'group flex transition-colors',
+          'group flex transition-colors cursor-pointer',
           focused ? 'bg-slate-800/60' : 'hover:bg-slate-800/30',
         )}
-        onClick={onFocus}
+        onClick={() => {
+          onFocus()
+          openDrawer(task.id)
+        }}
       >
         <div className="flex w-64 shrink-0 items-center gap-3 border-r border-slate-800 p-4">
           <div
@@ -407,10 +410,6 @@ function GanttRow({
         <div
           className="relative flex-1 p-2"
           style={{ minWidth: totalWidth }}
-          onDoubleClick={(e) => {
-            e.stopPropagation()
-            openDrawer(task.id)
-          }}
         >
           {/* grid columnas */}
           <div aria-hidden className="pointer-events-none absolute inset-0 flex">
