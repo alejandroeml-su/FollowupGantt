@@ -88,24 +88,27 @@ export default function Sidebar() {
     roles: [
       { 
         name: 'ADMIN', 
-        permissions: { allowedViews: ['list', 'kanban', 'gantt', 'table', 'docs', 'forms', 'gerencias', 'projects', 'workload', 'settings'] } 
+        permissions: { allowedViews: ['list', 'kanban', 'gantt', 'table', 'docs', 'forms', 'gerencias', 'projects', 'workload', 'teams', 'roles', 'settings'] } 
       }
     ]
   };
 
-  const allowedViews = currentUser.roles.flatMap(r => r.permissions.allowedViews);
+  const allowedViews = currentUser.roles.flatMap(r => r.permissions?.allowedViews || []);
   const isAdmin = currentUser.roles.some(r => r.name === 'ADMIN' || r.name === 'SUPER_ADMIN');
 
   // Filtrar rutas basadas en permisos
-  const filteredTopRoutes = topRoutes.filter(r => 
-    r.path === '/' || allowedViews.includes(r.path.replace('/', ''))
-  );
+  const filteredTopRoutes = topRoutes.filter(r => {
+    if (isAdmin) return true;
+    const viewName = r.path === '/' ? '' : r.path.replace('/', '');
+    return allowedViews.includes(viewName);
+  });
 
   const filteredMenuGroups = menuGroups.map(group => ({
     ...group,
     routes: group.routes.filter(r => {
+      if (isAdmin) return true;
       const viewName = r.path.split('/').pop() || '';
-      return allowedViews.includes(viewName) || isAdmin;
+      return allowedViews.includes(viewName);
     })
   })).filter(group => group.routes.length > 0);
 
