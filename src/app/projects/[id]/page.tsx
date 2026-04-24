@@ -56,15 +56,15 @@ export default function ProjectDetailManagement({ params }: { params: { id: stri
   const renderTaskRow = (task: MockTask, level = 0) => {
     return (
       <div key={task.id} className="flex flex-col">
-        <div className={`flex items-center group hover:bg-slate-800/50 border-b border-slate-800/50 py-3 px-4 transition-colors ${level === 0 ? 'bg-slate-900/40' : ''}`}>
+        <div className={`flex items-center group hover:bg-secondary/50 border-b border-border/50 py-3 px-4 transition-colors ${level === 0 ? 'bg-card/40' : ''}`}>
           <div className="flex-1 flex items-center gap-2" style={{ paddingLeft: `${level * 1.5}rem` }}>
             {task.subtasks && task.subtasks.length > 0 ? (
-              <ChevronDown className="h-4 w-4 text-slate-500" />
+              <ChevronDown className="h-4 w-4 text-muted-foreground" />
             ) : (
-              <GitCommit className="h-4 w-4 text-slate-600 ml-1" />
+              <GitCommit className="h-4 w-4 text-muted-foreground ml-1" />
             )}
             
-            <span className={`font-medium ${level === 0 ? 'text-indigo-300 text-base' : 'text-slate-200 text-sm'}`}>
+            <span className={`font-medium ${level === 0 ? 'text-indigo-300 text-base' : 'text-foreground text-sm'}`}>
               {task.title}
             </span>
             
@@ -77,18 +77,18 @@ export default function ProjectDetailManagement({ params }: { params: { id: stri
             </span>
           </div>
           
-          <div className="w-32 text-sm text-slate-400 flex items-center gap-2">
+          <div className="w-32 text-sm text-muted-foreground flex items-center gap-2">
             <CalendarIcon className="h-3 w-3" /> {task.start}
           </div>
-          <div className="w-32 text-sm text-slate-400 flex items-center gap-2">
+          <div className="w-32 text-sm text-muted-foreground flex items-center gap-2">
             <CalendarIcon className="h-3 w-3" /> {task.end}
           </div>
           
           <div className="w-32 flex items-center gap-2">
-            <div className="w-full bg-slate-800 rounded-full h-1.5">
+            <div className="w-full bg-secondary rounded-full h-1.5">
               <div className="bg-indigo-500 h-1.5 rounded-full" style={{ width: `${task.progress}%` }} />
             </div>
-            <span className="text-xs text-slate-400 w-8">{task.progress}%</span>
+            <span className="text-xs text-muted-foreground w-8">{task.progress}%</span>
           </div>
 
           <div className="w-24 text-right opacity-0 group-hover:opacity-100 transition-opacity">
@@ -108,9 +108,9 @@ export default function ProjectDetailManagement({ params }: { params: { id: stri
   };
 
   return (
-    <div className="flex h-full flex-col bg-slate-950 overflow-hidden relative">
-      <header className="flex-shrink-0 bg-slate-900 border-b border-slate-800 px-8 py-5">
-        <div className="flex items-center gap-4 text-sm text-slate-400 mb-2">
+    <div className="flex h-full flex-col bg-background overflow-hidden relative">
+      <header className="flex-shrink-0 bg-card border-b border-border px-8 py-5">
+        <div className="flex items-center gap-4 text-sm text-muted-foreground mb-2">
           <Link href="/projects" className="hover:text-indigo-400 transition-colors flex items-center gap-1">
             <ArrowLeft className="h-4 w-4" /> Volver a Proyectos
           </Link>
@@ -123,7 +123,7 @@ export default function ProjectDetailManagement({ params }: { params: { id: stri
             <h1 className="text-2xl font-bold text-white flex items-center gap-3">
               Planificación Detallada (WBS & Dependencias)
             </h1>
-            <p className="mt-1 text-slate-400 text-sm">
+            <p className="mt-1 text-muted-foreground text-sm">
               Mantenimiento de Fases, Tareas, Subtareas y Enlaces Críticos.
             </p>
           </div>
@@ -135,23 +135,23 @@ export default function ProjectDetailManagement({ params }: { params: { id: stri
             >
               <Plus className="h-4 w-4" /> Crear Fase / Tarea
             </button>
-            <button className="flex items-center gap-2 rounded-md bg-slate-800 px-4 py-2 text-sm font-medium text-slate-300 hover:bg-slate-700 border border-slate-700">
+            <button className="flex items-center gap-2 rounded-md bg-secondary px-4 py-2 text-sm font-medium text-foreground/90 hover:bg-secondary/80 border border-border">
               <Settings className="h-4 w-4" /> Línea Base
             </button>
           </div>
         </div>
 
         {/* TABS */}
-        <div className="flex gap-6 mt-6 border-b border-slate-800">
+        <div className="flex gap-6 mt-6 border-b border-border">
           <button 
             onClick={() => setActiveTab('WBS')}
-            className={`pb-3 text-sm font-medium flex items-center gap-2 border-b-2 transition-colors ${activeTab === 'WBS' ? 'border-indigo-500 text-indigo-400' : 'border-transparent text-slate-400 hover:text-slate-200'}`}
+            className={`pb-3 text-sm font-medium flex items-center gap-2 border-b-2 transition-colors ${activeTab === 'WBS' ? 'border-indigo-500 text-indigo-400' : 'border-transparent text-muted-foreground hover:text-foreground'}`}
           >
             <ListTree className="h-4 w-4" /> Estructura de Tareas (WBS)
           </button>
           <button 
             onClick={() => setActiveTab('DEPENDENCIES')}
-            className={`pb-3 text-sm font-medium flex items-center gap-2 border-b-2 transition-colors ${activeTab === 'DEPENDENCIES' ? 'border-indigo-500 text-indigo-400' : 'border-transparent text-slate-400 hover:text-slate-200'}`}
+            className={`pb-3 text-sm font-medium flex items-center gap-2 border-b-2 transition-colors ${activeTab === 'DEPENDENCIES' ? 'border-indigo-500 text-indigo-400' : 'border-transparent text-muted-foreground hover:text-foreground'}`}
           >
             <LinkIcon className="h-4 w-4" /> Vincular Dependencias
           </button>
@@ -160,15 +160,15 @@ export default function ProjectDetailManagement({ params }: { params: { id: stri
 
       <div className="flex-1 overflow-y-auto p-8">
         {activeTab === 'WBS' && (
-          <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden shadow-sm">
-            <div className="flex items-center bg-slate-950/50 border-b border-slate-800 py-3 px-4 text-xs font-semibold text-slate-400 uppercase tracking-wider">
+          <div className="bg-card border border-border rounded-xl overflow-hidden shadow-sm">
+            <div className="flex items-center bg-background/95 border-b border-border py-3 px-4 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
               <div className="flex-1">Estructura / Nombre</div>
               <div className="w-32">Fecha Inicio</div>
               <div className="w-32">Fecha Fin</div>
               <div className="w-32">Progreso</div>
               <div className="w-24 text-right">Acciones</div>
             </div>
-            <div className="divide-y divide-slate-800/50">
+            <div className="divide-y divide-border/50">
               {tasks.map(task => renderTaskRow(task, 0))}
             </div>
           </div>
@@ -176,16 +176,16 @@ export default function ProjectDetailManagement({ params }: { params: { id: stri
 
         {activeTab === 'DEPENDENCIES' && (
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-            <div className="lg:col-span-1 bg-slate-900 border border-slate-800 rounded-xl p-6 shadow-sm h-fit">
+            <div className="lg:col-span-1 bg-card border border-border rounded-xl p-6 shadow-sm h-fit">
               <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
                 <LinkIcon className="h-5 w-5 text-indigo-400" /> Crear Vínculo
               </h3>
-              <p className="text-sm text-slate-400 mb-6">Visualmente vincula una tarea predecesora con su sucesora para generar la ruta crítica en el Gantt.</p>
+              <p className="text-sm text-muted-foreground mb-6">Visualmente vincula una tarea predecesora con su sucesora para generar la ruta crítica en el Gantt.</p>
               
               <div className="space-y-4">
                 <div>
-                  <label className="block text-xs font-medium text-slate-300 mb-1 uppercase tracking-wider">Tarea Predecesora (A)</label>
-                  <select className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2.5 text-sm text-white focus:outline-none focus:border-indigo-500">
+                  <label className="block text-xs font-medium text-foreground/90 mb-1 uppercase tracking-wider">Tarea Predecesora (A)</label>
+                  <select className="w-full bg-background border border-border rounded-lg px-3 py-2.5 text-sm text-white focus:outline-none focus:border-indigo-500">
                     <option>t1-1: Reunión Kickoff</option>
                     <option>t1-2: Toma de requerimientos</option>
                     <option>t2-1: Diseño de Base de Datos</option>
@@ -193,16 +193,16 @@ export default function ProjectDetailManagement({ params }: { params: { id: stri
                 </div>
                 
                 <div className="flex justify-center my-2">
-                  <div className="h-8 w-px bg-slate-700 relative">
-                    <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-slate-800 rounded-full p-1 border border-slate-600">
-                      <ChevronDown className="h-3 w-3 text-slate-400" />
+                  <div className="h-8 w-px bg-border relative">
+                    <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-secondary rounded-full p-1 border border-border">
+                      <ChevronDown className="h-3 w-3 text-muted-foreground" />
                     </div>
                   </div>
                 </div>
 
                 <div>
-                  <label className="block text-xs font-medium text-slate-300 mb-1 uppercase tracking-wider">Tarea Sucesora (B)</label>
-                  <select className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2.5 text-sm text-white focus:outline-none focus:border-indigo-500">
+                  <label className="block text-xs font-medium text-foreground/90 mb-1 uppercase tracking-wider">Tarea Sucesora (B)</label>
+                  <select className="w-full bg-background border border-border rounded-lg px-3 py-2.5 text-sm text-white focus:outline-none focus:border-indigo-500">
                     <option>t1-2: Toma de requerimientos</option>
                     <option>t2-1: Diseño de Base de Datos</option>
                     <option>t2-2-1: Wireframes Dashboard</option>
@@ -210,12 +210,12 @@ export default function ProjectDetailManagement({ params }: { params: { id: stri
                 </div>
 
                 <div>
-                  <label className="block text-xs font-medium text-slate-300 mb-1 uppercase tracking-wider mt-4">Tipo de Relación</label>
+                  <label className="block text-xs font-medium text-foreground/90 mb-1 uppercase tracking-wider mt-4">Tipo de Relación</label>
                   <div className="grid grid-cols-2 gap-2">
                     <button className="bg-indigo-500/20 border border-indigo-500/50 text-indigo-300 text-xs py-2 rounded-md font-medium">Fin a Inicio (FS)</button>
-                    <button className="bg-slate-800 border border-slate-700 text-slate-400 hover:text-slate-300 text-xs py-2 rounded-md font-medium transition-colors">Inicio a Inicio (SS)</button>
-                    <button className="bg-slate-800 border border-slate-700 text-slate-400 hover:text-slate-300 text-xs py-2 rounded-md font-medium transition-colors">Fin a Fin (FF)</button>
-                    <button className="bg-slate-800 border border-slate-700 text-slate-400 hover:text-slate-300 text-xs py-2 rounded-md font-medium transition-colors">Inicio a Fin (SF)</button>
+                    <button className="bg-secondary border border-border text-muted-foreground hover:text-foreground/90 text-xs py-2 rounded-md font-medium transition-colors">Inicio a Inicio (SS)</button>
+                    <button className="bg-secondary border border-border text-muted-foreground hover:text-foreground/90 text-xs py-2 rounded-md font-medium transition-colors">Fin a Fin (FF)</button>
+                    <button className="bg-secondary border border-border text-muted-foreground hover:text-foreground/90 text-xs py-2 rounded-md font-medium transition-colors">Inicio a Fin (SF)</button>
                   </div>
                 </div>
 
@@ -225,29 +225,29 @@ export default function ProjectDetailManagement({ params }: { params: { id: stri
               </div>
             </div>
 
-            <div className="lg:col-span-2 bg-slate-900 border border-slate-800 rounded-xl overflow-hidden shadow-sm">
-              <div className="flex items-center bg-slate-950/50 border-b border-slate-800 py-4 px-6">
-                <h3 className="font-semibold text-slate-200">Enlaces Activos</h3>
+            <div className="lg:col-span-2 bg-card border border-border rounded-xl overflow-hidden shadow-sm">
+              <div className="flex items-center bg-background/95 border-b border-border py-4 px-6">
+                <h3 className="font-semibold text-foreground">Enlaces Activos</h3>
               </div>
               <div className="p-6">
                 <div className="space-y-4">
                   {dependencies.map(dep => (
-                    <div key={dep.id} className="flex items-center justify-between p-4 rounded-lg bg-slate-950 border border-slate-800">
+                    <div key={dep.id} className="flex items-center justify-between p-4 rounded-lg bg-background border border-border">
                       <div className="flex items-center gap-4 flex-1">
-                        <div className="px-3 py-2 bg-slate-900 rounded border border-slate-700 text-sm text-slate-300 w-1/3 truncate">
+                        <div className="px-3 py-2 bg-card rounded border border-border text-sm text-foreground/90 w-1/3 truncate">
                           {dep.from}
                         </div>
                         <div className="flex flex-col items-center justify-center shrink-0 w-24">
                           <span className="text-[10px] font-bold text-indigo-400 bg-indigo-500/10 px-2 py-0.5 rounded uppercase">{dep.type}</span>
-                          <div className="w-full h-px bg-slate-700 relative mt-1">
+                          <div className="w-full h-px bg-border relative mt-1">
                             <div className="absolute right-0 top-1/2 -translate-y-1/2 w-2 h-2 border-t border-r border-slate-500 rotate-45"></div>
                           </div>
                         </div>
-                        <div className="px-3 py-2 bg-slate-900 rounded border border-slate-700 text-sm text-slate-300 w-1/3 truncate">
+                        <div className="px-3 py-2 bg-card rounded border border-border text-sm text-foreground/90 w-1/3 truncate">
                           {dep.to}
                         </div>
                       </div>
-                      <button className="ml-4 text-slate-500 hover:text-red-400 transition-colors">
+                      <button className="ml-4 text-muted-foreground hover:text-red-400 transition-colors">
                         <X className="h-5 w-5" />
                       </button>
                     </div>
@@ -262,25 +262,25 @@ export default function ProjectDetailManagement({ params }: { params: { id: stri
       {/* MODAL MANTENIMIENTO TAREA/SUBTAREA */}
       {isTaskModalOpen && (
         <div className="absolute inset-0 bg-black/60 flex items-center justify-center z-50 backdrop-blur-sm">
-          <div className="bg-slate-900 border border-slate-700 rounded-xl w-full max-w-2xl p-6 shadow-2xl max-h-[90vh] overflow-y-auto">
-            <div className="flex justify-between items-center mb-6 border-b border-slate-800 pb-4">
+          <div className="bg-card border border-border rounded-xl w-full max-w-2xl p-6 shadow-2xl max-h-[90vh] overflow-y-auto">
+            <div className="flex justify-between items-center mb-6 border-b border-border pb-4">
               <h3 className="text-xl font-bold text-white flex items-center gap-2">
                 <GitCommit className="h-5 w-5 text-indigo-400" />
                 {selectedParentId ? 'Crear Subtarea' : 'Crear Nueva Fase / Tarea Raíz'}
               </h3>
-              <button onClick={() => setIsTaskModalOpen(false)} className="text-slate-400 hover:text-white"><X className="h-5 w-5" /></button>
+              <button onClick={() => setIsTaskModalOpen(false)} className="text-muted-foreground hover:text-white"><X className="h-5 w-5" /></button>
             </div>
             
             <div className="space-y-5">
               <div>
-                <label className="block text-sm font-medium text-slate-300 mb-1">Título de la Tarea</label>
-                <input type="text" className="w-full bg-slate-950 border border-slate-700 rounded-lg px-4 py-2.5 text-white focus:outline-none focus:border-indigo-500" placeholder="Ej. Diseño de Arquitectura" />
+                <label className="block text-sm font-medium text-foreground/90 mb-1">Título de la Tarea</label>
+                <input type="text" className="w-full bg-background border border-border rounded-lg px-4 py-2.5 text-white focus:outline-none focus:border-indigo-500" placeholder="Ej. Diseño de Arquitectura" />
               </div>
               
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-1">Tipo de Tarea</label>
-                  <select className="w-full bg-slate-950 border border-slate-700 rounded-lg px-4 py-2.5 text-slate-300 focus:outline-none focus:border-indigo-500">
+                  <label className="block text-sm font-medium text-foreground/90 mb-1">Tipo de Tarea</label>
+                  <select className="w-full bg-background border border-border rounded-lg px-4 py-2.5 text-foreground/90 focus:outline-none focus:border-indigo-500">
                     <option>PHASE (Agrupador PMI)</option>
                     <option>PMI_TASK (Tarea Clásica)</option>
                     <option>AGILE_STORY (Historia de Usuario)</option>
@@ -288,8 +288,8 @@ export default function ProjectDetailManagement({ params }: { params: { id: stri
                   </select>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-1">Responsable</label>
-                  <select className="w-full bg-slate-950 border border-slate-700 rounded-lg px-4 py-2.5 text-slate-300 focus:outline-none focus:border-indigo-500">
+                  <label className="block text-sm font-medium text-foreground/90 mb-1">Responsable</label>
+                  <select className="w-full bg-background border border-border rounded-lg px-4 py-2.5 text-foreground/90 focus:outline-none focus:border-indigo-500">
                     <option>Sin Asignar</option>
                     <option>Edwin Martinez</option>
                     <option>Desarrollador 1</option>
@@ -297,28 +297,28 @@ export default function ProjectDetailManagement({ params }: { params: { id: stri
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-4 bg-slate-950/50 p-4 rounded-lg border border-slate-800">
+              <div className="grid grid-cols-2 gap-4 bg-background/95 p-4 rounded-lg border border-border">
                 <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-1 flex items-center gap-2">
-                    <CalendarIcon className="h-4 w-4 text-slate-500" /> Fecha Inicio
+                  <label className="block text-sm font-medium text-foreground/90 mb-1 flex items-center gap-2">
+                    <CalendarIcon className="h-4 w-4 text-muted-foreground" /> Fecha Inicio
                   </label>
-                  <input type="date" className="w-full bg-slate-900 border border-slate-700 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-indigo-500 color-scheme-dark" />
+                  <input type="date" className="w-full bg-card border border-border rounded-lg px-4 py-2 text-white focus:outline-none focus:border-indigo-500 color-scheme-dark" />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-1 flex items-center gap-2">
-                    <CalendarIcon className="h-4 w-4 text-slate-500" /> Fecha Fin
+                  <label className="block text-sm font-medium text-foreground/90 mb-1 flex items-center gap-2">
+                    <CalendarIcon className="h-4 w-4 text-muted-foreground" /> Fecha Fin
                   </label>
-                  <input type="date" className="w-full bg-slate-900 border border-slate-700 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-indigo-500 color-scheme-dark" />
+                  <input type="date" className="w-full bg-card border border-border rounded-lg px-4 py-2 text-white focus:outline-none focus:border-indigo-500 color-scheme-dark" />
                 </div>
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-slate-300 mb-1">Descripción</label>
-                <textarea className="w-full bg-slate-950 border border-slate-700 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-indigo-500" rows={3} placeholder="Criterios de aceptación o descripción..." />
+                <label className="block text-sm font-medium text-foreground/90 mb-1">Descripción</label>
+                <textarea className="w-full bg-background border border-border rounded-lg px-4 py-2 text-white focus:outline-none focus:border-indigo-500" rows={3} placeholder="Criterios de aceptación o descripción..." />
               </div>
               
-              <div className="flex justify-end gap-3 pt-4 border-t border-slate-800">
-                <button onClick={() => setIsTaskModalOpen(false)} className="px-5 py-2.5 rounded-lg text-sm font-medium text-slate-300 hover:bg-slate-800 transition-colors">
+              <div className="flex justify-end gap-3 pt-4 border-t border-border">
+                <button onClick={() => setIsTaskModalOpen(false)} className="px-5 py-2.5 rounded-lg text-sm font-medium text-foreground/90 hover:bg-secondary transition-colors">
                   Cancelar
                 </button>
                 <button className="bg-indigo-600 hover:bg-indigo-500 text-white font-medium px-6 py-2.5 rounded-lg transition-colors shadow-lg shadow-indigo-500/20">

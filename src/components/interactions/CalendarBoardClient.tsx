@@ -41,10 +41,10 @@ const PRIORITY_BORDER: Record<string, string> = {
 }
 
 const STATUS_DOT: Record<string, string> = {
-  TODO: 'bg-slate-400',
-  IN_PROGRESS: 'bg-indigo-500 animate-pulse',
-  REVIEW: 'bg-amber-500',
-  DONE: 'bg-emerald-500',
+  TODO: 'bg-muted-foreground',
+  IN_PROGRESS: 'bg-primary animate-pulse',
+  REVIEW: 'bg-amber-400',
+  DONE: 'bg-emerald-400',
 }
 
 // Keys de URL para los filtros del calendario. Mantenemos claves dedicadas
@@ -467,8 +467,8 @@ export function CalendarBoardClient({
                 onDrop={(e) => handleDrop(e, dayKey)}
                 className={clsx(
                   'group relative min-h-[120px] cursor-pointer border-b border-r border-border/60 p-1.5 transition-colors last-of-type:border-r-0',
-                  isCurrentMonth ? 'bg-background' : 'bg-card/40 opacity-70',
-                  isWeekend && 'bg-card/30',
+                  isCurrentMonth ? 'bg-background' : 'bg-subtle/60',
+                  isWeekend && 'bg-subtle/40',
                   isToday && 'bg-primary/5 ring-2 ring-inset ring-primary/60',
                   isDropTarget && 'bg-primary/10 ring-2 ring-inset ring-primary',
                   'hover:bg-accent/40 focus-visible:outline-2 focus-visible:outline-primary',
@@ -482,7 +482,7 @@ export function CalendarBoardClient({
                         ? 'rounded-full bg-primary px-1.5 text-primary-foreground'
                         : isCurrentMonth
                           ? 'text-foreground'
-                          : 'text-muted-foreground',
+                          : 'text-muted-foreground/70',
                     )}
                   >
                     {day.getUTCDate()}

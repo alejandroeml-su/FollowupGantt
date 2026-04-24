@@ -43,12 +43,12 @@ function isGroupLabel(i: MenuItem): i is { type: 'label'; label: string } {
 
 const CONTENT_CLS =
   'z-50 min-w-[220px] overflow-hidden rounded-[10px] border border-slate-200 bg-white p-1 shadow-lg ' +
-  'dark:border-slate-700 dark:bg-slate-900'
+  'dark:border-border dark:bg-card'
 
 const ITEM_BASE =
   'flex cursor-default select-none items-center justify-between gap-3 rounded-md px-2 py-1.5 text-sm outline-none ' +
   'data-[highlighted]:bg-blue-50 data-[highlighted]:text-blue-700 ' +
-  'dark:data-[highlighted]:bg-slate-800 dark:data-[highlighted]:text-blue-300 ' +
+  'dark:data-[highlighted]:bg-secondary dark:data-[highlighted]:text-blue-300 ' +
   'data-[disabled]:pointer-events-none data-[disabled]:opacity-40'
 
 function renderItem(item: MenuItem, i: number) {
@@ -56,14 +56,14 @@ function renderItem(item: MenuItem, i: number) {
     return (
       <ContextMenu.Separator
         key={`sep-${i}`}
-        className="my-1 h-px bg-slate-200 dark:bg-slate-700"
+        className="my-1 h-px bg-slate-200 dark:bg-border"
       />
     )
   if (isGroupLabel(item))
     return (
       <ContextMenu.Label
         key={`lbl-${i}`}
-        className="px-2 py-1 text-xs font-medium uppercase tracking-wide text-slate-500"
+        className="px-2 py-1 text-xs font-medium uppercase tracking-wide text-muted-foreground"
       >
         {item.label}
       </ContextMenu.Label>
@@ -109,7 +109,7 @@ function renderItem(item: MenuItem, i: number) {
         {it.label}
       </span>
       {it.shortcut && (
-        <span className="ml-auto text-xs text-slate-500">{it.shortcut}</span>
+        <span className="ml-auto text-xs text-muted-foreground">{it.shortcut}</span>
       )}
     </ContextMenu.Item>
   )

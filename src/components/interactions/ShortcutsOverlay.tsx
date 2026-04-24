@@ -38,21 +38,21 @@ export function ShortcutsOverlay() {
     <Dialog.Root open={open} onOpenChange={(v) => toggle(v)}>
       <Dialog.Portal>
         <Dialog.Overlay className="fixed inset-0 z-50 bg-black/40" />
-        <Dialog.Content className="fixed left-1/2 top-1/2 z-50 w-full max-w-2xl -translate-x-1/2 -translate-y-1/2 rounded-xl border border-slate-200 bg-white p-6 shadow-xl dark:border-slate-700 dark:bg-slate-900">
+        <Dialog.Content className="fixed left-1/2 top-1/2 z-50 w-full max-w-2xl -translate-x-1/2 -translate-y-1/2 rounded-xl border border-slate-200 bg-white p-6 shadow-xl dark:border-border dark:bg-card">
           <Dialog.Title className="mb-4 text-lg font-semibold">
             Atajos de teclado
           </Dialog.Title>
           <div className="grid grid-cols-2 gap-6">
             {GROUPS.map((g) => (
               <section key={g.title}>
-                <h3 className="mb-2 text-xs font-medium uppercase tracking-wide text-slate-500">
+                <h3 className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
                   {g.title}
                 </h3>
                 <ul className="space-y-1">
                   {g.rows.map(([label, key]) => (
                     <li key={label} className="flex justify-between text-sm">
                       <span>{label}</span>
-                      <kbd className="rounded bg-slate-100 px-1.5 py-0.5 font-mono text-xs text-slate-700 dark:bg-slate-800 dark:text-slate-300">
+                      <kbd className="rounded bg-slate-100 px-1.5 py-0.5 font-mono text-xs text-foreground dark:bg-secondary dark:text-foreground/90">
                         {displayShortcut(key)}
                       </kbd>
                     </li>

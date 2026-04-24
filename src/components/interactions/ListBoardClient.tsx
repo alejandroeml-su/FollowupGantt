@@ -60,17 +60,17 @@ const STATUS_ICON: Record<string, React.ReactNode> = {
 }
 
 const STATUS_COLOR: Record<string, string> = {
-  TODO: 'text-slate-400',
+  TODO: 'text-muted-foreground',
   IN_PROGRESS: 'text-indigo-400',
   DONE: 'text-emerald-400',
   REVIEW: 'text-amber-400',
 }
 
 const PRIORITY_COLOR: Record<string, string> = {
-  LOW: 'text-slate-400',
-  MEDIUM: 'text-blue-400',
-  HIGH: 'text-amber-400',
-  CRITICAL: 'text-red-400',
+  LOW: 'text-muted-foreground',
+  MEDIUM: 'text-blue-300',
+  HIGH: 'text-amber-300',
+  CRITICAL: 'text-red-300',
 }
 
 export function ListBoardClient({
@@ -177,22 +177,22 @@ export function ListBoardClient({
         projects={projects}
         users={users}
       />
-      <div className="divide-y divide-slate-800/50">
-        <div className="flex items-center bg-slate-800/20 px-4 py-2">
-          <ChevronDown className="mr-2 h-4 w-4 text-slate-400" />
+      <div className="divide-y divide-border/50">
+        <div className="flex items-center bg-secondary/20 px-4 py-2">
+          <ChevronDown className="mr-2 h-4 w-4 text-muted-foreground" />
           <span className="rounded border border-indigo-500/20 bg-indigo-500/20 px-2 py-0.5 text-xs font-semibold text-indigo-400">
             ALL TASKS
           </span>
-          <span className="ml-2 text-xs text-slate-500">
+          <span className="ml-2 text-xs text-muted-foreground">
             {visibleItems.length} de {items.length} tareas
           </span>
-          <span className="ml-auto text-[10px] text-slate-500">
+          <span className="ml-auto text-[10px] text-muted-foreground">
             Shift + / atajos · / buscar · T nueva tarea
           </span>
         </div>
 
         {visibleItems.length === 0 && (
-          <div className="px-4 py-8 text-center text-sm text-slate-500">
+          <div className="px-4 py-8 text-center text-sm text-muted-foreground">
             {items.length === 0
               ? 'No hay tareas. Crea la primera desde "Nueva Tarea".'
               : 'Ninguna tarea coincide con los filtros.'}
@@ -250,8 +250,8 @@ export function ListBoardClient({
 
           <DragOverlay>
             {activeId ? (
-              <div className="rounded-lg border border-indigo-500/50 bg-slate-800 px-4 py-2 shadow-xl">
-                <p className="truncate text-sm text-slate-200">
+              <div className="rounded-lg border border-indigo-500/50 bg-secondary px-4 py-2 shadow-xl">
+                <p className="truncate text-sm text-foreground">
                   {items.find((t) => t.id === activeId)?.title}
                 </p>
               </div>
@@ -266,7 +266,7 @@ export function ListBoardClient({
             <>
               {drawerTask.project?.name}
               {' › '}
-              <span className="text-slate-300">
+              <span className="text-foreground/90">
                 #{drawerTask.id.substring(0, 6)}
               </span>
             </>
@@ -330,8 +330,8 @@ function Row({
   children,
 }: RowProps) {
   const openDrawer = useUIStore((s) => s.openDrawer)
-  const priorityColor = PRIORITY_COLOR[task.priority] ?? 'text-slate-400'
-  const statusColor = STATUS_COLOR[task.status] ?? 'text-slate-400'
+  const priorityColor = PRIORITY_COLOR[task.priority] ?? 'text-muted-foreground'
+  const statusColor = STATUS_COLOR[task.status] ?? 'text-muted-foreground'
   const commentCount = task.comments?.length ?? 0
   const hasSubs = (task.subtasks?.length ?? 0) > 0
   const dateStr = task.endDate
@@ -372,10 +372,10 @@ function Row({
           className={clsx(
             'group grid cursor-pointer grid-cols-12 items-center gap-4 border-l-2 px-4 py-2.5 text-sm transition-all',
             focused
-              ? 'border-indigo-500 bg-slate-800/60 outline-2 outline-indigo-500'
+              ? 'border-indigo-500 bg-secondary/60 outline-2 outline-indigo-500'
               : selected
                 ? 'border-indigo-500/50 bg-indigo-500/5'
-                : 'border-transparent hover:border-indigo-500 hover:bg-slate-800/50',
+                : 'border-transparent hover:border-indigo-500 hover:bg-secondary/50',
           )}
         >
           <div
@@ -392,7 +392,7 @@ function Row({
                   onToggleExpand?.()
                 }}
                 aria-label={expanded ? 'Colapsar' : 'Expandir'}
-                className="mr-1 rounded p-0.5 text-slate-500 hover:bg-slate-700 hover:text-slate-300"
+                className="mr-1 rounded p-0.5 text-muted-foreground hover:bg-secondary/80 hover:text-foreground/90"
               >
                 {expanded ? (
                   <ChevronDown className="h-4 w-4" />
@@ -407,19 +407,19 @@ function Row({
             <span className={clsx('mr-2 h-4 w-4', statusColor)}>
               {STATUS_ICON[task.status] ?? <Circle className="h-4 w-4" />}
             </span>
-            <span className="truncate font-medium text-slate-200 group-hover:text-indigo-300">
+            <span className="truncate font-medium text-foreground group-hover:text-indigo-300">
               {task.title}
             </span>
             {commentCount > 0 && (
-              <span className="ml-2 flex items-center gap-0.5 text-[10px] text-slate-500">
+              <span className="ml-2 flex items-center gap-0.5 text-[10px] text-muted-foreground">
                 <MessageSquare className="h-3 w-3" /> {commentCount}
               </span>
             )}
           </div>
 
           <div className="col-span-2 flex items-center">
-            <UserCircle2 className="mr-2 h-4 w-4 text-slate-400" />
-            <span className="truncate text-xs text-slate-300">
+            <UserCircle2 className="mr-2 h-4 w-4 text-muted-foreground" />
+            <span className="truncate text-xs text-foreground/90">
               {task.assignee?.name ?? 'Sin Asignar'}
             </span>
           </div>
@@ -428,7 +428,7 @@ function Row({
             <StatusSelector taskId={task.id} currentStatus={task.status} />
           </div>
 
-          <div className="col-span-2 flex items-center text-xs text-slate-400">
+          <div className="col-span-2 flex items-center text-xs text-muted-foreground">
             <Calendar className="mr-2 h-3.5 w-3.5" />
             {dateStr}
           </div>
@@ -437,7 +437,7 @@ function Row({
             <Flag className={clsx('h-4 w-4', priorityColor)} />
           </div>
 
-          <div className="col-span-1 flex justify-center text-xs text-slate-500">
+          <div className="col-span-1 flex justify-center text-xs text-muted-foreground">
             #{task.id.substring(0, 4)}
           </div>
         </div>
@@ -472,7 +472,7 @@ function SortableListRow({
           {...(listeners as Record<string, unknown>)}
           aria-label="Arrastrar para reordenar"
           onClick={(e) => e.stopPropagation()}
-          className="mr-1 cursor-grab text-slate-600 opacity-0 transition-opacity group-hover:opacity-100 active:cursor-grabbing"
+          className="mr-1 cursor-grab text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100 active:cursor-grabbing"
         >
           <GripVertical className="h-4 w-4" />
         </button>

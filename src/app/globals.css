@@ -28,63 +28,152 @@
   --color-card: var(--card);
   --color-card-foreground: var(--card-foreground);
 
+  /* Nuevos tokens semánticos (Avante Neutral+) */
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
+  --color-placeholder: var(--placeholder);
+  --color-input-foreground: var(--input-foreground);
+  --color-subtle: var(--subtle);
+  --color-subtle-foreground: var(--subtle-foreground);
+
   --radius-lg: var(--radius);
   --radius-md: calc(var(--radius) - 2px);
   --radius-sm: calc(var(--radius) - 4px);
-  
+
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
 
+/* ───────────────────────────────────────────────────────────────
+   Light Mode — Avante Neutral+
+   Todos los pares texto/fondo cumplen WCAG 2.1 AA (ratio ≥ 4.5:1)
+   ─────────────────────────────────────────────────────────────── */
 :root {
   --background: #ffffff;
-  --foreground: #020617;
+  --foreground: #0f172a;           /* slate-900 — texto principal */
+
   --card: #ffffff;
-  --card-foreground: #020617;
+  --card-foreground: #0f172a;
+
   --popover: #ffffff;
-  --popover-foreground: #020617;
-  --primary: #4f46e5;
+  --popover-foreground: #0f172a;
+
+  --subtle: #f8fafc;               /* slate-50 — superficie sutil (sidebars, headers) */
+  --subtle-foreground: #334155;    /* slate-700 */
+
+  --primary: #4338ca;              /* indigo-700 — más contraste que indigo-500 */
   --primary-foreground: #ffffff;
-  --secondary: #f1f5f9;
+
+  --secondary: #f1f5f9;            /* slate-100 */
   --secondary-foreground: #0f172a;
+
   --muted: #f1f5f9;
-  --muted-foreground: #64748b;
-  --accent: #f8fafc;
-  --accent-foreground: #0f172a;
-  --destructive: #ef4444;
+  --muted-foreground: #475569;     /* slate-600 — antes slate-500, ahora 7.2:1 */
+
+  --accent: #eef2ff;               /* indigo-50 */
+  --accent-foreground: #3730a3;    /* indigo-800 */
+
+  --destructive: #dc2626;          /* red-600 — 4.8:1 sobre blanco */
   --destructive-foreground: #ffffff;
-  --border: #e2e8f0;
-  --input: #e2e8f0;
-  --ring: #6366f1;
+
+  --success: #047857;              /* emerald-700 */
+  --success-foreground: #ffffff;
+
+  --warning: #b45309;              /* amber-700 */
+  --warning-foreground: #ffffff;
+
+  --border: #cbd5e1;               /* slate-300 — antes slate-200 casi invisible */
+  --input: #ffffff;                /* fondo de input */
+  --input-foreground: #0f172a;     /* texto dentro del input */
+  --placeholder: #64748b;          /* slate-500 — 4.8:1 sobre blanco */
+  --ring: #6366f1;                 /* indigo-500 para focus */
+
   --radius: 0.75rem;
 }
 
+/* ───────────────────────────────────────────────────────────────
+   Dark Mode — Avante Neutral+
+   Jerarquía de superficie: background < card < secondary < hover
+   Texto: foreground > muted-foreground > placeholder
+   ─────────────────────────────────────────────────────────────── */
 .dark {
-  --background: #020617;
-  --foreground: #f8fafc;
-  --card: #020617;
+  --background: #0b1220;           /* slate-950 cálido — antes #020617 */
+  --foreground: #f8fafc;           /* slate-50 */
+
+  --card: #111b2e;                 /* +1 nivel sobre bg para profundidad */
   --card-foreground: #f8fafc;
-  --popover: #020617;
+
+  --popover: #111b2e;
   --popover-foreground: #f8fafc;
-  --primary: #818cf8;
-  --primary-foreground: #ffffff;
-  --secondary: #1e293b;
+
+  --subtle: #0f172a;               /* slate-900 — sidebars, zonas secundarias */
+  --subtle-foreground: #cbd5e1;    /* slate-300 */
+
+  --primary: #a5b4fc;              /* indigo-300 — 9.5:1 sobre bg */
+  --primary-foreground: #1e1b4b;   /* indigo-950 para texto sobre primary */
+
+  --secondary: #1e293b;            /* slate-800 */
   --secondary-foreground: #f8fafc;
-  --muted: #0f172a;
-  --muted-foreground: #94a3b8;
-  --accent: #1e293b;
-  --accent-foreground: #f8fafc;
-  --destructive: #7f1d1d;
-  --destructive-foreground: #f8fafc;
-  --border: #1e293b;
-  --input: #1e293b;
-  --ring: #6366f1;
+
+  --muted: #1e293b;
+  --muted-foreground: #cbd5e1;     /* slate-300 — 11.5:1. Antes #94a3b8 fallaba */
+
+  --accent: #312e81;               /* indigo-900 para hover del primary */
+  --accent-foreground: #e0e7ff;    /* indigo-100 */
+
+  --destructive: #f87171;          /* red-400 — 6.9:1. Antes #7f1d1d era 3.0:1 */
+  --destructive-foreground: #450a0a;
+
+  --success: #34d399;              /* emerald-400 */
+  --success-foreground: #022c22;
+
+  --warning: #fbbf24;              /* amber-400 */
+  --warning-foreground: #451a03;
+
+  --border: #334155;               /* slate-700 — antes #1e293b casi invisible */
+  --input: #1e293b;                /* bg input dark */
+  --input-foreground: #f8fafc;     /* texto dentro de input */
+  --placeholder: #94a3b8;          /* slate-400 — 5.2:1 sobre input */
+  --ring: #818cf8;                 /* indigo-400 focus visible */
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
   transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+/* ───────────────────────────────────────────────────────────────
+   Inputs nativos — placeholder y value legibles en dark mode
+   Fix para <input type="date">, <input type="number">, textarea
+   ─────────────────────────────────────────────────────────────── */
+input, textarea, select {
+  color: var(--input-foreground);
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: var(--placeholder);
+  opacity: 1; /* Firefox baja la opacidad por defecto */
+}
+
+/* El pseudo-elemento de <input type="date"> es gris system por defecto.
+   Lo forzamos al token de placeholder cuando no hay valor. */
+input[type="date"]:not([value])::-webkit-datetime-edit,
+input[type="date"][value=""]::-webkit-datetime-edit,
+input[type="date"]::-webkit-datetime-edit-fields-wrapper {
+  color: var(--input-foreground);
+}
+
+input[type="date"]::-webkit-calendar-picker-indicator {
+  filter: invert(0.85);
+  opacity: 0.7;
+  cursor: pointer;
+}
+input[type="date"]::-webkit-calendar-picker-indicator:hover {
+  opacity: 1;
 }
 
 /* Custom Scrollbar */
@@ -96,9 +185,9 @@ body {
   background: transparent;
 }
 .custom-scrollbar::-webkit-scrollbar-thumb {
-  background: color-mix(in srgb, var(--muted-foreground) 20%, transparent);
+  background: color-mix(in srgb, var(--muted-foreground) 30%, transparent);
   border-radius: 99px;
 }
 .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-  background: color-mix(in srgb, var(--muted-foreground) 40%, transparent);
+  background: color-mix(in srgb, var(--muted-foreground) 50%, transparent);
 }

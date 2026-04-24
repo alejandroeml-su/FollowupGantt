@@ -26,17 +26,17 @@ type Props = {
 }
 
 const PRIORITY_OPTIONS = [
-  { value: 'LOW', label: 'Baja', cls: 'hover:border-slate-400' },
+  { value: 'LOW', label: 'Baja', cls: 'hover:border-border' },
   { value: 'MEDIUM', label: 'Media', cls: 'hover:border-blue-500' },
   { value: 'HIGH', label: 'Alta', cls: 'hover:border-amber-500' },
   { value: 'CRITICAL', label: 'Crítica', cls: 'hover:border-red-500' },
 ]
 
 const PRIORITY_ACTIVE: Record<string, string> = {
-  LOW: 'border-slate-400 bg-slate-400/10 text-slate-200',
-  MEDIUM: 'border-blue-500 bg-blue-500/10 text-blue-400',
-  HIGH: 'border-amber-500 bg-amber-500/10 text-amber-400',
-  CRITICAL: 'border-red-500 bg-red-500/10 text-red-400',
+  LOW: 'border-border bg-secondary text-foreground',
+  MEDIUM: 'border-blue-500 bg-blue-500/15 text-blue-300',
+  HIGH: 'border-amber-500 bg-amber-500/15 text-amber-300',
+  CRITICAL: 'border-red-500 bg-red-500/15 text-red-300',
 }
 
 export function QuickCreatePopover({

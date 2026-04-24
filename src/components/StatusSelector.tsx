@@ -22,10 +22,10 @@ export default function StatusSelector({ taskId, currentStatus }: { taskId: stri
       <select
         defaultValue={currentStatus}
         onChange={handleChange}
-        className="bg-transparent text-xs font-medium cursor-pointer text-slate-300 focus:outline-none hover:text-white"
+        className="bg-transparent text-xs font-medium cursor-pointer text-foreground/90 focus:outline-none hover:text-white"
       >
         {statuses.map(s => (
-          <option key={s.value} value={s.value} className="bg-slate-900 text-slate-200">
+          <option key={s.value} value={s.value} className="bg-card text-foreground">
             {s.label}
           </option>
         ))}

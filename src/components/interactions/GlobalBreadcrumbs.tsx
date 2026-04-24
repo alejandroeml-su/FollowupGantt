@@ -43,26 +43,26 @@ export function GlobalBreadcrumbs() {
   return (
     <nav
       aria-label="Breadcrumb"
-      className="flex items-center gap-1 text-xs text-slate-400"
+      className="flex items-center gap-1 text-xs text-muted-foreground"
     >
       <Link
         href={hrefWithFilters('/', filters)}
-        className="flex items-center gap-1 hover:text-slate-200"
+        className="flex items-center gap-1 hover:text-foreground"
         aria-label="Inicio"
       >
         <Home className="h-3 w-3" />
       </Link>
       {crumbs.map((c, i) => (
         <span key={c.href} className="flex items-center gap-1">
-          <ChevronRight className="h-3 w-3 text-slate-600" aria-hidden />
+          <ChevronRight className="h-3 w-3 text-muted-foreground" aria-hidden />
           {i === crumbs.length - 1 ? (
-            <span aria-current="page" className="font-medium text-slate-200">
+            <span aria-current="page" className="font-medium text-foreground">
               {c.label}
             </span>
           ) : (
             <Link
               href={hrefWithFilters(c.href, filters)}
-              className="hover:text-slate-200"
+              className="hover:text-foreground"
             >
               {c.label}
             </Link>
