@@ -34,7 +34,7 @@ export default async function KanbanBoard() {
     ]),
   )
 
-  const [projects, users, allTasksRaw, gerencias, areas] = await Promise.all([
+  const [projects, users, allTasksRaw, gerencias, areas, phases, sprints] = await Promise.all([
     prisma.project.findMany({ select: { id: true, name: true, areaId: true }, orderBy: { name: 'asc' } }),
     prisma.user.findMany({ orderBy: { name: 'asc' } }),
     prisma.task.findMany({
@@ -44,6 +44,8 @@ export default async function KanbanBoard() {
     }),
     prisma.gerencia.findMany({ select: { id: true, name: true }, orderBy: { name: 'asc' } }),
     prisma.area.findMany({ select: { id: true, name: true, gerenciaId: true }, orderBy: { name: 'asc' } }),
+    prisma.phase.findMany({ select: { id: true, name: true, projectId: true }, orderBy: [{ project: { name: 'asc' } }, { order: 'asc' }] }),
+    prisma.sprint.findMany({ select: { id: true, name: true, projectId: true }, orderBy: [{ project: { name: 'asc' } }, { startDate: 'asc' }] }),
   ])
 
   return (
@@ -74,7 +76,13 @@ export default async function KanbanBoard() {
         </div>
         <div className="flex items-center gap-3">
           <ViewSwitcher />
-          <NewTaskButton projects={projects} users={users} allTasks={allTasksRaw} />
+          <NewTaskButton
+            projects={projects}
+            users={users}
+            allTasks={allTasksRaw}
+            phases={phases}
+            sprints={sprints}
+          />
         </div>
       </header>
 
@@ -86,6 +94,8 @@ export default async function KanbanBoard() {
         gerencias={gerencias}
         areas={areas}
         allTasks={allTasksRaw}
+        phases={phases}
+        sprints={sprints}
       />
     </div>
   )

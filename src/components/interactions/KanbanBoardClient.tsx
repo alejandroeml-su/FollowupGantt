@@ -28,6 +28,7 @@ import {
   Plus,
 } from 'lucide-react'
 import { clsx } from 'clsx'
+import type { TaskStatus } from '@prisma/client'
 import type { SerializedTask } from '@/lib/types'
 import {
   moveTaskToColumn,
@@ -36,8 +37,13 @@ import {
 } from '@/lib/actions/reorder'
 import { TaskWithContextMenu } from './TaskContextMenuItems'
 import { ColumnContextMenu } from './ColumnContextMenu'
+import { TaskCreationModal } from './TaskCreationModal'
 import { TaskDrawer } from './TaskDrawer'
 import { TaskDrawerContent } from './TaskDrawerContent'
+import type {
+  PhaseOption,
+  SprintOption,
+} from './task-form/TaskMetaSidebar'
 import { useUIStore } from '@/lib/stores/ui'
 import { useTaskShortcuts } from '@/lib/hooks/useTaskShortcuts'
 import { toast } from './Toaster'
@@ -67,6 +73,8 @@ type Props = {
   gerencias?: { id: string; name: string }[]
   areas?: { id: string; name: string; gerenciaId?: string | null }[]
   allTasks?: ParentOption[]
+  phases?: PhaseOption[]
+  sprints?: SprintOption[]
 }
 
 const TYPE_COLOR: Record<string, string> = {
@@ -97,6 +105,8 @@ export function KanbanBoardClient({
   gerencias = [],
   areas = [],
   allTasks = [],
+  phases = [],
+  sprints = [],
 }: Props) {
   const [local, setLocal] = useState(tasksByColumn)
   const [activeId, setActiveId] = useState<string | null>(null)
@@ -297,6 +307,11 @@ export function KanbanBoardClient({
                 accent={prefs.accent}
                 effectiveWip={effectiveWip(col)}
                 focusedId={focusedId}
+                projects={projects}
+                users={users}
+                allTasks={allTasks}
+                phases={phases}
+                sprints={sprints}
               />
             )
           })}
@@ -390,6 +405,11 @@ function BoardColumn({
   accent,
   effectiveWip,
   focusedId,
+  projects,
+  users,
+  allTasks,
+  phases,
+  sprints,
 }: {
   column: Column
   tasks: SerializedTask[]
@@ -401,8 +421,14 @@ function BoardColumn({
   accent?: string
   effectiveWip: number | null
   focusedId: string | null
+  projects: { id: string; name: string }[]
+  users: { id: string; name: string }[]
+  allTasks: ParentOption[]
+  phases: PhaseOption[]
+  sprints: SprintOption[]
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: column.id })
+  const [createOpen, setCreateOpen] = useState(false)
   const isOverWip = effectiveWip != null && tasks.length > effectiveWip
   const nearWip =
     effectiveWip != null &&
@@ -529,12 +555,25 @@ function BoardColumn({
         <div className="border-t border-border p-2">
           <button
             type="button"
+            onClick={() => setCreateOpen(true)}
+            aria-label={`Añadir tarea en ${column.title}`}
             className="flex w-full items-center justify-center gap-1 rounded text-xs text-muted-foreground hover:text-foreground/90"
           >
             <Plus className="h-3 w-3" /> Añadir tarea
           </button>
         </div>
       )}
+
+      <TaskCreationModal
+        open={createOpen}
+        onClose={() => setCreateOpen(false)}
+        projects={projects}
+        users={users}
+        allTasks={allTasks}
+        phases={phases}
+        sprints={sprints}
+        defaultStatus={column.id as TaskStatus}
+      />
     </div>
   )
 }

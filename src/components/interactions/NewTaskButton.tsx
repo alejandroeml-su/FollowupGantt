@@ -4,6 +4,10 @@ import { useState } from 'react'
 import { Plus } from 'lucide-react'
 import { TaskCreationModal } from './TaskCreationModal'
 import type { SerializedTask } from '@/lib/types'
+import type {
+  PhaseOption,
+  SprintOption,
+} from './task-form/TaskMetaSidebar'
 
 type ParentOption = Pick<SerializedTask, 'id' | 'title' | 'mnemonic'> & {
   project?: { id: string; name: string } | null
@@ -14,6 +18,10 @@ type Props = {
   projects: { id: string; name: string }[]
   users: { id: string; name: string }[]
   allTasks?: ParentOption[]
+  /** Épicas (Phase del schema) — se filtran por proyecto en la sidebar. */
+  phases?: PhaseOption[]
+  /** Sprints — se filtran por proyecto en la sidebar. */
+  sprints?: SprintOption[]
   variant?: 'primary' | 'subtle'
   label?: string
 }
@@ -22,6 +30,8 @@ export function NewTaskButton({
   projects,
   users,
   allTasks = [],
+  phases = [],
+  sprints = [],
   variant = 'primary',
   label = 'Nueva Tarea',
 }: Props) {
@@ -47,6 +57,8 @@ export function NewTaskButton({
         projects={projects}
         users={users}
         allTasks={allTasks}
+        phases={phases}
+        sprints={sprints}
       />
     </>
   )
