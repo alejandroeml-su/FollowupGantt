@@ -1,9 +1,20 @@
 'use client'
 
 import { useState, useTransition, useEffect, useMemo, useCallback } from 'react'
-import { X, Plus, GitBranch } from 'lucide-react'
+import {
+  X,
+  Plus,
+  GitBranch,
+  Briefcase,
+  CheckSquare,
+  MessageSquare,
+  History,
+  Paperclip,
+  Tag,
+} from 'lucide-react'
 import type { TaskStatus } from '@prisma/client'
 import { createTask } from '@/lib/actions'
+import { listProjectTags } from '@/lib/actions/tags'
 import { toast } from './Toaster'
 import type { SerializedTask } from '@/lib/types'
 import { PriorityPills, type PriorityValue } from './task-form/PriorityPills'
@@ -13,6 +24,13 @@ import {
   type SprintOption,
   type TaskMetaState,
 } from './task-form/TaskMetaSidebar'
+import { TagChipInput } from './task-form/TagChipInput'
+import { TaskFormTabs, type TaskFormTab } from './task-form/TaskFormTabs'
+import { SubtasksTab } from './task-form/tabs/SubtasksTab'
+import { CommentsTab } from './task-form/tabs/CommentsTab'
+import { HistoryTab } from './task-form/tabs/HistoryTab'
+import { AttachmentsTab } from './task-form/tabs/AttachmentsTab'
+import { DependenciesTab } from './task-form/tabs/DependenciesTab'
 
 type ParentOption = Pick<SerializedTask, 'id' | 'title' | 'mnemonic'> & {
   project?: { id: string; name: string } | null
@@ -37,6 +55,8 @@ type Props = {
   /** Sprints por proyecto. Compat: opcional, default []. */
   sprints?: SprintOption[]
 }
+
+type ModalTabId = 'detail' | 'subtasks' | 'comments' | 'history' | 'attachments' | 'relations'
 
 const INITIAL_FORM = {
   title: '',
@@ -73,6 +93,9 @@ export function TaskCreationModal({
   const [isSubtask, setIsSubtask] = useState(!!defaultParentId)
   const [form, setForm] = useState(INITIAL_FORM)
   const [meta, setMeta] = useState<TaskMetaState>(() => initialMeta(defaultStatus))
+  const [tags, setTags] = useState<string[]>([])
+  const [tagSuggestions, setTagSuggestions] = useState<string[]>([])
+  const [activeTab, setActiveTab] = useState<ModalTabId>('detail')
 
   /* eslint-disable react-hooks/set-state-in-effect */
   // Reset por transición open=false→true (evento, no derivación de props).
@@ -92,9 +115,32 @@ export function TaskCreationModal({
         ...initialMeta(defaultStatus),
         projectId: initialProjectId,
       })
+      setTags([])
+      setActiveTab('detail')
     }
   }, [open, defaultParentId, defaultStatus, allTasks])
   /* eslint-enable react-hooks/set-state-in-effect */
+
+  // Carga sugerencias de tags al cambiar projectId (debounced 250ms para
+  // evitar refetch en cada render del select de proyectos).
+  useEffect(() => {
+    if (!open) return
+    const projectId = meta.projectId
+    let cancelled = false
+    const timer = setTimeout(async () => {
+      try {
+        const list = await listProjectTags(projectId || undefined)
+        if (!cancelled) setTagSuggestions(list)
+      } catch {
+        // Falla silenciosa: el chip-input funciona sin sugerencias.
+        if (!cancelled) setTagSuggestions([])
+      }
+    }, 250)
+    return () => {
+      cancelled = true
+      clearTimeout(timer)
+    }
+  }, [open, meta.projectId])
 
   const isDirty = useMemo(() => {
     return (
@@ -106,9 +152,10 @@ export function TaskCreationModal({
       meta.isMilestone ||
       meta.startDate !== '' ||
       meta.endDate !== '' ||
-      meta.plannedValue !== ''
+      meta.plannedValue !== '' ||
+      tags.length > 0
     )
-  }, [form, meta])
+  }, [form, meta, tags])
 
   const handleClose = useCallback(() => {
     if (isPending) return
@@ -167,6 +214,8 @@ export function TaskCreationModal({
         if (meta.sprintId) fd.set('sprintId', meta.sprintId)
         if (meta.isMilestone) fd.set('isMilestone', '1')
         if (meta.plannedValue) fd.set('plannedValue', meta.plannedValue)
+        // Sprint 2: tags persistidos por createTask (parseTagsFromFormData).
+        if (tags.length > 0) fd.set('tags', JSON.stringify(tags))
 
         await createTask(fd)
         toast.success(isSubtask ? 'Subtarea creada' : 'Tarea creada')
@@ -186,6 +235,21 @@ export function TaskCreationModal({
       patchMeta({ projectId: inferredProject, phaseId: '', sprintId: '' })
     }
   }
+
+  // Tabs del modal: en modo creación todas excepto "Detalle" están deshabilitadas
+  // hasta guardar la tarea. Este comportamiento se alinea con el shell del
+  // drawer de edición (ver `TaskDrawerContent`) para que el shell sea idéntico.
+  const tabs: TaskFormTab[] = useMemo(() => {
+    const reason = 'Disponible al guardar la tarea'
+    return [
+      { id: 'detail', label: 'Detalle', icon: Briefcase },
+      { id: 'subtasks', label: 'Subtareas', icon: CheckSquare, disabled: true, disabledReason: reason },
+      { id: 'comments', label: 'Comentarios', icon: MessageSquare, disabled: true, disabledReason: reason },
+      { id: 'history', label: 'Historial', icon: History, disabled: true, disabledReason: reason },
+      { id: 'attachments', label: 'Adjuntos', icon: Paperclip, disabled: true, disabledReason: reason },
+      { id: 'relations', label: 'Dependencias', icon: GitBranch, disabled: true, disabledReason: reason },
+    ]
+  }, [])
 
   if (!open) return null
 
@@ -247,137 +311,179 @@ export function TaskCreationModal({
           </button>
         </header>
 
+        {/* Tabs (compartidos con el drawer; en creación todas excepto Detalle
+            están disabled). */}
+        <div className="px-6 pt-3 shrink-0">
+          <TaskFormTabs
+            tabs={tabs}
+            active={activeTab}
+            onChange={(id) => setActiveTab(id as ModalTabId)}
+          />
+        </div>
+
         {/* Body 2-col (≥lg). En <lg: 1-col, sidebar arriba como bloque. */}
         <div className="flex flex-1 flex-col-reverse overflow-hidden lg:flex-row">
           {/* Columna izquierda: contenido principal */}
           <div className="flex-1 overflow-y-auto px-6 py-5 custom-scrollbar">
-            <div className="space-y-4">
-              {/* Toggle Tarea / Subtarea */}
-              <div className="flex items-center gap-2 p-1 bg-muted rounded-lg w-fit">
-                <button
-                  type="button"
-                  onClick={() => setIsSubtask(false)}
-                  className={`px-3 py-1 text-xs font-semibold rounded-md transition-all ${
-                    !isSubtask
-                      ? 'bg-primary text-primary-foreground shadow'
-                      : 'text-muted-foreground hover:text-foreground'
-                  }`}
-                >
-                  Tarea
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setIsSubtask(true)}
-                  className={`px-3 py-1 text-xs font-semibold rounded-md transition-all ${
-                    isSubtask
-                      ? 'bg-primary text-primary-foreground shadow'
-                      : 'text-muted-foreground hover:text-foreground'
-                  }`}
-                >
-                  Subtarea
-                </button>
-              </div>
+            {activeTab === 'detail' && (
+              <div className="space-y-4">
+                {/* Toggle Tarea / Subtarea */}
+                <div className="flex items-center gap-2 p-1 bg-muted rounded-lg w-fit">
+                  <button
+                    type="button"
+                    onClick={() => setIsSubtask(false)}
+                    className={`px-3 py-1 text-xs font-semibold rounded-md transition-all ${
+                      !isSubtask
+                        ? 'bg-primary text-primary-foreground shadow'
+                        : 'text-muted-foreground hover:text-foreground'
+                    }`}
+                  >
+                    Tarea
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setIsSubtask(true)}
+                    className={`px-3 py-1 text-xs font-semibold rounded-md transition-all ${
+                      isSubtask
+                        ? 'bg-primary text-primary-foreground shadow'
+                        : 'text-muted-foreground hover:text-foreground'
+                    }`}
+                  >
+                    Subtarea
+                  </button>
+                </div>
 
-              {/* Tarea padre (solo si es subtarea) */}
-              {isSubtask && (
+                {/* Tarea padre (solo si es subtarea) */}
+                {isSubtask && (
+                  <div className="space-y-1.5">
+                    <label
+                      htmlFor="task-parent"
+                      className="text-xs font-semibold uppercase tracking-wider text-muted-foreground"
+                    >
+                      Tarea padre <span className="text-destructive">*</span>
+                    </label>
+                    <select
+                      id="task-parent"
+                      value={form.parentId}
+                      onChange={(e) => handleParentChange(e.target.value)}
+                      required={isSubtask}
+                      className="w-full rounded-md border border-border bg-input py-2 px-3 text-sm text-input-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-ring"
+                    >
+                      <option value="">Selecciona la tarea padre…</option>
+                      {allTasks.map((t) => (
+                        <option key={t.id} value={t.id}>
+                          {t.mnemonic ? `[${t.mnemonic}] ` : ''}
+                          {t.title}
+                          {t.project?.name ? ` — ${t.project.name}` : ''}
+                        </option>
+                      ))}
+                    </select>
+                    <p className="text-[11px] text-muted-foreground">
+                      Puedes elegir cualquier tarea de cualquier proyecto existente.
+                    </p>
+                  </div>
+                )}
+
+                {/* Título */}
                 <div className="space-y-1.5">
                   <label
-                    htmlFor="task-parent"
+                    htmlFor="task-title"
                     className="text-xs font-semibold uppercase tracking-wider text-muted-foreground"
                   >
-                    Tarea padre <span className="text-destructive">*</span>
+                    Título <span className="text-destructive">*</span>
                   </label>
-                  <select
-                    id="task-parent"
-                    value={form.parentId}
-                    onChange={(e) => handleParentChange(e.target.value)}
-                    required={isSubtask}
+                  <input
+                    id="task-title"
+                    autoFocus
+                    type="text"
+                    value={form.title}
+                    onChange={(e) => setFormField('title', e.target.value)}
+                    placeholder="Ej: Implementar login con Supabase Auth"
+                    required
                     className="w-full rounded-md border border-border bg-input py-2 px-3 text-sm text-input-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-ring"
+                  />
+                </div>
+
+                {/* Descripción */}
+                <div className="space-y-1.5">
+                  <label
+                    htmlFor="task-description"
+                    className="text-xs font-semibold uppercase tracking-wider text-muted-foreground"
                   >
-                    <option value="">Selecciona la tarea padre…</option>
-                    {allTasks.map((t) => (
-                      <option key={t.id} value={t.id}>
-                        {t.mnemonic ? `[${t.mnemonic}] ` : ''}
-                        {t.title}
-                        {t.project?.name ? ` — ${t.project.name}` : ''}
-                      </option>
-                    ))}
-                  </select>
-                  <p className="text-[11px] text-muted-foreground">
-                    Puedes elegir cualquier tarea de cualquier proyecto existente.
+                    Descripción
+                  </label>
+                  <textarea
+                    id="task-description"
+                    value={form.description}
+                    onChange={(e) => setFormField('description', e.target.value)}
+                    rows={4}
+                    placeholder="Contexto, criterios de aceptación…"
+                    className="w-full rounded-md border border-border bg-input py-2 px-3 text-sm text-input-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-ring resize-none"
+                  />
+                </div>
+
+                {/* Etiquetas (chip-input + autocomplete) */}
+                <div className="space-y-1.5">
+                  <label
+                    htmlFor="task-tags"
+                    className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1"
+                  >
+                    <Tag className="h-3 w-3" /> Etiquetas
+                  </label>
+                  <TagChipInput
+                    id="task-tags"
+                    value={tags}
+                    onChange={setTags}
+                    suggestions={tagSuggestions}
+                    aria-describedby="task-tags-hint"
+                  />
+                  <p id="task-tags-hint" className="text-[11px] text-muted-foreground">
+                    Escribe y pulsa Enter. Se canonicalizan a minúsculas y sin
+                    duplicados.
                   </p>
                 </div>
-              )}
 
-              {/* Título */}
-              <div className="space-y-1.5">
-                <label
-                  htmlFor="task-title"
-                  className="text-xs font-semibold uppercase tracking-wider text-muted-foreground"
-                >
-                  Título <span className="text-destructive">*</span>
-                </label>
-                <input
-                  id="task-title"
-                  autoFocus
-                  type="text"
-                  value={form.title}
-                  onChange={(e) => setFormField('title', e.target.value)}
-                  placeholder="Ej: Implementar login con Supabase Auth"
-                  required
-                  className="w-full rounded-md border border-border bg-input py-2 px-3 text-sm text-input-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-ring"
-                />
-              </div>
+                {/* Prioridad (pills horizontales) */}
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                    Prioridad
+                  </label>
+                  <PriorityPills
+                    value={form.priority}
+                    onChange={(next) => setFormField('priority', next)}
+                  />
+                </div>
 
-              {/* Descripción */}
-              <div className="space-y-1.5">
-                <label
-                  htmlFor="task-description"
-                  className="text-xs font-semibold uppercase tracking-wider text-muted-foreground"
-                >
-                  Descripción
-                </label>
-                <textarea
-                  id="task-description"
-                  value={form.description}
-                  onChange={(e) => setFormField('description', e.target.value)}
-                  rows={4}
-                  placeholder="Contexto, criterios de aceptación…"
-                  className="w-full rounded-md border border-border bg-input py-2 px-3 text-sm text-input-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-ring resize-none"
-                />
+                {/* Tipo (sigue siendo select por decisión del brief) */}
+                <div className="space-y-1.5">
+                  <label
+                    htmlFor="task-type"
+                    className="text-xs font-semibold uppercase tracking-wider text-muted-foreground"
+                  >
+                    Tipo
+                  </label>
+                  <select
+                    id="task-type"
+                    value={form.type}
+                    onChange={(e) => setFormField('type', e.target.value)}
+                    className="w-full rounded-md border border-border bg-input py-2 px-3 text-sm text-input-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-ring"
+                  >
+                    <option value="AGILE_STORY">Agile Story</option>
+                    <option value="PMI_TASK">PMI Task</option>
+                    <option value="ITIL_TICKET">ITIL Ticket</option>
+                  </select>
+                </div>
               </div>
+            )}
 
-              {/* Prioridad (pills horizontales) */}
-              <div className="space-y-1.5">
-                <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                  Prioridad
-                </label>
-                <PriorityPills
-                  value={form.priority}
-                  onChange={(next) => setFormField('priority', next)}
-                />
-              </div>
-
-              {/* Tipo (sigue siendo select por decisión del brief) */}
-              <div className="space-y-1.5">
-                <label
-                  htmlFor="task-type"
-                  className="text-xs font-semibold uppercase tracking-wider text-muted-foreground"
-                >
-                  Tipo
-                </label>
-                <select
-                  id="task-type"
-                  value={form.type}
-                  onChange={(e) => setFormField('type', e.target.value)}
-                  className="w-full rounded-md border border-border bg-input py-2 px-3 text-sm text-input-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-ring"
-                >
-                  <option value="AGILE_STORY">Agile Story</option>
-                  <option value="PMI_TASK">PMI Task</option>
-                  <option value="ITIL_TICKET">ITIL Ticket</option>
-                </select>
-              </div>
-            </div>
+            {/* Resto de tabs en modo creación: placeholders (`task=null`).
+                La barra de tabs ya las muestra disabled, pero si por A11y un
+                lector las activa via DOM, igual ven placeholder consistente. */}
+            {activeTab === 'subtasks' && <SubtasksTab task={null} />}
+            {activeTab === 'comments' && <CommentsTab task={null} users={users} />}
+            {activeTab === 'history' && <HistoryTab task={null} />}
+            {activeTab === 'attachments' && <AttachmentsTab task={null} />}
+            {activeTab === 'relations' && <DependenciesTab task={null} />}
           </div>
 
           {/* Sidebar derecha (en lg+; en <lg aparece arriba por flex-col-reverse) */}
