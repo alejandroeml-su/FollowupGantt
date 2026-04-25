@@ -198,6 +198,37 @@ export function TaskFiltersBar({
         </select>
       )}
 
+      {(visible('dateFrom') || visible('dateTo')) && (
+        <div className="flex items-center gap-1.5 pl-2 ml-1 border-l border-border/60">
+          {visible('dateFrom') && (
+            <label className="flex items-center gap-1 text-xs text-muted-foreground">
+              Desde
+              <input
+                type="date"
+                value={value.dateFrom ?? ''}
+                onChange={(e) => set('dateFrom', e.target.value)}
+                className={selectClass}
+                aria-label="Fecha desde"
+                max={value.dateTo || undefined}
+              />
+            </label>
+          )}
+          {visible('dateTo') && (
+            <label className="flex items-center gap-1 text-xs text-muted-foreground">
+              Hasta
+              <input
+                type="date"
+                value={value.dateTo ?? ''}
+                onChange={(e) => set('dateTo', e.target.value)}
+                className={selectClass}
+                aria-label="Fecha hasta"
+                min={value.dateFrom || undefined}
+              />
+            </label>
+          )}
+        </div>
+      )}
+
       {active > 0 && (
         <button
           type="button"

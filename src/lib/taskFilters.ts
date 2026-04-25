@@ -8,6 +8,10 @@ export type TaskFilters = {
   type?: string
   priority?: string
   assigneeId?: string // '__unassigned__' => tareas sin responsable
+  /** Fecha inicial del rango (YYYY-MM-DD, UTC). Filtra tareas con overlap. */
+  dateFrom?: string
+  /** Fecha final del rango (YYYY-MM-DD, UTC). Filtra tareas con overlap. */
+  dateTo?: string
 }
 
 export const EMPTY_TASK_FILTERS: TaskFilters = {}
@@ -19,6 +23,33 @@ export function hasActiveFilters(f: TaskFilters): boolean {
 
 export function countActiveFilters(f: TaskFilters): number {
   return Object.values(f).filter((v) => v !== undefined && v !== '').length
+}
+
+/**
+ * Una tarea pasa el filtro de rango si su intervalo [startDate, endDate] se
+ * solapa con [dateFrom, dateTo]. Tareas sin fechas se excluyen cuando el
+ * filtro está activo (no están "en el periodo"). Si solo hay startDate, se
+ * asume endDate=+∞ (sigue activa); si solo hay endDate, startDate=-∞.
+ */
+export function matchesDateRange(
+  task: SerializedTask,
+  dateFrom?: string,
+  dateTo?: string,
+): boolean {
+  if (!dateFrom && !dateTo) return true
+
+  const taskStart = task.startDate ? Date.parse(task.startDate) : null
+  const taskEnd = task.endDate ? Date.parse(task.endDate) : null
+
+  if (taskStart === null && taskEnd === null) return false
+
+  const effStart = taskStart ?? Number.NEGATIVE_INFINITY
+  const effEnd = taskEnd ?? Number.POSITIVE_INFINITY
+
+  const f0 = dateFrom ? Date.parse(`${dateFrom}T00:00:00.000Z`) : Number.NEGATIVE_INFINITY
+  const f1 = dateTo ? Date.parse(`${dateTo}T23:59:59.999Z`) : Number.POSITIVE_INFINITY
+
+  return effStart <= f1 && effEnd >= f0
 }
 
 export function matchesFilters(task: SerializedTask, f: TaskFilters): boolean {
@@ -35,6 +66,7 @@ export function matchesFilters(task: SerializedTask, f: TaskFilters): boolean {
       return false
     }
   }
+  if (!matchesDateRange(task, f.dateFrom, f.dateTo)) return false
   return true
 }
 
