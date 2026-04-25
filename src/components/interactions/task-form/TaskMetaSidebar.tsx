@@ -4,6 +4,7 @@ import { useMemo } from 'react'
 import { clsx } from 'clsx'
 import type { TaskStatus } from '@prisma/client'
 import { StatusPills } from './StatusPills'
+import { CollaboratorsField, type CollaboratorOption } from './CollaboratorsField'
 
 export type PhaseOption = {
   id: string
@@ -51,6 +52,11 @@ type Props = {
 
   /** Layout responsive: en `<lg` el padre puede colapsar a 1-col arriba (no afecta esta hoja). */
   className?: string
+
+  /** Sprint 4 — sólo en modo `edit`. ID de la tarea para mutar colaboradores. */
+  taskId?: string
+  /** Sprint 4 — colaboradores actuales serializados desde el server. */
+  collaborators?: CollaboratorOption[]
 }
 
 const FIELD_LABEL =
@@ -76,6 +82,8 @@ export function TaskMetaSidebar({
   sprints = [],
   projectRequired = true,
   className,
+  taskId,
+  collaborators = [],
 }: Props) {
   const phasesForProject = useMemo(
     () => phases.filter((p) => p.projectId === value.projectId),
@@ -85,8 +93,6 @@ export function TaskMetaSidebar({
     () => sprints.filter((s) => s.projectId === value.projectId),
     [sprints, value.projectId],
   )
-
-  const isEdit = mode === 'edit'
 
   return (
     <aside
@@ -125,6 +131,15 @@ export function TaskMetaSidebar({
           ))}
         </select>
       </div>
+
+      {/* 2.b Colaboradores (Sprint 4) — funcional sólo en modo edit */}
+      <CollaboratorsField
+        mode={mode}
+        taskId={taskId}
+        assigneeId={value.assigneeId || null}
+        collaborators={collaborators}
+        users={users}
+      />
 
       {/* 3. Proyecto / Épica */}
       <div className="space-y-1.5">
@@ -262,12 +277,9 @@ export function TaskMetaSidebar({
         </div>
       </div>
 
-      {isEdit && (
-        // Placeholder visual para Sprint 2+; en Sprint 1 mode siempre es 'create'.
-        <p className="text-[11px] text-muted-foreground italic">
-          (Sprint 2) Edición avanzada — pendiente.
-        </p>
-      )}
+      {/* Sprint 4: el sidebar ya soporta `mode='edit'` con sección Colaboradores
+          funcional (ver CollaboratorsField). El resto de campos comparten contrato
+          con `mode='create'` y se persisten desde el padre (Drawer/Modal). */}
     </aside>
   )
 }

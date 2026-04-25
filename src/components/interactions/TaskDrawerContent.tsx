@@ -28,6 +28,7 @@ import { HistoryTab } from './task-form/tabs/HistoryTab'
 import { AttachmentsTab } from './task-form/tabs/AttachmentsTab'
 import { DependenciesTab } from './task-form/tabs/DependenciesTab'
 import { SubtasksTab } from './task-form/tabs/SubtasksTab'
+import { CollaboratorsField } from './task-form/CollaboratorsField'
 
 type Props = {
   task: SerializedTask
@@ -219,6 +220,24 @@ export function TaskDrawerContent({ task, users, allTasks = [] }: Props) {
                 )}
               </div>
 
+              {/* Sprint 4 — URL de referencia (read-only en Detalle; la edición
+                  vive en el tab Adjuntos vía ReferenceUrlField). */}
+              {task.referenceUrl && (
+                <div className="rounded-lg border border-border bg-subtle/50 p-3 mt-4">
+                  <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground flex items-center gap-1">
+                    <Link2 className="h-3 w-3" /> URL de referencia
+                  </h3>
+                  <a
+                    href={task.referenceUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-sm text-indigo-300 hover:text-indigo-200 break-all underline-offset-2 hover:underline"
+                  >
+                    {task.referenceUrl}
+                  </a>
+                </div>
+              )}
+
               {/* Tags read-only en el drawer (Sprint 2 sólo agrega edición de tags
                   desde el modal de creación; el formulario de edición se aborda
                   en sprints posteriores). */}
@@ -336,6 +355,21 @@ export function TaskDrawerContent({ task, users, allTasks = [] }: Props) {
                           <span className="font-medium text-foreground">{task.assignee?.name || 'Sin asignar'}</span>
                         </div>
                       )}</dd>
+                    </div>
+                    {/* Sprint 4 — Colaboradores adicionales (M:N). El componente
+                        es el mismo usado por TaskMetaSidebar; aquí lo embebemos
+                        en el drawer con `mode='edit'`. */}
+                    <div>
+                      <dt className="sr-only">Colaboradores</dt>
+                      <dd>
+                        <CollaboratorsField
+                          mode="edit"
+                          taskId={task.id}
+                          assigneeId={task.assignee?.id ?? null}
+                          collaborators={task.collaborators ?? []}
+                          users={users}
+                        />
+                      </dd>
                     </div>
                   </dl>
                </div>
