@@ -1,7 +1,8 @@
 'use client';
 
 import { useState } from 'react';
-import { Sparkles, PenTool, BrainCircuit, Search, ArrowRight, Bot, Zap, Database } from 'lucide-react';
+import { Sparkles, PenTool, Bot, Zap, Database } from 'lucide-react';
+import { KnowledgeChat } from '@/components/brain/KnowledgeChat';
 
 export default function BrainAIPage() {
   const [activeTab, setActiveTab] = useState('knowledge');
@@ -44,40 +45,7 @@ export default function BrainAIPage() {
 
         <div className="mx-auto max-w-4xl relative z-10 h-full flex flex-col">
           
-          {activeTab === 'knowledge' && (
-            <div className="flex-1 flex flex-col items-center justify-center space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
-               <div className="text-center space-y-4">
-                 <div className="inline-flex h-20 w-20 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-500/20 to-purple-500/20 border border-indigo-500/30 shadow-[0_0_30px_rgba(99,102,241,0.2)]">
-                   <BrainCircuit className="h-10 w-10 text-indigo-400" />
-                 </div>
-                 <h2 className="text-3xl font-bold text-white">Pregúntale a Avante Brain</h2>
-                 <p className="text-muted-foreground max-w-lg text-sm">
-                   El Knowledge Manager indexa todos los proyectos, documentos, wikis y tareas de la base de datos para responder cualquier consulta empresarial en lenguaje natural.
-                 </p>
-               </div>
-
-               <div className="w-full max-w-2xl relative">
-                 <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-indigo-400" />
-                 <input 
-                   type="text" 
-                   placeholder="Ej: ¿Cuál es el SLA definido para tickets de hardware ITIL en la política del Release 1?"
-                   className="w-full rounded-xl border border-indigo-500/30 bg-subtle/80 py-4 pl-12 pr-14 text-sm text-white shadow-xl focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-ring backdrop-blur-sm transition-all"
-                 />
-                 <button className="absolute right-3 top-1/2 -translate-y-1/2 bg-indigo-500 hover:bg-indigo-400 text-white p-2 rounded-lg transition-colors">
-                   <ArrowRight className="h-4 w-4" />
-                 </button>
-               </div>
-
-               <div className="flex gap-4 mt-8">
-                 <div className="px-4 py-2 rounded-lg bg-card border border-border text-xs text-muted-foreground cursor-pointer hover:border-indigo-500/50 transition-colors">
-                   Resumir riesgos del proyecto actual
-                 </div>
-                 <div className="px-4 py-2 rounded-lg bg-card border border-border text-xs text-muted-foreground cursor-pointer hover:border-indigo-500/50 transition-colors">
-                   Buscar requerimientos de la Fase 2
-                 </div>
-               </div>
-            </div>
-          )}
+          {activeTab === 'knowledge' && <KnowledgeChat />}
 
           {activeTab === 'pm' && (
             <div className="flex-1 animate-in fade-in slide-in-from-bottom-4 duration-500">
