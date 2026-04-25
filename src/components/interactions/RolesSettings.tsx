@@ -12,6 +12,9 @@ type Role = {
   id: string
   name: string
   description: string | null
+  // permissions viene de Prisma como JsonValue (opaco) — no se parsea
+  // estrictamente en el cliente.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   permissions: any
 }
 
