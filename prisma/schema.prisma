@@ -17,10 +17,10 @@ enum TaskType {
 }
 
 enum DependencyType {
-  FINISH_TO_START   // FS
-  START_TO_START    // SS
-  FINISH_TO_FINISH  // FF
-  START_TO_FINISH   // SF
+  FINISH_TO_START // FS
+  START_TO_START // SS
+  FINISH_TO_FINISH // FF
+  START_TO_FINISH // SF
 }
 
 enum ProjectStatus {
@@ -49,68 +49,69 @@ enum Priority {
 // ---------------------------------------------------------
 
 model User {
-  id             String    @id @default(uuid())
-  name           String
-  email          String    @unique
-  
+  id    String @id @default(uuid())
+  name  String
+  email String @unique
+
   // Roles y Permisos
-  roles          UserRole[]
-  
+  roles UserRole[]
+
   // Equipos
-  teams          TeamMember[]
+  teams TeamMember[]
 
   // Asignaciones a Proyectos (para restringir edición)
   projectAssignments ProjectAssignment[]
-  
+
   // Relaciones
-  managedProjects Project[] @relation("ProjectManager")
-  tasks          Task[]    @relation("TaskAssignee")
-  comments       Comment[] @relation("CommentAuthor")
-  history        TaskHistory[]
-  attachments    Attachment[]
-  
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
+  managedProjects Project[]     @relation("ProjectManager")
+  tasks           Task[]        @relation("TaskAssignee")
+  comments        Comment[]     @relation("CommentAuthor")
+  history         TaskHistory[]
+  attachments     Attachment[]
+  mindMaps        MindMap[]     @relation("MindMapOwner")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model Role {
-  id          String    @id @default(uuid())
-  name        String    @unique // AGENTE, ADMIN, SUPER_ADMIN
+  id          String  @id @default(uuid())
+  name        String  @unique // AGENTE, ADMIN, SUPER_ADMIN
   description String?
-  permissions Json?     // Ejemplo: { "allowedViews": ["list", "kanban", "gantt"] }
-  
-  users       UserRole[]
-  
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  permissions Json? // Ejemplo: { "allowedViews": ["list", "kanban", "gantt"] }
+
+  users UserRole[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model UserRole {
   userId String
   roleId String
-  user   User @relation(fields: [userId], references: [id], onDelete: Cascade)
-  role   Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
-  
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role   Role   @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
   @@id([userId, roleId])
 }
 
 model Team {
-  id          String   @id @default(uuid())
-  name        String   @unique
+  id          String  @id @default(uuid())
+  name        String  @unique
   description String?
-  
-  members     TeamMember[]
-  
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+
+  members TeamMember[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model TeamMember {
   teamId String
   userId String
-  team   Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
-  user   User @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
+  team   Team   @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
   @@id([teamId, userId])
 }
 
@@ -119,183 +120,186 @@ model ProjectAssignment {
   userId    String
   project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
   user      User    @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
+
   @@id([projectId, userId])
 }
 
-
 // Módulo de Estructura Organizacional
 model Gerencia {
-  id             String    @id @default(uuid())
-  name           String    @unique // Ejemplo: "OPERACIONES", "FINANZAS"
-  description    String?
-  
-  areas          Area[]
+  id          String  @id @default(uuid())
+  name        String  @unique // Ejemplo: "OPERACIONES", "FINANZAS"
+  description String?
 
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
+  areas Area[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model Area {
-  id             String    @id @default(uuid())
-  name           String    // Ejemplo: "Desarrollo", "Infraestructura"
-  description    String?
-  
-  // Relación con Gerencia (obligatoria)
-  gerenciaId     String
-  gerencia       Gerencia  @relation(fields: [gerenciaId], references: [id], onDelete: Cascade)
-  
-  projects       Project[]
+  id          String  @id @default(uuid())
+  name        String // Ejemplo: "Desarrollo", "Infraestructura"
+  description String?
 
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
+  // Relación con Gerencia (obligatoria)
+  gerenciaId String
+  gerencia   Gerencia @relation(fields: [gerenciaId], references: [id], onDelete: Cascade)
+
+  projects Project[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model Project {
-  id             String    @id @default(uuid())
-  name           String
-  description    String?
-  status         ProjectStatus @default(PLANNING)
-  
+  id          String        @id @default(uuid())
+  name        String
+  description String?
+  status      ProjectStatus @default(PLANNING)
+
   // Área / Gerencia
-  areaId         String?
-  area           Area?     @relation(fields: [areaId], references: [id])
-  
-  managerId      String?
-  manager        User?     @relation("ProjectManager", fields: [managerId], references: [id])
+  areaId String?
+  area   Area?   @relation(fields: [areaId], references: [id])
+
+  managerId String?
+  manager   User?   @relation("ProjectManager", fields: [managerId], references: [id])
 
   // KPIs financieros y de cronograma (EVM - Earned Value Management)
   // Se pueden guardar calculados o dejarlos para consulta dinámica
-  cpi            Float?    // Cost Performance Index
-  spi            Float?    // Schedule Performance Index
+  cpi Float? // Cost Performance Index
+  spi Float? // Schedule Performance Index
 
   // Relaciones
-  phases         Phase[]
-  sprints        Sprint[]
-  columns        BoardColumn[]
-  tasks          Task[]
-  baselines      Baseline[]
-  assignments    ProjectAssignment[]
+  phases      Phase[]
+  sprints     Sprint[]
+  columns     BoardColumn[]
+  tasks       Task[]
+  baselines   Baseline[]
+  assignments ProjectAssignment[]
+  mindMaps    MindMap[]
 
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 // Fases del Proyecto (Waterfall / PMI)
 model Phase {
-  id             String    @id @default(uuid())
-  name           String
-  order          Int       @default(0)
-  
-  projectId      String
-  project        Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  
-  tasks          Task[]
+  id    String @id @default(uuid())
+  name  String
+  order Int    @default(0)
 
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  tasks Task[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 // Módulo Agile: Sprints y Columnas Kanban
 model Sprint {
-  id             String    @id @default(uuid())
-  name           String
-  goal           String?
-  startDate      DateTime
-  endDate        DateTime
-  status         ProjectStatus @default(PLANNING)
-  
-  projectId      String
-  project        Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  
-  tasks          Task[]
+  id        String        @id @default(uuid())
+  name      String
+  goal      String?
+  startDate DateTime
+  endDate   DateTime
+  status    ProjectStatus @default(PLANNING)
 
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  tasks Task[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model BoardColumn {
-  id             String    @id @default(uuid())
-  name           String
-  order          Int
-  wipLimit       Int?      // Límite de Work in Progress (AC Kanban)
-  
-  projectId      String
-  project        Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  
-  tasks          Task[]
+  id       String @id @default(uuid())
+  name     String
+  order    Int
+  wipLimit Int? // Límite de Work in Progress (AC Kanban)
 
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  tasks Task[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 // Tarea Universal: Soporta Story (Agile), Hito/Tarea (Gantt) y Ticket (ITIL)
 model Task {
-  id             String    @id @default(uuid())
-  mnemonic       String?   // Ejemplo: "PROJ-1"
-  title          String
-  description    String?
-  type           TaskType  @default(AGILE_STORY)
-  status         TaskStatus @default(TODO)
-  priority       Priority   @default(MEDIUM)
-  
+  id          String     @id @default(uuid())
+  mnemonic    String? // Ejemplo: "PROJ-1"
+  title       String
+  description String?
+  type        TaskType   @default(AGILE_STORY)
+  status      TaskStatus @default(TODO)
+  priority    Priority   @default(MEDIUM)
+
   // Jerarquía (Subtareas)
-  parentId       String?
-  parent         Task?     @relation("SubTasks", fields: [parentId], references: [id], onDelete: Cascade)
-  subtasks       Task[]    @relation("SubTasks")
+  parentId String?
+  parent   Task?   @relation("SubTasks", fields: [parentId], references: [id], onDelete: Cascade)
+  subtasks Task[]  @relation("SubTasks")
 
   // Relaciones de Agrupación
-  projectId      String
-  project        Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  
-  phaseId        String?
-  phase          Phase?    @relation(fields: [phaseId], references: [id])
-  
-  sprintId       String?
-  sprint         Sprint?   @relation(fields: [sprintId], references: [id])
-  
-  columnId       String?
-  column         BoardColumn? @relation(fields: [columnId], references: [id])
-  
-  assigneeId     String?
-  assignee       User?     @relation("TaskAssignee", fields: [assigneeId], references: [id])
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  phaseId String?
+  phase   Phase?  @relation(fields: [phaseId], references: [id])
+
+  sprintId String?
+  sprint   Sprint? @relation(fields: [sprintId], references: [id])
+
+  columnId String?
+  column   BoardColumn? @relation(fields: [columnId], references: [id])
+
+  assigneeId String?
+  assignee   User?   @relation("TaskAssignee", fields: [assigneeId], references: [id])
 
   // Módulo PMI (Gantt)
-  startDate      DateTime?
-  endDate        DateTime?
-  progress       Int       @default(0) // 0 - 100%
-  isMilestone    Boolean   @default(false)
-  
+  startDate   DateTime?
+  endDate     DateTime?
+  progress    Int       @default(0) // 0 - 100%
+  isMilestone Boolean   @default(false)
+
   // Dependencias (Gantt)
-  predecessors   TaskDependency[] @relation("SuccessorTask")
-  successors     TaskDependency[] @relation("PredecessorTask")
+  predecessors TaskDependency[] @relation("SuccessorTask")
+  successors   TaskDependency[] @relation("PredecessorTask")
 
   // Módulo ITIL (SLA Management)
-  slaResponseLimit    DateTime? // Límite de tiempo para responder
-  slaResolutionLimit  DateTime? // Límite de tiempo para resolver
-  isEscalated         Boolean   @default(false)
+  slaResponseLimit   DateTime? // Límite de tiempo para responder
+  slaResolutionLimit DateTime? // Límite de tiempo para resolver
+  isEscalated        Boolean   @default(false)
 
   // EVM y KPIs (Horas / Costos)
-  plannedValue   Float?    // PV: Valor Planificado (Costo o esfuerzo base)
-  actualCost     Float?    // AC: Costo/Esfuerzo real incurrido
-  earnedValue    Float?    // EV: Valor Ganado (PV * progress/100)
+  plannedValue Float? // PV: Valor Planificado (Costo o esfuerzo base)
+  actualCost   Float? // AC: Costo/Esfuerzo real incurrido
+  earnedValue  Float? // EV: Valor Ganado (PV * progress/100)
 
   // Ordenamiento visual en List/Kanban (ADR-001 fractional indexing)
-  position       Float     @default(0)
+  position Float @default(0)
 
   // Soft archive para acción "Archivar" del menú contextual
-  archivedAt     DateTime?
+  archivedAt DateTime?
 
   // Etiquetas libres para filtros/búsqueda
-  tags           String[]  @default([])
+  tags String[] @default([])
 
   // Seguimiento y comentarios
-  comments       Comment[]
-  history        TaskHistory[]
-  attachments    Attachment[]
+  comments    Comment[]
+  history     TaskHistory[]
+  attachments Attachment[]
 
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
+  // Enlace opcional desde nodos de Mapa Mental
+  mindMapNodes MindMapNode[] @relation("TaskMindMapNodes")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([projectId, columnId, position])
   @@index([projectId, parentId, position])
@@ -304,75 +308,147 @@ model Task {
 
 // Comentarios / Seguimiento de tareas
 model Comment {
-  id             String    @id @default(uuid())
-  content        String
-  isInternal     Boolean   @default(false) // Seguimiento interno vs externo
-  
-  taskId         String
-  task           Task      @relation(fields: [taskId], references: [id], onDelete: Cascade)
-  
-  authorId       String?
-  author         User?     @relation("CommentAuthor", fields: [authorId], references: [id])
-  
-  createdAt      DateTime  @default(now())
+  id         String  @id @default(uuid())
+  content    String
+  isInternal Boolean @default(false) // Seguimiento interno vs externo
+
+  taskId String
+  task   Task   @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  authorId String?
+  author   User?   @relation("CommentAuthor", fields: [authorId], references: [id])
+
+  createdAt DateTime @default(now())
 }
 
 // Historial de cambios / Auditoría
 model TaskHistory {
-  id          String   @id @default(uuid())
-  taskId      String
-  task        Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
-  
-  userId      String?
-  user        User?    @relation(fields: [userId], references: [id])
-  
-  field       String   // Campo modificado: "status", "priority", "assigneeId", etc.
-  oldValue    String?
-  newValue    String?
-  
-  createdAt   DateTime @default(now())
+  id     String @id @default(uuid())
+  taskId String
+  task   Task   @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  userId String?
+  user   User?   @relation(fields: [userId], references: [id])
+
+  field    String // Campo modificado: "status", "priority", "assigneeId", etc.
+  oldValue String?
+  newValue String?
+
+  createdAt DateTime @default(now())
 }
 
 // Adjuntos / Archivos de respaldo
 model Attachment {
-  id          String   @id @default(uuid())
-  filename    String
-  url         String
-  size        Int?
-  mimetype    String?
-  
-  taskId      String
-  task        Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
-  
-  userId      String?
-  user        User?    @relation(fields: [userId], references: [id])
-  
-  createdAt   DateTime @default(now())
+  id       String  @id @default(uuid())
+  filename String
+  url      String
+  size     Int?
+  mimetype String?
+
+  taskId String
+  task   Task   @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  userId String?
+  user   User?   @relation(fields: [userId], references: [id])
+
+  createdAt DateTime @default(now())
 }
 
 // Dependencias entre tareas (FS, SS, FF, SF)
 model TaskDependency {
-  id             String    @id @default(uuid())
-  
-  predecessorId  String
-  predecessor    Task      @relation("PredecessorTask", fields: [predecessorId], references: [id], onDelete: Cascade)
-  
-  successorId    String
-  successor      Task      @relation("SuccessorTask", fields: [successorId], references: [id], onDelete: Cascade)
-  
-  type           DependencyType @default(FINISH_TO_START)
+  id String @id @default(uuid())
+
+  predecessorId String
+  predecessor   Task   @relation("PredecessorTask", fields: [predecessorId], references: [id], onDelete: Cascade)
+
+  successorId String
+  successor   Task   @relation("SuccessorTask", fields: [successorId], references: [id], onDelete: Cascade)
+
+  type DependencyType @default(FINISH_TO_START)
 
   @@unique([predecessorId, successorId])
 }
 
 // Módulo PMI: Líneas Base (Snapshots para calcular Schedule Variance)
 model Baseline {
-  id             String    @id @default(uuid())
-  version        Int       // Versión 1, 2, 3...
-  snapshotData   Json      // Json estructurado con el estado de las tareas (fechas, PV, EV, AC)
-  
-  projectId      String
-  project        Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  id           String @id @default(uuid())
+  version      Int // Versión 1, 2, 3...
+  snapshotData Json // Json estructurado con el estado de las tareas (fechas, PV, EV, AC)
 
-  createdAt      DateTime  @default(now())
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+}
+
+// ─────────────────────────────────────────────────────────────
+// Módulo Mapas Mentales (estilo MindMup 3)
+// ─────────────────────────────────────────────────────────────
+
+model MindMap {
+  id          String  @id @default(uuid())
+  title       String
+  description String?
+
+  projectId String?
+  project   Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+
+  ownerId String?
+  owner   User?   @relation("MindMapOwner", fields: [ownerId], references: [id], onDelete: SetNull)
+
+  nodes MindMapNode[]
+  edges MindMapEdge[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([projectId])
+  @@index([ownerId])
+}
+
+model MindMapNode {
+  id String @id @default(uuid())
+
+  mindMapId String
+  mindMap   MindMap @relation(fields: [mindMapId], references: [id], onDelete: Cascade)
+
+  label  String  @default("Nuevo nodo")
+  note   String? // Markdown o texto libre (nota expandida)
+  x      Float   @default(0)
+  y      Float   @default(0)
+  color  String?
+  isRoot Boolean @default(false)
+
+  // Enlace opcional a Task
+  taskId String?
+  task   Task?   @relation("TaskMindMapNodes", fields: [taskId], references: [id], onDelete: SetNull)
+
+  sourceEdges MindMapEdge[] @relation("EdgeSource")
+  targetEdges MindMapEdge[] @relation("EdgeTarget")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([mindMapId])
+  @@index([taskId])
+}
+
+model MindMapEdge {
+  id String @id @default(uuid())
+
+  mindMapId String
+  mindMap   MindMap @relation(fields: [mindMapId], references: [id], onDelete: Cascade)
+
+  sourceId String
+  source   MindMapNode @relation("EdgeSource", fields: [sourceId], references: [id], onDelete: Cascade)
+
+  targetId String
+  target   MindMapNode @relation("EdgeTarget", fields: [targetId], references: [id], onDelete: Cascade)
+
+  label String?
+
+  createdAt DateTime @default(now())
+
+  @@unique([sourceId, targetId])
+  @@index([mindMapId])
 }
