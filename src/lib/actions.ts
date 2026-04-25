@@ -106,6 +106,29 @@ export async function deleteProject(formData: FormData) {
 // CRUD: TAREAS
 // =============================================
 
+/**
+ * Parsea el campo `tags` del FormData. Espera JSON.stringify(string[]).
+ * Devuelve un array deduplicado (case-insensitive, lowercase).
+ * Fallback `[]` ante cualquier error de parseo o valor ausente.
+ */
+function parseTagsFromFormData(formData: FormData): string[] {
+  const raw = formData.get('tags')
+  if (typeof raw !== 'string' || !raw) return []
+  try {
+    const parsed: unknown = JSON.parse(raw)
+    if (!Array.isArray(parsed)) return []
+    const out = new Set<string>()
+    for (const v of parsed) {
+      if (typeof v !== 'string') continue
+      const t = v.trim().toLowerCase()
+      if (t) out.add(t)
+    }
+    return Array.from(out)
+  } catch {
+    return []
+  }
+}
+
 export async function createTask(formData: FormData) {
   const title = formData.get('title') as string
   const projectId = formData.get('projectId') as string
@@ -116,6 +139,7 @@ export async function createTask(formData: FormData) {
   const assigneeId = formData.get('assigneeId') as string || undefined
   const endDateStr = formData.get('endDate') as string
   const description = formData.get('description') as string || undefined
+  const tags = parseTagsFromFormData(formData)
 
   if (!title || !projectId) throw new Error('Título y proyecto son requeridos')
 
@@ -138,6 +162,7 @@ export async function createTask(formData: FormData) {
       assigneeId: assigneeId || null,
       startDate: formData.get('startDate') ? new Date(formData.get('startDate') as string) : null,
       endDate: endDateStr ? new Date(endDateStr) : null,
+      ...(tags.length > 0 ? { tags } : {}),
     }
   })
   revalidatePath('/list')
