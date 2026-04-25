@@ -45,7 +45,9 @@ export function TaskCreationModal({
   const [isSubtask, setIsSubtask] = useState(!!defaultParentId)
   const [form, setForm] = useState(INITIAL_STATE)
 
-  // Reset al abrir para limpiar estado previo.
+  // Reset al abrir para limpiar estado previo. El reset es por transición
+  // open=false→true, no derivación de props durante render.
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => {
     if (open) {
       setIsSubtask(!!defaultParentId)

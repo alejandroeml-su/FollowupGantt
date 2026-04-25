@@ -192,9 +192,10 @@ export async function updateTask(formData: FormData) {
 
 
   const data: Record<string, unknown> = {}
-  const historyEntries: any[] = []
+  type HistoryEntry = { field: string; oldValue: string; newValue: string; userId: string | null }
+  const historyEntries: HistoryEntry[] = []
 
-  const checkChange = (field: string, newValue: any, oldValue: any) => {
+  const checkChange = (field: string, newValue: unknown, oldValue: unknown) => {
     if (newValue !== undefined && String(newValue) !== String(oldValue)) {
       data[field] = newValue
       historyEntries.push({

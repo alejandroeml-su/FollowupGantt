@@ -81,9 +81,18 @@ export interface SerializedTask {
   plannedValue?: number | null;
   actualCost?: number | null;
   tags?: string[];
-  predecessors?: any[];
-  successors?: any[];
+  predecessors?: SerializedDependency[];
+  successors?: SerializedDependency[];
 }
+
+export type SerializedDependency = {
+  id: string;
+  predecessorId: string;
+  successorId: string;
+  type?: 'FINISH_TO_START' | 'START_TO_START' | 'FINISH_TO_FINISH' | 'START_TO_FINISH';
+  predecessor: { id: string; mnemonic?: string | null; title: string };
+  successor: { id: string; mnemonic?: string | null; title: string };
+};
 
 // ─── Serialization Utility ───────────────────────────────────────
 
@@ -150,8 +159,8 @@ type RawTask = {
   plannedValue?: number | null;
   actualCost?: number | null;
   tags?: string[];
-  predecessors?: any[];
-  successors?: any[];
+  predecessors?: unknown[];
+  successors?: unknown[];
 }
 
 function toISO(d: DateLike): string | null {
@@ -218,7 +227,7 @@ export function serializeTask(task: Record<string, unknown>): SerializedTask {
       createdAt: toISO(a.createdAt) ?? '',
       user: a.user ? { id: a.user.id, name: a.user.name } : null,
     })) : [],
-    predecessors: Array.isArray(t.predecessors) ? t.predecessors : [],
-    successors: Array.isArray(t.successors) ? t.successors : [],
+    predecessors: Array.isArray(t.predecessors) ? (t.predecessors as SerializedDependency[]) : [],
+    successors: Array.isArray(t.successors) ? (t.successors as SerializedDependency[]) : [],
   };
 }
