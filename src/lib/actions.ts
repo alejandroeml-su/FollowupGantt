@@ -148,6 +148,30 @@ function parseTagsFromFormData(formData: FormData): string[] {
   }
 }
 
+/**
+ * Normaliza la URL de referencia que llega por FormData. Acepta `null`
+ * o cadena vacía para indicar "sin enlace". Rechaza protocolos distintos
+ * a http/https. Espejo del helper en `actions/collaborators.ts` —
+ * duplicado intencional para que `createTask` no dependa del archivo
+ * `'use server'` de colaboradores.
+ */
+function parseReferenceUrlFromFormData(formData: FormData): string | null {
+  const raw = formData.get('referenceUrl')
+  if (typeof raw !== 'string') return null
+  const trimmed = raw.trim()
+  if (!trimmed) return null
+  let parsed: URL
+  try {
+    parsed = new URL(trimmed)
+  } catch {
+    throw new Error('URL de referencia inválida')
+  }
+  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+    throw new Error('URL de referencia inválida (solo http/https)')
+  }
+  return parsed.toString()
+}
+
 export async function createTask(formData: FormData) {
   const title = formData.get('title') as string
   const projectId = formData.get('projectId') as string
@@ -159,6 +183,7 @@ export async function createTask(formData: FormData) {
   const endDateStr = formData.get('endDate') as string
   const description = formData.get('description') as string || undefined
   const tags = parseTagsFromFormData(formData)
+  const referenceUrl = parseReferenceUrlFromFormData(formData)
 
   if (!title || !projectId) throw new Error('Título y proyecto son requeridos')
 
@@ -182,6 +207,7 @@ export async function createTask(formData: FormData) {
       startDate: formData.get('startDate') ? new Date(formData.get('startDate') as string) : null,
       endDate: endDateStr ? new Date(endDateStr) : null,
       ...(tags.length > 0 ? { tags } : {}),
+      ...(referenceUrl ? { referenceUrl } : {}),
     }
   })
   revalidatePath('/list')
@@ -585,17 +611,30 @@ export async function createComment(formData: FormData) {
   const mentions = content.match(/@[\w.-]+@[\w.-]+\.\w+|@[\w.-]+/g)
   if (mentions) {
     const handles = Array.from(new Set(mentions.map((m) => m.substring(1))))
+
+    // `@todos` (case-insensitive) es un alias para "todos los implicados":
+    // assignee + colaboradores. Si aparece junto a otras menciones, se
+    // unen los conjuntos (con dedupe por id de usuario abajo).
+    const broadcastAll = handles.some((h) => h.toLowerCase() === 'todos')
+    const explicitHandles = handles.filter((h) => h.toLowerCase() !== 'todos')
+
     const [mentionedUsers, task, author] = await Promise.all([
-      prisma.user.findMany({
-        where: { OR: [{ email: { in: handles } }, { name: { in: handles } }] },
-        select: { id: true, email: true, name: true },
-      }),
+      explicitHandles.length > 0
+        ? prisma.user.findMany({
+            where: {
+              OR: [{ email: { in: explicitHandles } }, { name: { in: explicitHandles } }],
+            },
+            select: { id: true, email: true, name: true },
+          })
+        : Promise.resolve([] as { id: string; email: string; name: string }[]),
       prisma.task.findUnique({
         where: { id: taskId },
         select: {
           title: true,
           mnemonic: true,
+          assigneeId: true,
           parent: { select: { title: true } },
+          collaborators: { select: { userId: true } },
         },
       }),
       authorId
@@ -603,10 +642,41 @@ export async function createComment(formData: FormData) {
         : Promise.resolve(null),
     ])
 
-    const recipients = mentionedUsers.filter((u) => u.id !== authorId)
-    if (task && recipients.length > 0) {
+    // Resolución de destinatarios:
+    //   1. Menciones explícitas (`@nombre`, `@email`).
+    //   2. Si hay `@todos`, sumar `assigneeId` + colaboradores de la tarea.
+    //   3. Dedupe por id (Set), excluir al autor del comentario.
+    const recipientIds = new Set<string>()
+    for (const u of mentionedUsers) recipientIds.add(u.id)
+    if (broadcastAll && task) {
+      if (task.assigneeId) recipientIds.add(task.assigneeId)
+      for (const c of task.collaborators) recipientIds.add(c.userId)
+    }
+    if (authorId) recipientIds.delete(authorId)
+
+    if (task && recipientIds.size > 0) {
+      // Cargamos el shape mínimo que el email necesita. Para destinatarios
+      // que ya teníamos por `mentionedUsers` evitamos un round-trip extra,
+      // pero los provenientes de `@todos` requieren su email/name.
+      const knownById = new Map(mentionedUsers.map((u) => [u.id, u]))
+      const missingIds = [...recipientIds].filter((id) => !knownById.has(id))
+      const extra = missingIds.length
+        ? await prisma.user.findMany({
+            where: { id: { in: missingIds } },
+            select: { id: true, email: true, name: true },
+          })
+        : []
+
+      const recipients = [...recipientIds]
+        .map((id) => knownById.get(id) ?? extra.find((u) => u.id === id))
+        .filter((u): u is { id: string; email: string; name: string } => Boolean(u))
+
       const authorName = author?.name ?? 'Un colaborador'
       const parentTitle = task.parent?.title ?? null
+      // Resend ya está integrado con `after()` no-bloqueante. NO añadimos
+      // rate limiting aquí: deuda registrada del proyecto, separada.
+      // Riesgo conocido: un comentario con `@todos` puede emitir N+M
+      // correos donde M = colaboradores; documentado en el PR.
       after(async () => {
         await Promise.all(
           recipients.map((user) =>
@@ -654,6 +724,7 @@ export async function getTaskWithDetails(taskId: string) {
       project: true,
       assignee: true,
       subtasks: { include: { assignee: true } },
+      collaborators: { include: { user: true } },
       comments: {
         include: { author: true },
         orderBy: { createdAt: 'desc' },
