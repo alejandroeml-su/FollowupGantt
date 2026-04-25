@@ -63,12 +63,13 @@ model User {
   projectAssignments ProjectAssignment[]
 
   // Relaciones
-  managedProjects Project[]     @relation("ProjectManager")
-  tasks           Task[]        @relation("TaskAssignee")
-  comments        Comment[]     @relation("CommentAuthor")
-  history         TaskHistory[]
-  attachments     Attachment[]
-  mindMaps        MindMap[]     @relation("MindMapOwner")
+  managedProjects    Project[]          @relation("ProjectManager")
+  tasks              Task[]             @relation("TaskAssignee")
+  taskCollaborations TaskCollaborator[] @relation("TaskCollaborator")
+  comments           Comment[]          @relation("CommentAuthor")
+  history            TaskHistory[]
+  attachments        Attachment[]
+  mindMaps           MindMap[]          @relation("MindMapOwner")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -290,10 +291,14 @@ model Task {
   // Etiquetas libres para filtros/búsqueda
   tags String[] @default([])
 
+  // Enlace externo de referencia (Confluence, Figma, ticket externo, etc.)
+  referenceUrl String?
+
   // Seguimiento y comentarios
-  comments    Comment[]
-  history     TaskHistory[]
-  attachments Attachment[]
+  comments      Comment[]
+  history       TaskHistory[]
+  attachments   Attachment[]
+  collaborators TaskCollaborator[]
 
   // Enlace opcional desde nodos de Mapa Mental
   mindMapNodes MindMapNode[] @relation("TaskMindMapNodes")
@@ -304,6 +309,22 @@ model Task {
   @@index([projectId, columnId, position])
   @@index([projectId, parentId, position])
   @@index([archivedAt])
+}
+
+// Colaboradores adicionales de una tarea (M:N Task ↔ User).
+// El `assigneeId` único de Task sigue siendo el responsable principal;
+// los colaboradores aquí son destinatarios extra para notificaciones de
+// mención y visibilidad del trabajo compartido.
+model TaskCollaborator {
+  taskId    String
+  task      Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation("TaskCollaborator", fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@id([taskId, userId])
+  @@index([taskId])
+  @@index([userId])
 }
 
 // Comentarios / Seguimiento de tareas

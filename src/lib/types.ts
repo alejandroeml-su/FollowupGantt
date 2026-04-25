@@ -81,6 +81,10 @@ export interface SerializedTask {
   plannedValue?: number | null;
   actualCost?: number | null;
   tags?: string[];
+  /** URL externa de referencia (Confluence, Figma, ticket, etc.). */
+  referenceUrl?: string | null;
+  /** Colaboradores adicionales además de `assignee` (Sprint 4). */
+  collaborators?: { id: string; name: string }[];
   predecessors?: SerializedDependency[];
   successors?: SerializedDependency[];
 }
@@ -159,6 +163,11 @@ type RawTask = {
   plannedValue?: number | null;
   actualCost?: number | null;
   tags?: string[];
+  referenceUrl?: string | null;
+  collaborators?: Array<{
+    userId?: string;
+    user?: RawPerson | null;
+  }>;
   predecessors?: unknown[];
   successors?: unknown[];
 }
@@ -195,6 +204,18 @@ export function serializeTask(task: Record<string, unknown>): SerializedTask {
     plannedValue: t.plannedValue ?? null,
     actualCost: t.actualCost ?? null,
     tags: Array.isArray(t.tags) ? (t.tags as string[]) : [],
+    referenceUrl: t.referenceUrl ?? null,
+    collaborators: Array.isArray(t.collaborators)
+      ? t.collaborators
+          .map((c) =>
+            c.user
+              ? { id: c.user.id, name: c.user.name }
+              : c.userId
+                ? { id: c.userId, name: '' }
+                : null,
+          )
+          .filter((c): c is { id: string; name: string } => Boolean(c))
+      : [],
     assignee: t.assignee ? { id: t.assignee.id, name: t.assignee.name } : null,
     assigneeId: t.assigneeId ?? t.assignee?.id ?? null,
     project: t.project ? { id: t.project.id, name: t.project.name } : null,
