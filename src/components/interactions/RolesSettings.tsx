@@ -5,11 +5,14 @@ import { Plus, Shield, Trash2, CheckCircle2 } from 'lucide-react'
 import { createRole, deleteRole } from '@/lib/actions'
 import { toast } from '@/components/interactions/Toaster'
 
+// permissions viene de Prisma como JsonValue (opaco) — no se parsea
+// estrictamente en el cliente.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Role = {
   id: string
   name: string
   description: string | null
-  permissions: { allowedViews?: string[] } | null
+  permissions: any
 }
 
 type Props = {

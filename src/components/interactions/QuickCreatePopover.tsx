@@ -60,10 +60,8 @@ export function QuickCreatePopover({
   const [isPending, startTransition] = useTransition()
   const inputRef = useRef<HTMLInputElement>(null)
 
-  // Reset del formulario al cerrar el popover. La regla
-  // react-hooks/set-state-in-effect aplica al patrón derivado-de-props,
-  // pero aquí el reset es por evento (transición open=true→false).
-  // eslint-disable-next-line react-hooks/set-state-in-effect
+  /* eslint-disable react-hooks/set-state-in-effect */
+  // Reset del formulario por transición open=true→false (evento, no derivación de props).
   useEffect(() => {
     if (!open) {
       setTitle('')
@@ -73,6 +71,7 @@ export function QuickCreatePopover({
       setProjectId(defaultProjectId ?? '')
     }
   }, [open, defaultProjectId])
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   function submit() {
     const t = title.trim()

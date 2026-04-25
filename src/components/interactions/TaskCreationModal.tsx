@@ -45,9 +45,8 @@ export function TaskCreationModal({
   const [isSubtask, setIsSubtask] = useState(!!defaultParentId)
   const [form, setForm] = useState(INITIAL_STATE)
 
-  // Reset al abrir para limpiar estado previo. El reset es por transición
-  // open=false→true, no derivación de props durante render.
-  // eslint-disable-next-line react-hooks/set-state-in-effect
+  /* eslint-disable react-hooks/set-state-in-effect */
+  // Reset por transición open=false→true (evento, no derivación de props).
   useEffect(() => {
     if (open) {
       setIsSubtask(!!defaultParentId)
@@ -62,6 +61,7 @@ export function TaskCreationModal({
       })
     }
   }, [open, defaultParentId, allTasks])
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   const set = <K extends keyof typeof form>(key: K, value: (typeof form)[K]) =>
     setForm(s => ({ ...s, [key]: value }))
