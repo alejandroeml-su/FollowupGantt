@@ -28,6 +28,7 @@ import {
   Plus,
 } from 'lucide-react'
 import { clsx } from 'clsx'
+import type { TaskStatus } from '@prisma/client'
 import type { SerializedTask } from '@/lib/types'
 import {
   moveTaskToColumn,
@@ -36,6 +37,7 @@ import {
 } from '@/lib/actions/reorder'
 import { TaskWithContextMenu } from './TaskContextMenuItems'
 import { ColumnContextMenu } from './ColumnContextMenu'
+import { TaskCreationModal } from './TaskCreationModal'
 import { TaskDrawer } from './TaskDrawer'
 import { TaskDrawerContent } from './TaskDrawerContent'
 import { useUIStore } from '@/lib/stores/ui'
@@ -297,6 +299,9 @@ export function KanbanBoardClient({
                 accent={prefs.accent}
                 effectiveWip={effectiveWip(col)}
                 focusedId={focusedId}
+                projects={projects}
+                users={users}
+                allTasks={allTasks}
               />
             )
           })}
@@ -390,6 +395,9 @@ function BoardColumn({
   accent,
   effectiveWip,
   focusedId,
+  projects,
+  users,
+  allTasks,
 }: {
   column: Column
   tasks: SerializedTask[]
@@ -401,8 +409,12 @@ function BoardColumn({
   accent?: string
   effectiveWip: number | null
   focusedId: string | null
+  projects: { id: string; name: string }[]
+  users: { id: string; name: string }[]
+  allTasks: ParentOption[]
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: column.id })
+  const [createOpen, setCreateOpen] = useState(false)
   const isOverWip = effectiveWip != null && tasks.length > effectiveWip
   const nearWip =
     effectiveWip != null &&
@@ -529,12 +541,23 @@ function BoardColumn({
         <div className="border-t border-border p-2">
           <button
             type="button"
+            onClick={() => setCreateOpen(true)}
+            aria-label={`Añadir tarea en ${column.title}`}
             className="flex w-full items-center justify-center gap-1 rounded text-xs text-muted-foreground hover:text-foreground/90"
           >
             <Plus className="h-3 w-3" /> Añadir tarea
           </button>
         </div>
       )}
+
+      <TaskCreationModal
+        open={createOpen}
+        onClose={() => setCreateOpen(false)}
+        projects={projects}
+        users={users}
+        allTasks={allTasks}
+        defaultStatus={column.id as TaskStatus}
+      />
     </div>
   )
 }

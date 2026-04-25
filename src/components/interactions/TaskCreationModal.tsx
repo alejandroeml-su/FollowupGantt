@@ -2,6 +2,7 @@
 
 import { useState, useTransition, useEffect } from 'react'
 import { X, Plus, GitBranch } from 'lucide-react'
+import type { TaskStatus } from '@prisma/client'
 import { createTask } from '@/lib/actions'
 import { toast } from './Toaster'
 import type { SerializedTask } from '@/lib/types'
@@ -19,6 +20,11 @@ type Props = {
   allTasks?: ParentOption[]
   /** Si se pasa, abre el modal en modo subtarea con este padre pre-seleccionado. */
   defaultParentId?: string
+  /**
+   * Estado inicial para la nueva tarea (ej. al crear desde una columna del Kanban).
+   * Si no se pasa, la server action `createTask` aplica 'TODO' por defecto.
+   */
+  defaultStatus?: TaskStatus
 }
 
 const INITIAL_STATE = {
@@ -40,6 +46,7 @@ export function TaskCreationModal({
   users,
   allTasks = [],
   defaultParentId,
+  defaultStatus,
 }: Props) {
   const [isPending, startTransition] = useTransition()
   const [isSubtask, setIsSubtask] = useState(!!defaultParentId)
@@ -79,6 +86,7 @@ export function TaskCreationModal({
         fd.set('projectId', form.projectId)
         fd.set('priority', form.priority)
         fd.set('type', form.type)
+        if (defaultStatus) fd.set('status', defaultStatus)
         if (form.assigneeId) fd.set('assigneeId', form.assigneeId)
         if (form.startDate) fd.set('startDate', form.startDate)
         if (form.endDate) fd.set('endDate', form.endDate)
