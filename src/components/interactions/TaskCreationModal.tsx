@@ -479,7 +479,7 @@ export function TaskCreationModal({
             {/* Resto de tabs en modo creación: placeholders (`task=null`).
                 La barra de tabs ya las muestra disabled, pero si por A11y un
                 lector las activa via DOM, igual ven placeholder consistente. */}
-            {activeTab === 'subtasks' && <SubtasksTab task={null} />}
+            {activeTab === 'subtasks' && <SubtasksTab task={null} users={users} />}
             {activeTab === 'comments' && <CommentsTab task={null} users={users} />}
             {activeTab === 'history' && <HistoryTab task={null} />}
             {activeTab === 'attachments' && <AttachmentsTab task={null} />}
