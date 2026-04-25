@@ -25,6 +25,7 @@ import {
   type TaskMetaState,
 } from './task-form/TaskMetaSidebar'
 import { TagChipInput } from './task-form/TagChipInput'
+import { ReferenceUrlField } from './task-form/ReferenceUrlField'
 import { TaskFormTabs, type TaskFormTab } from './task-form/TaskFormTabs'
 import { SubtasksTab } from './task-form/tabs/SubtasksTab'
 import { CommentsTab } from './task-form/tabs/CommentsTab'
@@ -95,6 +96,7 @@ export function TaskCreationModal({
   const [meta, setMeta] = useState<TaskMetaState>(() => initialMeta(defaultStatus))
   const [tags, setTags] = useState<string[]>([])
   const [tagSuggestions, setTagSuggestions] = useState<string[]>([])
+  const [referenceUrl, setReferenceUrl] = useState('')
   const [activeTab, setActiveTab] = useState<ModalTabId>('detail')
 
   /* eslint-disable react-hooks/set-state-in-effect */
@@ -116,6 +118,7 @@ export function TaskCreationModal({
         projectId: initialProjectId,
       })
       setTags([])
+      setReferenceUrl('')
       setActiveTab('detail')
     }
   }, [open, defaultParentId, defaultStatus, allTasks])
@@ -153,9 +156,10 @@ export function TaskCreationModal({
       meta.startDate !== '' ||
       meta.endDate !== '' ||
       meta.plannedValue !== '' ||
-      tags.length > 0
+      tags.length > 0 ||
+      referenceUrl.trim() !== ''
     )
-  }, [form, meta, tags])
+  }, [form, meta, tags, referenceUrl])
 
   const handleClose = useCallback(() => {
     if (isPending) return
@@ -216,6 +220,8 @@ export function TaskCreationModal({
         if (meta.plannedValue) fd.set('plannedValue', meta.plannedValue)
         // Sprint 2: tags persistidos por createTask (parseTagsFromFormData).
         if (tags.length > 0) fd.set('tags', JSON.stringify(tags))
+        // Sprint 4: URL de referencia opcional.
+        if (referenceUrl.trim()) fd.set('referenceUrl', referenceUrl.trim())
 
         await createTask(fd)
         toast.success(isSubtask ? 'Subtarea creada' : 'Tarea creada')
@@ -442,6 +448,15 @@ export function TaskCreationModal({
                     duplicados.
                   </p>
                 </div>
+
+                {/* URL de referencia (Sprint 4) — el tab "Adjuntos" está
+                    deshabilitado en modo creación, así que el campo vive en
+                    Detalle para que el usuario pueda capturarlo desde el inicio. */}
+                <ReferenceUrlField
+                  mode="create"
+                  value={referenceUrl}
+                  onChange={setReferenceUrl}
+                />
 
                 {/* Prioridad (pills horizontales) */}
                 <div className="space-y-1.5">

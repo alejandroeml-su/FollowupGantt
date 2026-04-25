@@ -5,6 +5,7 @@ import { Paperclip, FileIcon, Link2 } from 'lucide-react'
 import type { SerializedTask } from '@/lib/types'
 import { createAttachment } from '@/lib/actions'
 import { toast } from '../../Toaster'
+import { ReferenceUrlField } from '../ReferenceUrlField'
 
 type Props = {
   /** `null` = modo creación: tab placeholder. */
@@ -46,6 +47,14 @@ export function AttachmentsTab({ task }: Props) {
 
   return (
     <section className="space-y-6">
+      {/* Sprint 4 — URL de referencia (Confluence, Figma, ticket externo).
+          Persistencia onBlur via `updateTaskReferenceUrl`. */}
+      <ReferenceUrlField
+        mode="edit"
+        taskId={task.id}
+        value={task.referenceUrl ?? ''}
+      />
+
       <div
         className="border-2 border-dashed border-border rounded-2xl p-10 text-center space-y-4 hover:border-indigo-500/50 hover:bg-indigo-500/5 transition-all cursor-pointer group"
         onClick={handleSimulateUpload}
