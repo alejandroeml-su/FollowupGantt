@@ -402,7 +402,13 @@ export function TaskDrawerContent({ task, users, allTasks = [] }: Props) {
           </>
         )}
 
-        {activeTab === 'subtasks' && <SubtasksTab task={task} />}
+        {activeTab === 'subtasks' && (
+          <SubtasksTab
+            task={task}
+            users={users}
+            initialSubtasks={task.subtasks}
+          />
+        )}
         {activeTab === 'comments' && <CommentsTab task={task} users={users} />}
         {activeTab === 'history' && <HistoryTab task={task} />}
         {activeTab === 'attachments' && <AttachmentsTab task={task} />}

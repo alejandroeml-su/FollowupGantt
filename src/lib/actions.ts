@@ -11,6 +11,25 @@ import type {
   TaskStatus,
   DependencyType,
 } from '@prisma/client'
+import { serializeTask } from '@/lib/types'
+import type { SerializedTask } from '@/lib/types'
+
+// Vistas que dependen de la jerarquía de tareas: cualquier mutación de
+// subtareas inline necesita revalidarlas para no servir caché obsoleta.
+const TASK_VIEW_PATHS = [
+  '/list',
+  '/kanban',
+  '/gantt',
+  '/table',
+  '/workload',
+  '/mindmaps',
+  '/dashboards',
+  '/brain',
+] as const
+
+function revalidateTaskViews() {
+  for (const p of TASK_VIEW_PATHS) revalidatePath(p)
+}
 
 // =============================================
 // CRUD: GERENCIAS
@@ -651,5 +670,215 @@ export async function getTaskWithDetails(taskId: string) {
       successors: { include: { successor: true } },
     },
   })
+}
+
+// =============================================
+// SUBTAREAS INLINE (Sprint 3)
+// =============================================
+// Operaciones puntuales sobre subtareas hijas, expuestas para el
+// listado inline del tab "Subtareas" del formulario de tarea.
+//
+// Convenciones compartidas con `updateTask`:
+//   - Errores tipados con prefijo en corchetes: `[INVALID_INPUT]`,
+//     `[NOT_FOUND]`, `[FORBIDDEN]`. El cliente puede hacer match si
+//     necesita comportarse distinto, y el toast se queda con el
+//     mensaje legible que sigue al prefijo.
+//   - Hardcode SUPER_ADMIN mientras no exista sesión real (mismo hack
+//     que `updateTask`); pasar `userRoles` desde el cliente para que el
+//     futuro switch a auth sea simétrico.
+//   - Historial: misma forma `{ field, oldValue, newValue, userId }`.
+//   - Revalidación: las cinco vistas de tareas + brain.
+
+type RoleCheckInput = {
+  userId?: string | null
+  userRoles?: string[]
+}
+
+/**
+ * Genera el siguiente mnemónico para un proyecto siguiendo la misma
+ * convención que `createTask` (prefijo de iniciales del nombre del
+ * proyecto + correlativo basado en `task.count`).
+ *
+ * Idéntica derivación intencional: si `createTask` cambia el algoritmo,
+ * deberíamos extraer un helper compartido en una iteración posterior.
+ */
+async function nextMnemonicForProject(projectId: string): Promise<string> {
+  const project = await prisma.project.findUnique({ where: { id: projectId } })
+  const prefix =
+    project?.name
+      .split(' ')
+      .map((w) => w[0])
+      .join('')
+      .substring(0, 4)
+      .toUpperCase() || 'TASK'
+  const count = await prisma.task.count({ where: { projectId } })
+  return `${prefix}-${count + 1}`
+}
+
+/**
+ * Crea una subtarea inline (fila "Añadir subtarea... Enter") y devuelve
+ * el shape mínimo que el cliente necesita para inyectarla en el state
+ * local del tab sin tener que re-fetchear el padre completo.
+ *
+ * Hereda `projectId` y `type` del padre — la subtarea no puede vivir
+ * en otro proyecto que el de su padre.
+ */
+export async function createSubtaskInline(input: {
+  parentId: string
+  title: string
+  assigneeId?: string | null
+  userId?: string | null
+  userRoles?: string[]
+}): Promise<{
+  id: string
+  mnemonic: string | null
+  title: string
+  status: TaskStatus
+  assigneeId: string | null
+}> {
+  const title = input.title?.trim() ?? ''
+  if (!input.parentId || !title) {
+    throw new Error('[INVALID_INPUT] título o padre requerido')
+  }
+
+  const parent = await prisma.task.findUnique({
+    where: { id: input.parentId },
+    select: { id: true, projectId: true, type: true },
+  })
+  if (!parent) throw new Error('[NOT_FOUND] tarea padre no encontrada')
+
+  // Control de acceso: mismo patrón debug que `updateTask`. Cuando exista
+  // sesión, validar que el usuario esté asignado al proyecto.
+  const roles = input.userRoles ?? []
+  const isAdmin = roles.some((r) => r === 'ADMIN' || r === 'SUPER_ADMIN')
+  void isAdmin // explícito: por ahora siempre permitido si llega userRoles
+
+  const mnemonic = await nextMnemonicForProject(parent.projectId)
+
+  const created = await prisma.task.create({
+    data: {
+      title,
+      mnemonic,
+      projectId: parent.projectId,
+      type: parent.type,
+      status: 'TODO',
+      priority: 'MEDIUM',
+      parentId: parent.id,
+      assigneeId: input.assigneeId || null,
+    },
+    select: {
+      id: true,
+      mnemonic: true,
+      title: true,
+      status: true,
+      assigneeId: true,
+    },
+  })
+
+  revalidateTaskViews()
+  return created
+}
+
+/**
+ * Cierra/abre una subtarea desde el checkbox del listado inline.
+ *
+ * - `done=true` → status `DONE`, progress 100.
+ * - `done=false` → status `TODO`, progress 0.
+ *
+ * Crea entrada de historial sólo del campo `status` (el progress es
+ * derivado y se considera ruido para el timeline humano).
+ */
+export async function toggleSubtaskDone(input: {
+  id: string
+  done: boolean
+} & RoleCheckInput): Promise<{ id: string; status: TaskStatus; progress: number }> {
+  if (!input.id) throw new Error('[INVALID_INPUT] id requerido')
+
+  const current = await prisma.task.findUnique({
+    where: { id: input.id },
+    select: { id: true, status: true, progress: true },
+  })
+  if (!current) throw new Error('[NOT_FOUND] subtarea no encontrada')
+
+  const nextStatus: TaskStatus = input.done ? 'DONE' : 'TODO'
+  const nextProgress = input.done ? 100 : 0
+
+  const [updated] = await prisma.$transaction([
+    prisma.task.update({
+      where: { id: input.id },
+      data: { status: nextStatus, progress: nextProgress },
+      select: { id: true, status: true, progress: true },
+    }),
+    prisma.taskHistory.create({
+      data: {
+        taskId: input.id,
+        field: 'status',
+        oldValue: String(current.status),
+        newValue: String(nextStatus),
+        userId: input.userId || null,
+      },
+    }),
+  ])
+
+  revalidateTaskViews()
+  return updated
+}
+
+/**
+ * Reasigna una subtarea desde el mini-selector inline. `assigneeId=null`
+ * desasigna explícitamente (no es lo mismo que omitir el campo).
+ */
+export async function assignSubtaskInline(input: {
+  id: string
+  assigneeId: string | null
+} & RoleCheckInput): Promise<{ id: string; assigneeId: string | null }> {
+  if (!input.id) throw new Error('[INVALID_INPUT] id requerido')
+
+  const current = await prisma.task.findUnique({
+    where: { id: input.id },
+    select: { id: true, assigneeId: true },
+  })
+  if (!current) throw new Error('[NOT_FOUND] subtarea no encontrada')
+
+  // No-op: si no cambió, no escribimos historial ni revalidamos vistas.
+  const nextAssignee = input.assigneeId || null
+  if (nextAssignee === (current.assigneeId || null)) {
+    return { id: current.id, assigneeId: current.assigneeId ?? null }
+  }
+
+  const [updated] = await prisma.$transaction([
+    prisma.task.update({
+      where: { id: input.id },
+      data: { assigneeId: nextAssignee },
+      select: { id: true, assigneeId: true },
+    }),
+    prisma.taskHistory.create({
+      data: {
+        taskId: input.id,
+        field: 'assigneeId',
+        oldValue: current.assigneeId ?? '',
+        newValue: nextAssignee ?? '',
+        userId: input.userId || null,
+      },
+    }),
+  ])
+
+  revalidateTaskViews()
+  return updated
+}
+
+/**
+ * Lista de subtareas serializadas para el tab. Sólo se invoca si el
+ * cliente no las recibió ya como prop (`task.subtasks`) — evitamos un
+ * round-trip innecesario en el caso común.
+ */
+export async function getSubtasks(parentId: string): Promise<SerializedTask[]> {
+  if (!parentId) return []
+  const subtasks = await prisma.task.findMany({
+    where: { parentId },
+    include: { assignee: true },
+    orderBy: { createdAt: 'asc' },
+  })
+  return subtasks.map((s) => serializeTask(s as unknown as Record<string, unknown>))
 }
 
