@@ -5,6 +5,9 @@ import { Plus, Shield, Trash2, CheckCircle2 } from 'lucide-react'
 import { createRole, deleteRole } from '@/lib/actions'
 import { toast } from '@/components/interactions/Toaster'
 
+// permissions viene de Prisma como JsonValue (opaco) — no se parsea
+// estrictamente en el cliente.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Role = {
   id: string
   name: string
@@ -107,7 +110,7 @@ export default function RolesSettings({ roles }: Props) {
         {roles.length === 0 && (
           <div className="text-center py-20 bg-muted/20 rounded-xl border-2 border-dashed border-border">
             <Shield className="h-12 w-12 text-muted-foreground mx-auto mb-4 opacity-20" />
-            <p className="text-muted-foreground">No hay roles definidos. Utiliza "Inicializar Roles Base" para empezar.</p>
+            <p className="text-muted-foreground">No hay roles definidos. Utiliza &laquo;Inicializar Roles Base&raquo; para empezar.</p>
           </div>
         )}
       </div>

@@ -324,7 +324,7 @@ export function TaskDrawerContent({ task, projects, users, allTasks = [] }: Prop
                           <option value="REVIEW">Review</option>
                           <option value="DONE">Done</option>
                         </select>
-                      ) : <StatusSelector taskId={task.id} currentStatus={task.status as any} />}</dd>
+                      ) : <StatusSelector taskId={task.id} currentStatus={task.status} />}</dd>
                     </div>
                     <div>
                       <dt className="text-muted-foreground mb-1 text-xs uppercase tracking-wider font-semibold">Prioridad</dt>

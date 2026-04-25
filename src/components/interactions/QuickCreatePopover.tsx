@@ -60,6 +60,8 @@ export function QuickCreatePopover({
   const [isPending, startTransition] = useTransition()
   const inputRef = useRef<HTMLInputElement>(null)
 
+  /* eslint-disable react-hooks/set-state-in-effect */
+  // Reset del formulario por transición open=true→false (evento, no derivación de props).
   useEffect(() => {
     if (!open) {
       setTitle('')
@@ -69,6 +71,7 @@ export function QuickCreatePopover({
       setProjectId(defaultProjectId ?? '')
     }
   }, [open, defaultProjectId])
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   function submit() {
     const t = title.trim()
