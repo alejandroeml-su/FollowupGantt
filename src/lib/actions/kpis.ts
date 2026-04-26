@@ -1,7 +1,7 @@
 'use server'
 
 import prisma from '@/lib/prisma'
-import type { Prisma } from '@prisma/client'
+import type { Prisma, ProjectStatus } from '@prisma/client'
 import {
   type KPIBundle,
   type KPIFilterOptions,
@@ -17,6 +17,25 @@ import {
   lastNMonths,
   monthKey,
 } from '@/lib/kpi-calc'
+
+export type ProjectKPIRow = {
+  projectId: string
+  projectName: string
+  status: ProjectStatus
+  totalTasks: number
+  completedTasks: number
+  inProgressTasks: number
+  overdueTasks: number
+  criticalOpenTasks: number
+  pv: number
+  ev: number
+  ac: number
+  spi: number | null
+  cpi: number | null
+  roi: number | null
+  avgProgress: number
+  health: 'HEALTHY' | 'AT_RISK' | 'CRITICAL'
+}
 
 function buildTaskWhere(filters: KPIFilters): Prisma.TaskWhereInput {
   const where: Prisma.TaskWhereInput = { archivedAt: null }
@@ -190,4 +209,116 @@ export async function getPortfolioKPIs(filters: KPIFilters = {}): Promise<KPIBun
     trend,
     totals,
   }
+}
+
+export async function getProjectsKPIs(filters: KPIFilters = {}): Promise<ProjectKPIRow[]> {
+  const projectWhere = buildProjectWhere(filters)
+
+  // Construye un filtro de tareas por-proyecto reutilizando los filtros granulares
+  // (status/type/assigneeId aplican a las tareas; gerencia/area/projectId ya
+  // restringen el set de proyectos arriba).
+  const taskFilter: Prisma.TaskWhereInput = { archivedAt: null }
+  if (filters.status) taskFilter.status = filters.status
+  if (filters.type) taskFilter.type = filters.type
+  if (filters.assigneeId) taskFilter.assigneeId = filters.assigneeId
+
+  const projects = await prisma.project.findMany({
+    where: projectWhere,
+    orderBy: { name: 'asc' },
+    select: {
+      id: true,
+      name: true,
+      status: true,
+      tasks: {
+        where: taskFilter,
+        select: {
+          id: true,
+          status: true,
+          priority: true,
+          progress: true,
+          plannedValue: true,
+          actualCost: true,
+          earnedValue: true,
+          endDate: true,
+        },
+      },
+    },
+  })
+
+  const now = new Date()
+
+  return projects.map((p) => {
+    const tasks = p.tasks
+    const totalTasks = tasks.length
+    const completedTasks = tasks.filter((t) => t.status === 'DONE').length
+    const inProgressTasks = tasks.filter((t) => t.status === 'IN_PROGRESS').length
+    const overdueTasks = tasks.filter(
+      (t) => t.endDate != null && t.endDate < now && t.status !== 'DONE',
+    ).length
+    const criticalOpenTasks = tasks.filter(
+      (t) => t.priority === 'CRITICAL' && t.status !== 'DONE',
+    ).length
+    const overdueCriticalTasks = tasks.filter(
+      (t) =>
+        t.endDate != null &&
+        t.endDate < now &&
+        t.status !== 'DONE' &&
+        t.priority === 'CRITICAL',
+    ).length
+    const overdueNonCriticalTasks = overdueTasks - overdueCriticalTasks
+
+    const { pv, ev, ac } = computeEVMTotals(
+      tasks.map((t) => ({
+        plannedValue: t.plannedValue,
+        actualCost: t.actualCost,
+        earnedValue: t.earnedValue,
+        progress: t.progress,
+      })),
+    )
+
+    const spi = pv > 0 ? ev / pv : null
+    const cpi = ac > 0 ? ev / ac : null
+    const roi = ac > 0 ? ((ev - ac) / ac) * 100 : null
+
+    const avgProgress =
+      totalTasks > 0
+        ? tasks.reduce((acc, t) => acc + (t.progress ?? 0), 0) / totalTasks
+        : 0
+
+    let health: 'HEALTHY' | 'AT_RISK' | 'CRITICAL'
+    if (
+      (spi != null && spi < 0.85) ||
+      (cpi != null && cpi < 0.85) ||
+      overdueCriticalTasks >= 3
+    ) {
+      health = 'CRITICAL'
+    } else if (
+      (spi != null && spi < 0.95) ||
+      (cpi != null && cpi < 0.95) ||
+      overdueNonCriticalTasks >= 5
+    ) {
+      health = 'AT_RISK'
+    } else {
+      health = 'HEALTHY'
+    }
+
+    return {
+      projectId: p.id,
+      projectName: p.name,
+      status: p.status,
+      totalTasks,
+      completedTasks,
+      inProgressTasks,
+      overdueTasks,
+      criticalOpenTasks,
+      pv,
+      ev,
+      ac,
+      spi,
+      cpi,
+      roi,
+      avgProgress,
+      health,
+    }
+  })
 }
