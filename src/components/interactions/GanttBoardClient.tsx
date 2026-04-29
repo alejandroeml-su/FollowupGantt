@@ -1,10 +1,11 @@
 'use client'
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { MessageSquare } from 'lucide-react'
 import { clsx } from 'clsx'
 import type { SerializedTask } from '@/lib/types'
 import { updateTaskDates, shiftTaskDates } from '@/lib/actions/schedule'
+import { createDependency } from '@/lib/actions/dependencies'
 import { useHorizontalDrag } from '@/lib/hooks/useHorizontalDrag'
 import { TaskWithContextMenu } from './TaskContextMenuItems'
 import { TaskDrawer } from './TaskDrawer'
@@ -258,6 +259,118 @@ export function GanttBoardClient({
   const totalWidth = rangeDays * DAY_WIDTH
   const canvasHeight = Math.max(ROW_HEIGHT, visibleLocal.length * ROW_HEIGHT)
 
+  // ─── HU-1.3: modo conexión (drag-handle para crear dependencia) ───
+  //
+  // `connection.from` apunta al taskId origen y a las coordenadas (en el
+  // sistema del canvas) del punto donde nació el drag — ahí ancla la línea
+  // SVG. `cursor` se actualiza en cada mousemove. `targetTaskId` se setea
+  // cuando el cursor está dentro de una barra (hover-target). `mouseup`
+  // cierra el modo: si hay target válido → invoca server action; si no
+  // (drop fuera o Escape) → cancela.
+  const canvasRef = useRef<HTMLDivElement>(null)
+  const [connection, setConnection] = useState<{
+    fromTaskId: string
+    fromX: number
+    fromY: number
+    cursorX: number
+    cursorY: number
+    targetTaskId: string | null
+  } | null>(null)
+  const connectionRef = useRef(connection)
+  connectionRef.current = connection
+
+  /**
+   * Convierte coordenadas globales (clientX/Y del MouseEvent) al sistema
+   * de píxeles del canvas. Si no hay canvas montado (caso degenerado),
+   * retorna {0,0}.
+   */
+  const toCanvasCoords = useCallback((clientX: number, clientY: number) => {
+    const el = canvasRef.current
+    if (!el) return { x: 0, y: 0 }
+    const r = el.getBoundingClientRect()
+    return { x: clientX - r.left, y: clientY - r.top }
+  }, [])
+
+  const beginConnection = useCallback(
+    (taskId: string, fromX: number, fromY: number) => {
+      setConnection({
+        fromTaskId: taskId,
+        fromX,
+        fromY,
+        cursorX: fromX,
+        cursorY: fromY,
+        targetTaskId: null,
+      })
+    },
+    [],
+  )
+
+  // Mousemove global mientras dura el modo conexión — actualiza la punta
+  // de la línea temporal y resuelve hover-target consultando el dataset
+  // `data-gantt-task-id` de los elementos bajo el cursor.
+  useEffect(() => {
+    if (!connection) return
+    const onMove = (e: MouseEvent) => {
+      const cur = connectionRef.current
+      if (!cur) return
+      const { x, y } = toCanvasCoords(e.clientX, e.clientY)
+      // Detección de target via elementsFromPoint — funciona aunque la
+      // capa SVG esté encima (es pointer-events:none).
+      let targetId: string | null = null
+      if (typeof document !== 'undefined') {
+        const els = document.elementsFromPoint(e.clientX, e.clientY)
+        for (const el of els) {
+          if (!(el instanceof HTMLElement)) continue
+          const id = el.dataset.ganttTaskId
+          if (id && id !== cur.fromTaskId) {
+            targetId = id
+            break
+          }
+        }
+      }
+      setConnection({ ...cur, cursorX: x, cursorY: y, targetTaskId: targetId })
+    }
+    const onUp = async () => {
+      const cur = connectionRef.current
+      setConnection(null)
+      if (!cur) return
+      const targetId = cur.targetTaskId
+      if (!targetId) return
+      // Self-dep ya filtrado en mousemove (targetId !== fromTaskId).
+      try {
+        await createDependency({
+          predecessorId: cur.fromTaskId,
+          successorId: targetId,
+          type: 'FS',
+          lagDays: 0,
+        })
+        toast.success('Dependencia FS creada')
+      } catch (err) {
+        const { code, detail } = parseActionError(err)
+        const msg =
+          code === 'CYCLE_DETECTED'
+            ? `Ciclo detectado · ${detail}`
+            : code === 'DEPENDENCY_EXISTS'
+              ? `Ya existe · ${detail}`
+              : code === 'CROSS_PROJECT'
+                ? `Proyectos distintos · ${detail}`
+                : detail
+        toast.error(msg)
+      }
+    }
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setConnection(null)
+    }
+    window.addEventListener('mousemove', onMove)
+    window.addEventListener('mouseup', onUp)
+    window.addEventListener('keydown', onKey)
+    return () => {
+      window.removeEventListener('mousemove', onMove)
+      window.removeEventListener('mouseup', onUp)
+      window.removeEventListener('keydown', onKey)
+    }
+  }, [connection, toCanvasCoords])
+
   // Posiciones de barras visibles (para la capa SVG). Solo tareas con fechas
   // dentro del rango aparecen aquí; el resto no tiene flechas.
   const positions = useMemo<GanttTaskPosition[]>(() => {
@@ -382,7 +495,8 @@ export function GanttBoardClient({
 
             {/* Canvas único: relative para anclar la capa SVG global y todas las barras. */}
             <div
-              className="relative"
+              ref={canvasRef}
+              className={clsx('relative', connection && 'cursor-crosshair')}
               style={{ width: totalWidth, height: canvasHeight, minWidth: totalWidth }}
             >
               {/* Tinte de fines de semana — columnas verticales por día. */}
@@ -427,6 +541,10 @@ export function GanttBoardClient({
                     if (!s || !e) return
                     commitDates(task.id, s, addDays(e, delta), 'resize-end')
                   }}
+                  // HU-1.3: drag-handle activo solo si la tarea tiene fechas;
+                  // se renderiza un círculo en el borde derecho de la barra.
+                  isConnectionTarget={connection?.targetTaskId === task.id}
+                  onConnectStart={(x, y) => beginConnection(task.id, x, y)}
                 />
               ))}
 
@@ -438,6 +556,33 @@ export function GanttBoardClient({
                   width={totalWidth}
                   height={canvasHeight}
                 />
+              )}
+
+              {/* HU-1.3: línea temporal del modo conexión. Va por encima
+                  de la capa de dependencias persistentes. */}
+              {connection && (
+                <svg
+                  aria-hidden
+                  className="pointer-events-none absolute left-0 top-0"
+                  width={totalWidth}
+                  height={canvasHeight}
+                  style={{ overflow: 'visible' }}
+                >
+                  <line
+                    x1={connection.fromX}
+                    y1={connection.fromY}
+                    x2={connection.cursorX}
+                    y2={connection.cursorY}
+                    stroke="currentColor"
+                    strokeWidth={2}
+                    strokeDasharray="4 2"
+                    className={
+                      connection.targetTaskId
+                        ? 'text-emerald-500'
+                        : 'text-indigo-500'
+                    }
+                  />
+                </svg>
               )}
             </div>
           </div>
@@ -545,6 +690,8 @@ function GanttBarSlot({
   onShift,
   onResizeStart,
   onResizeEnd,
+  isConnectionTarget,
+  onConnectStart,
 }: {
   task: SerializedTask
   index: number
@@ -557,6 +704,10 @@ function GanttBarSlot({
   onShift: (deltaDays: number) => void
   onResizeStart: (deltaDays: number) => void
   onResizeEnd: (deltaDays: number) => void
+  /** True cuando el cursor está sobre esta barra durante un drag de conexión. */
+  isConnectionTarget?: boolean
+  /** Inicia el modo conexión desde esta barra (HU-1.3). x/y son coords del canvas. */
+  onConnectStart?: (canvasX: number, canvasY: number) => void
 }) {
   const s = parseISO(task.startDate)
   const e = parseISO(task.endDate)
@@ -638,6 +789,7 @@ function GanttBarSlot({
           aria-valuemax={rangeDays}
           aria-valuenow={startDay ?? 0}
           aria-valuetext={`${fmt(s)} a ${fmt(e)}`}
+          data-gantt-task-id={task.id}
           onFocus={onFocus}
           title={cpmTooltip}
           style={{
@@ -648,7 +800,7 @@ function GanttBarSlot({
               : undefined,
           }}
           className={clsx(
-            'absolute top-1/2 z-10 h-6 -translate-y-1/2 overflow-hidden rounded-md shadow-sm',
+            'group/bar absolute top-1/2 z-10 h-6 -translate-y-1/2 rounded-md shadow-sm',
             'flex cursor-grab active:cursor-grabbing',
             'border focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-500',
             isCritical
@@ -657,22 +809,28 @@ function GanttBarSlot({
                 ? 'border-emerald-500/50 bg-emerald-900/40'
                 : 'border-indigo-500/50 bg-indigo-900/40',
             focused && 'ring-2 ring-indigo-500/60',
+            isConnectionTarget && 'outline outline-2 outline-offset-2 outline-emerald-500',
             bodyDrag.isDragging && 'opacity-80',
           )}
           {...bodyDrag.dragProps}
         >
-          {/* progreso */}
+          {/* progreso (overlay clipeado) */}
           <div
-            className={clsx(
-              'h-full transition-all',
-              isCritical
-                ? 'bg-red-500'
-                : task.type === 'PMI_TASK'
-                  ? 'bg-emerald-500'
-                  : 'bg-indigo-500',
-            )}
-            style={{ width: `${progress}%` }}
-          />
+            className="pointer-events-none absolute inset-0 overflow-hidden rounded-md"
+            aria-hidden
+          >
+            <div
+              className={clsx(
+                'h-full transition-all',
+                isCritical
+                  ? 'bg-red-500'
+                  : task.type === 'PMI_TASK'
+                    ? 'bg-emerald-500'
+                    : 'bg-indigo-500',
+              )}
+              style={{ width: `${progress}%` }}
+            />
+          </div>
 
           {/* handle izquierdo */}
           <div
@@ -690,6 +848,34 @@ function GanttBarSlot({
             {...rightDrag.dragProps}
             onClick={(e) => e.stopPropagation()}
           />
+
+          {/* HU-1.3 · drag-handle de conexión (borde derecho, hover-only).
+              z-20 para quedar por encima del handle de resize. La detención
+              del propagation evita que el mousedown active el body-drag
+              antes de iniciar el modo conexión. */}
+          {onConnectStart && (
+            <div
+              role="button"
+              aria-label={`Crear dependencia desde ${task.title}`}
+              className={clsx(
+                'absolute right-0 top-1/2 z-20 h-2 w-2 -translate-y-1/2 translate-x-1/2 rounded-full',
+                'cursor-crosshair bg-indigo-400 opacity-0 transition-opacity',
+                'group-hover/bar:opacity-70 hover:opacity-100',
+                isCritical && 'bg-red-400',
+              )}
+              onMouseDown={(e) => {
+                e.stopPropagation()
+                e.preventDefault()
+                // Coordenadas del centro del handle en el sistema del canvas.
+                // Como la barra está absoluta dentro del canvas, basta con
+                // (left + width, middleY).
+                const x = (left ?? 0) + (width ?? 0)
+                const y = index * rowHeight + rowHeight / 2
+                onConnectStart(x, y)
+              }}
+              onClick={(e) => e.stopPropagation()}
+            />
+          )}
         </div>
       )}
 
@@ -698,6 +884,7 @@ function GanttBarSlot({
           role="img"
           aria-label={`Hito ${task.title} el ${fmt(s)}`}
           tabIndex={0}
+          data-gantt-task-id={task.id}
           onFocus={onFocus}
           style={{
             left: left + DAY_WIDTH / 2 - 8,
@@ -710,6 +897,7 @@ function GanttBarSlot({
             'absolute z-10 h-4 w-4 shadow-[0_0_10px_rgba(251,191,36,0.4)]',
             isCritical ? 'bg-red-500' : 'bg-amber-400',
             focused && 'ring-2 ring-amber-300',
+            isConnectionTarget && 'outline outline-2 outline-offset-2 outline-emerald-500',
           )}
           title={cpmTooltip}
           {...bodyDrag.dragProps}
