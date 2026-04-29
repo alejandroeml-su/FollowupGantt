@@ -3,6 +3,7 @@
 import prisma from '@/lib/prisma'
 import { revalidatePath } from 'next/cache'
 import type { Priority, TaskType } from '@prisma/client'
+import { invalidateCpmCache } from '@/lib/scheduling/invalidate'
 
 // Patrón de errores tipados (alineado con reorder.ts / schedule.ts):
 //   throw new Error(`[CODE] detalle`)  → el cliente parsea /^\[([A-Z_]+)\]\s*(.+)$/
@@ -108,6 +109,7 @@ export async function quickCreateTaskForDate(input: {
     },
   })
 
+  invalidateCpmCache(input.projectId)
   revalidateAllBoards()
   return { ok: true as const, id: task.id, mnemonic }
 }

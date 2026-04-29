@@ -10,8 +10,7 @@ import {
 import { GlobalBreadcrumbs } from '@/components/interactions/GlobalBreadcrumbs'
 import { ViewSwitcher } from '@/components/interactions/ViewSwitcher'
 import { NewTaskButton } from '@/components/interactions/NewTaskButton'
-import { computeCpm } from '@/lib/scheduling/cpm'
-import { loadCpmInputForProject } from '@/lib/scheduling/prismaAdapter'
+import { getCachedCpmForProject } from '@/lib/scheduling/cache'
 
 export const dynamic = 'force-dynamic'
 
@@ -76,26 +75,16 @@ async function computeCpmForProjects(projectIds: string[]): Promise<{
   const cpmByTaskId: Record<string, GanttCpmInfo> = {}
   let hasCycle = false
 
-  // En paralelo — cada proyecto es independiente.
+  // En paralelo — cada proyecto es independiente. Cada llamada está
+  // cacheada con tag `cpm:<projectId>` (HU-2.1); ver invalidate.ts.
   const outputs = await Promise.all(
-    projectIds.map(async (pid) => {
-      try {
-        const input = await loadCpmInputForProject(pid)
-        if (input.tasks.length === 0) return null
-        return computeCpm(input)
-      } catch {
-        // No bloquear el render del Gantt si falla el CPM de un proyecto
-        // (ej. lagDays aún no migrado en BD). Los tooltips simplemente
-        // no aparecerán para ese proyecto.
-        return null
-      }
-    }),
+    projectIds.map((pid) => getCachedCpmForProject(pid)),
   )
 
   for (const out of outputs) {
     if (!out) continue
     if (out.warnings.some((w) => w.code === 'CYCLE')) hasCycle = true
-    for (const r of out.results.values()) {
+    for (const r of out.results) {
       cpmByTaskId[r.id] = {
         id: r.id,
         ES: r.ES,
