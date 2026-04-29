@@ -14,10 +14,34 @@ import { useTaskShortcuts } from '@/lib/hooks/useTaskShortcuts'
 import { toast } from './Toaster'
 import { TaskFiltersBar } from './TaskFiltersBar'
 import { EMPTY_TASK_FILTERS, filterTasks, type TaskFilters } from '@/lib/taskFilters'
+import {
+  GanttDependencyLayer,
+  type GanttDependencyEdge,
+  type GanttTaskPosition,
+} from './GanttDependencyLayer'
 
 type ParentOption = Pick<SerializedTask, 'id' | 'title' | 'mnemonic'> & {
   project?: { id: string; name: string } | null
   projectId?: string
+}
+
+/** CPM info por tarea (subset serializable que llega del RSC). */
+export type GanttCpmInfo = {
+  id: string
+  ES: number
+  EF: number
+  LS: number
+  LF: number
+  totalFloat: number
+  isCritical: boolean
+}
+
+/** Dependencia serializable con tipo Prisma (mapeada a 2-letras para la capa SVG). */
+export type GanttDependencyDescriptor = {
+  predecessorId: string
+  successorId: string
+  type: 'FS' | 'SS' | 'FF' | 'SF'
+  lagDays: number
 }
 
 type Props = {
@@ -31,9 +55,16 @@ type Props = {
   gerencias?: { id: string; name: string }[]
   areas?: { id: string; name: string; gerenciaId?: string | null }[]
   allTasks?: ParentOption[]
+  /** Resultados CPM agregados de todos los proyectos visibles (HU-1.2). */
+  cpmByTaskId?: Record<string, GanttCpmInfo>
+  /** Dependencias inter-tareas (todas las que conectan tareas visibles). */
+  dependencies?: GanttDependencyDescriptor[]
+  /** Si CPM detectó al menos un ciclo en cualquier proyecto, render banner. */
+  hasCpmCycle?: boolean
 }
 
 const DAY_WIDTH = 40 // px por día — balance legibilidad / densidad
+const ROW_HEIGHT = 40 // px — altura fija por fila para alinear SVG <-> barras
 
 function parseISO(s: string | null | undefined): Date | null {
   if (!s) return null
@@ -82,6 +113,9 @@ export function GanttBoardClient({
   users,
   gerencias = [],
   areas = [],
+  cpmByTaskId,
+  dependencies,
+  hasCpmCycle,
 }: Props) {
   const start = useMemo(() => new Date(rangeStart), [rangeStart])
   const days = useMemo(
@@ -222,6 +256,56 @@ export function GanttBoardClient({
   }
 
   const totalWidth = rangeDays * DAY_WIDTH
+  const canvasHeight = Math.max(ROW_HEIGHT, visibleLocal.length * ROW_HEIGHT)
+
+  // Posiciones de barras visibles (para la capa SVG). Solo tareas con fechas
+  // dentro del rango aparecen aquí; el resto no tiene flechas.
+  const positions = useMemo<GanttTaskPosition[]>(() => {
+    const result: GanttTaskPosition[] = []
+    visibleLocal.forEach((task, i) => {
+      const s = parseISO(task.startDate)
+      const e = parseISO(task.endDate)
+      if (!s || !e) return
+      const startDay = Math.max(0, daysBetween(start, s))
+      const endDay = Math.min(rangeDays, daysBetween(start, e) + 1)
+      if (endDay <= 0 || startDay >= rangeDays) return
+      const left = startDay * DAY_WIDTH
+      const width = Math.max(DAY_WIDTH, (endDay - startDay) * DAY_WIDTH)
+      const right = left + width
+      const middleY = i * ROW_HEIGHT + ROW_HEIGHT / 2
+      result.push({ id: task.id, left, right, middleY })
+    })
+    return result
+  }, [visibleLocal, start, rangeDays])
+
+  // Edges para la capa SVG: solo los que conectan tareas visibles. La capa
+  // del POC ya filtra por type !== 'FS'; las demás se difieren a HU-1.3.
+  const visibleIdSet = useMemo(
+    () => new Set(visibleLocal.map((t) => t.id)),
+    [visibleLocal],
+  )
+  const criticalIds = useMemo(() => {
+    const out = new Set<string>()
+    if (!cpmByTaskId) return out
+    for (const id of visibleIdSet) {
+      if (cpmByTaskId[id]?.isCritical) out.add(id)
+    }
+    return out
+  }, [cpmByTaskId, visibleIdSet])
+  const edges = useMemo<GanttDependencyEdge[]>(() => {
+    if (!dependencies) return []
+    return dependencies
+      .filter(
+        (d) => visibleIdSet.has(d.predecessorId) && visibleIdSet.has(d.successorId),
+      )
+      .map((d) => ({
+        predecessorId: d.predecessorId,
+        successorId: d.successorId,
+        type: d.type,
+        isCritical:
+          criticalIds.has(d.predecessorId) && criticalIds.has(d.successorId),
+      }))
+  }, [dependencies, visibleIdSet, criticalIds])
 
   return (
     <>
@@ -234,6 +318,17 @@ export function GanttBoardClient({
         users={users}
         className="rounded-lg mb-4 border border-border"
       />
+
+      {hasCpmCycle && (
+        <div
+          role="alert"
+          className="mb-3 rounded-md border border-red-500/40 bg-red-950/30 px-3 py-2 text-xs text-red-300"
+        >
+          CPM: se detectó al menos un ciclo en las dependencias. Las flechas
+          afectadas se omiten hasta que se rompa el ciclo.
+        </div>
+      )}
+
       <div className="rounded-xl border border-border bg-subtle/80 shadow-sm">
         {/* Header: etiquetas de nombre + escala de días */}
         <div className="flex border-b border-border">
@@ -263,40 +358,90 @@ export function GanttBoardClient({
           </div>
         </div>
 
-        {/* Filas de tareas */}
-        <div className="divide-y divide-border/50">
-          {visibleLocal.length === 0 && (
-            <div className="p-8 text-center text-sm text-muted-foreground">
-              {local.length === 0
-                ? 'No hay tareas planificadas en este rango.'
-                : 'Ninguna tarea coincide con los filtros.'}
+        {/* Cuerpo: dos columnas hermanas (labels + canvas relative compartido). */}
+        {visibleLocal.length === 0 ? (
+          <div className="p-8 text-center text-sm text-muted-foreground">
+            {local.length === 0
+              ? 'No hay tareas planificadas en este rango.'
+              : 'Ninguna tarea coincide con los filtros.'}
+          </div>
+        ) : (
+          <div className="flex">
+            {/* Columna de labels — una fila por tarea, alineada en altura con el canvas. */}
+            <div className="w-64 shrink-0 border-r border-border">
+              {visibleLocal.map((task) => (
+                <GanttLabelRow
+                  key={task.id}
+                  task={task}
+                  focused={focusedId === task.id}
+                  onFocus={() => setFocusedId(task.id)}
+                  rowHeight={ROW_HEIGHT}
+                />
+              ))}
             </div>
-          )}
-          {visibleLocal.map((task) => (
-            <GanttRow
-              key={task.id}
-              task={task}
-              focused={focusedId === task.id}
-              onFocus={() => setFocusedId(task.id)}
-              rangeStart={start}
-              rangeDays={rangeDays}
-              totalWidth={totalWidth}
-              onShift={(delta) => commitShift(task.id, delta)}
-              onResizeStart={(delta) => {
-                const s = parseISO(task.startDate)
-                const e = parseISO(task.endDate)
-                if (!s || !e) return
-                commitDates(task.id, addDays(s, delta), e, 'resize-start')
-              }}
-              onResizeEnd={(delta) => {
-                const s = parseISO(task.startDate)
-                const e = parseISO(task.endDate)
-                if (!s || !e) return
-                commitDates(task.id, s, addDays(e, delta), 'resize-end')
-              }}
-            />
-          ))}
-        </div>
+
+            {/* Canvas único: relative para anclar la capa SVG global y todas las barras. */}
+            <div
+              className="relative"
+              style={{ width: totalWidth, height: canvasHeight, minWidth: totalWidth }}
+            >
+              {/* Tinte de fines de semana — columnas verticales por día. */}
+              <div aria-hidden className="pointer-events-none absolute inset-0 flex">
+                {days.map((d, i) => {
+                  const isWeekend = d.getUTCDay() === 0 || d.getUTCDay() === 6
+                  return (
+                    <div
+                      key={i}
+                      className={clsx(
+                        'shrink-0 border-r border-border/30',
+                        isWeekend && 'bg-card/40',
+                      )}
+                      style={{ width: DAY_WIDTH }}
+                    />
+                  )
+                })}
+              </div>
+
+              {/* Líneas horizontales por fila + zona clickeable de la fila. */}
+              {visibleLocal.map((task, i) => (
+                <GanttBarSlot
+                  key={task.id}
+                  task={task}
+                  index={i}
+                  focused={focusedId === task.id}
+                  onFocus={() => setFocusedId(task.id)}
+                  rangeStart={start}
+                  rangeDays={rangeDays}
+                  rowHeight={ROW_HEIGHT}
+                  cpm={cpmByTaskId?.[task.id]}
+                  onShift={(delta) => commitShift(task.id, delta)}
+                  onResizeStart={(delta) => {
+                    const s = parseISO(task.startDate)
+                    const e = parseISO(task.endDate)
+                    if (!s || !e) return
+                    commitDates(task.id, addDays(s, delta), e, 'resize-start')
+                  }}
+                  onResizeEnd={(delta) => {
+                    const s = parseISO(task.startDate)
+                    const e = parseISO(task.endDate)
+                    if (!s || !e) return
+                    commitDates(task.id, s, addDays(e, delta), 'resize-end')
+                  }}
+                />
+              ))}
+
+              {/* Capa SVG superpuesta — flechas de dependencias FS (HU-1.2). */}
+              {edges.length > 0 && (
+                <GanttDependencyLayer
+                  tasks={positions}
+                  dependencies={edges}
+                  width={totalWidth}
+                  height={canvasHeight}
+                />
+              )}
+            </div>
+          </div>
+        )}
       </div>
 
       <TaskDrawer
@@ -325,10 +470,10 @@ export function GanttBoardClient({
         }}
       >
         {drawerTask ? (
-          <TaskDrawerContent 
-            task={drawerTask} 
-            projects={projects} 
-            users={users} 
+          <TaskDrawerContent
+            task={drawerTask}
+            projects={projects}
+            users={users}
           />
         ) : null}
       </TaskDrawer>
@@ -336,25 +481,79 @@ export function GanttBoardClient({
   )
 }
 
-// ─────────────────── Row ────────────────────────────────────────
+// ─────────────────── Label Row (columna izquierda) ───────────────────
 
-function GanttRow({
+function GanttLabelRow({
   task,
+  focused,
+  onFocus,
+  rowHeight,
+}: {
+  task: SerializedTask
+  focused: boolean
+  onFocus: () => void
+  rowHeight: number
+}) {
+  const openDrawer = useUIStore((st) => st.openDrawer)
+  return (
+    <TaskWithContextMenu ctx={{ taskId: task.id }}>
+      <div
+        className={clsx(
+          'group flex cursor-pointer items-center gap-3 border-b border-border/50 px-4 transition-colors',
+          focused ? 'bg-secondary/60' : 'hover:bg-secondary/30',
+        )}
+        style={{ height: rowHeight }}
+        onClick={() => {
+          onFocus()
+          openDrawer(task.id)
+        }}
+      >
+        <div
+          className={clsx(
+            'h-2 w-2 rounded-full',
+            task.type === 'PMI_TASK' ? 'bg-emerald-500' : 'bg-indigo-500',
+          )}
+        />
+        <span
+          className="truncate text-sm font-medium text-foreground/90 group-hover:text-white"
+          title={task.title}
+        >
+          {task.title}
+        </span>
+        {(task.comments?.length ?? 0) > 0 && (
+          <span className="flex flex-shrink-0 items-center gap-0.5 text-[10px] text-muted-foreground">
+            <MessageSquare className="h-3 w-3" />
+            {task.comments?.length}
+          </span>
+        )}
+      </div>
+    </TaskWithContextMenu>
+  )
+}
+
+// ─────────────────── Bar Slot (canvas absoluto por fila) ───────────────────
+
+function GanttBarSlot({
+  task,
+  index,
   focused,
   onFocus,
   rangeStart,
   rangeDays,
-  totalWidth,
+  rowHeight,
+  cpm,
   onShift,
   onResizeStart,
   onResizeEnd,
 }: {
   task: SerializedTask
+  index: number
   focused: boolean
   onFocus: () => void
   rangeStart: Date
   rangeDays: number
-  totalWidth: number
+  rowHeight: number
+  cpm?: GanttCpmInfo
   onShift: (deltaDays: number) => void
   onResizeStart: (deltaDays: number) => void
   onResizeEnd: (deltaDays: number) => void
@@ -375,7 +574,6 @@ function GanttRow({
       : 0
 
   const bodyRef = useRef<HTMLDivElement>(null)
-  const openDrawer = useUIStore((st) => st.openDrawer)
 
   const bodyDrag = useHorizontalDrag({
     dayWidth: DAY_WIDTH,
@@ -398,141 +596,125 @@ function GanttRow({
 
   const isMilestone = !!task.isMilestone
   const progress = task.progress ?? 0
+  const isCritical = !!cpm?.isCritical
 
+  // Tooltip CPM (HU-2.4 simplificada): se construye solo si hay datos CPM.
+  const cpmTooltip = cpm
+    ? `${task.title}\n` +
+      `ES: día ${cpm.ES} · EF: día ${cpm.EF}\n` +
+      `LS: día ${cpm.LS} · LF: día ${cpm.LF}\n` +
+      `Float: ${cpm.totalFloat} día${Math.abs(cpm.totalFloat) !== 1 ? 's' : ''}` +
+      (cpm.isCritical ? '  · Crítica' : '')
+    : task.title
+
+  // Slot absoluto por fila — incluye línea horizontal de fila + barra/hito.
   return (
-    <TaskWithContextMenu ctx={{ taskId: task.id }}>
+    <div
+      className="absolute inset-x-0"
+      style={{ top: index * rowHeight, height: rowHeight }}
+    >
+      {/* Línea horizontal de la fila (separador). */}
       <div
-        className={clsx(
-          'group flex transition-colors cursor-pointer',
-          focused ? 'bg-secondary/60' : 'hover:bg-secondary/30',
-        )}
-        onClick={() => {
-          onFocus()
-          openDrawer(task.id)
-        }}
-      >
-        <div className="flex w-64 shrink-0 items-center gap-3 border-r border-border p-4">
+        aria-hidden
+        className="pointer-events-none absolute inset-x-0 bottom-0 border-b border-border/30"
+      />
+
+      {!hasDates && (
+        <div
+          className="absolute left-2 top-1/2 z-10 inline-flex -translate-y-1/2 items-center rounded border border-dashed border-border px-2 py-1 text-xs text-muted-foreground"
+          onClick={onFocus}
+        >
+          Sin fechas
+        </div>
+      )}
+
+      {hasDates && !isMilestone && (
+        <div
+          ref={bodyRef}
+          role="slider"
+          tabIndex={0}
+          aria-label={`Barra de ${task.title}`}
+          aria-valuemin={0}
+          aria-valuemax={rangeDays}
+          aria-valuenow={startDay ?? 0}
+          aria-valuetext={`${fmt(s)} a ${fmt(e)}`}
+          onFocus={onFocus}
+          title={cpmTooltip}
+          style={{
+            left,
+            width,
+            transform: bodyDrag.isDragging
+              ? `translateX(${bodyDrag.deltaPx}px)`
+              : undefined,
+          }}
+          className={clsx(
+            'absolute top-1/2 z-10 h-6 -translate-y-1/2 overflow-hidden rounded-md shadow-sm',
+            'flex cursor-grab active:cursor-grabbing',
+            'border focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-500',
+            isCritical
+              ? 'border-red-500/60 bg-red-900/40'
+              : task.type === 'PMI_TASK'
+                ? 'border-emerald-500/50 bg-emerald-900/40'
+                : 'border-indigo-500/50 bg-indigo-900/40',
+            focused && 'ring-2 ring-indigo-500/60',
+            bodyDrag.isDragging && 'opacity-80',
+          )}
+          {...bodyDrag.dragProps}
+        >
+          {/* progreso */}
           <div
             className={clsx(
-              'h-2 w-2 rounded-full',
-              task.type === 'PMI_TASK' ? 'bg-emerald-500' : 'bg-indigo-500',
+              'h-full transition-all',
+              isCritical
+                ? 'bg-red-500'
+                : task.type === 'PMI_TASK'
+                  ? 'bg-emerald-500'
+                  : 'bg-indigo-500',
             )}
+            style={{ width: `${progress}%` }}
           />
-          <span
-            className="truncate text-sm font-medium text-foreground/90 group-hover:text-white"
-            title={task.title}
-          >
-            {task.title}
-          </span>
-          {(task.comments?.length ?? 0) > 0 && (
-            <span className="flex flex-shrink-0 items-center gap-0.5 text-[10px] text-muted-foreground">
-              <MessageSquare className="h-3 w-3" />
-              {task.comments?.length}
-            </span>
-          )}
-        </div>
 
+          {/* handle izquierdo */}
+          <div
+            role="button"
+            aria-label="Redimensionar inicio"
+            className="absolute left-0 top-0 h-full w-1.5 cursor-ew-resize bg-white/10 hover:bg-white/20"
+            {...leftDrag.dragProps}
+            onClick={(e) => e.stopPropagation()}
+          />
+          {/* handle derecho */}
+          <div
+            role="button"
+            aria-label="Redimensionar fin"
+            className="absolute right-0 top-0 h-full w-1.5 cursor-ew-resize bg-white/10 hover:bg-white/20"
+            {...rightDrag.dragProps}
+            onClick={(e) => e.stopPropagation()}
+          />
+        </div>
+      )}
+
+      {hasDates && isMilestone && (
         <div
-          className="relative flex-1 p-2"
-          style={{ minWidth: totalWidth }}
-        >
-          {/* grid columnas */}
-          <div aria-hidden className="pointer-events-none absolute inset-0 flex">
-            {Array.from({ length: rangeDays }).map((_, i) => (
-              <div
-                key={i}
-                className="shrink-0 border-r border-border/30"
-                style={{ width: DAY_WIDTH }}
-              />
-            ))}
-          </div>
-
-          {!hasDates && (
-            <div className="relative z-10 inline-flex items-center rounded border border-dashed border-border px-2 py-1 text-xs text-muted-foreground">
-              Sin fechas
-            </div>
+          role="img"
+          aria-label={`Hito ${task.title} el ${fmt(s)}`}
+          tabIndex={0}
+          onFocus={onFocus}
+          style={{
+            left: left + DAY_WIDTH / 2 - 8,
+            top: '50%',
+            transform: bodyDrag.isDragging
+              ? `translate(0, -50%) translateX(${bodyDrag.deltaPx}px) rotate(45deg)`
+              : 'translate(0, -50%) rotate(45deg)',
+          }}
+          className={clsx(
+            'absolute z-10 h-4 w-4 shadow-[0_0_10px_rgba(251,191,36,0.4)]',
+            isCritical ? 'bg-red-500' : 'bg-amber-400',
+            focused && 'ring-2 ring-amber-300',
           )}
-
-          {hasDates && !isMilestone && (
-            <div
-              ref={bodyRef}
-              role="slider"
-              tabIndex={0}
-              aria-label={`Barra de ${task.title}`}
-              aria-valuemin={0}
-              aria-valuemax={rangeDays}
-              aria-valuenow={startDay ?? 0}
-              aria-valuetext={`${fmt(s)} a ${fmt(e)}`}
-              onFocus={onFocus}
-              style={{
-                left,
-                width,
-                transform: bodyDrag.isDragging
-                  ? `translateX(${bodyDrag.deltaPx}px)`
-                  : undefined,
-              }}
-              className={clsx(
-                'absolute top-1/2 z-10 h-6 -translate-y-1/2 overflow-hidden rounded-md shadow-sm',
-                'flex cursor-grab active:cursor-grabbing',
-                'border focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-500',
-                task.type === 'PMI_TASK'
-                  ? 'border-emerald-500/50 bg-emerald-900/40'
-                  : 'border-indigo-500/50 bg-indigo-900/40',
-                focused && 'ring-2 ring-indigo-500/60',
-                bodyDrag.isDragging && 'opacity-80',
-              )}
-              {...bodyDrag.dragProps}
-            >
-              {/* progreso */}
-              <div
-                className={clsx(
-                  'h-full transition-all',
-                  task.type === 'PMI_TASK' ? 'bg-emerald-500' : 'bg-indigo-500',
-                )}
-                style={{ width: `${progress}%` }}
-              />
-
-              {/* handle izquierdo */}
-              <div
-                role="button"
-                aria-label="Redimensionar inicio"
-                className="absolute left-0 top-0 h-full w-1.5 cursor-ew-resize bg-white/10 hover:bg-white/20"
-                {...leftDrag.dragProps}
-                onClick={(e) => e.stopPropagation()}
-              />
-              {/* handle derecho */}
-              <div
-                role="button"
-                aria-label="Redimensionar fin"
-                className="absolute right-0 top-0 h-full w-1.5 cursor-ew-resize bg-white/10 hover:bg-white/20"
-                {...rightDrag.dragProps}
-                onClick={(e) => e.stopPropagation()}
-              />
-            </div>
-          )}
-
-          {hasDates && isMilestone && (
-            <div
-              role="img"
-              aria-label={`Hito ${task.title} el ${fmt(s)}`}
-              tabIndex={0}
-              onFocus={onFocus}
-              style={{
-                left: left + DAY_WIDTH / 2 - 8,
-                transform: bodyDrag.isDragging
-                  ? `translateX(${bodyDrag.deltaPx}px) rotate(45deg)`
-                  : 'rotate(45deg)',
-              }}
-              className={clsx(
-                'absolute top-1/2 z-10 h-4 w-4 -translate-y-1/2 bg-amber-400 shadow-[0_0_10px_rgba(251,191,36,0.4)]',
-                focused && 'ring-2 ring-amber-300',
-              )}
-              title={task.title}
-              {...bodyDrag.dragProps}
-            />
-          )}
-        </div>
-      </div>
-    </TaskWithContextMenu>
+          title={cpmTooltip}
+          {...bodyDrag.dragProps}
+        />
+      )}
+    </div>
   )
 }
