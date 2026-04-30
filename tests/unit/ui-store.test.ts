@@ -8,6 +8,7 @@ beforeEach(() => {
     commandPaletteOpen: false,
     shortcutsOverlayOpen: false,
     columnPrefs: {},
+    criticalOnly: false,
   })
 })
 
@@ -79,5 +80,43 @@ describe('uiStore · overlays', () => {
     useUIStore.getState().toggleCommandPalette(true)
     useUIStore.getState().toggleCommandPalette(false)
     expect(useUIStore.getState().commandPaletteOpen).toBe(false)
+  })
+})
+
+describe('uiStore · criticalOnly (HU-2.3)', () => {
+  it('estado inicial false', () => {
+    expect(useUIStore.getState().criticalOnly).toBe(false)
+  })
+
+  it('toggleCriticalOnly() alterna el flag', () => {
+    useUIStore.getState().toggleCriticalOnly()
+    expect(useUIStore.getState().criticalOnly).toBe(true)
+    useUIStore.getState().toggleCriticalOnly()
+    expect(useUIStore.getState().criticalOnly).toBe(false)
+  })
+
+  it('toggleCriticalOnly(true|false) fuerza estado explícito', () => {
+    useUIStore.getState().toggleCriticalOnly(true)
+    expect(useUIStore.getState().criticalOnly).toBe(true)
+    useUIStore.getState().toggleCriticalOnly(true) // idempotente
+    expect(useUIStore.getState().criticalOnly).toBe(true)
+    useUIStore.getState().toggleCriticalOnly(false)
+    expect(useUIStore.getState().criticalOnly).toBe(false)
+  })
+
+  it('persiste en localStorage vía partialize', async () => {
+    // Activamos y forzamos la persistencia (zustand/persist es sync con
+    // localStorage, pero exponemos rehydrate para reescribir el snapshot).
+    useUIStore.getState().toggleCriticalOnly(true)
+    // Persiste sincrónicamente — si el partialize no incluye la clave, el
+    // snapshot no la traerá y este aserto fallaría.
+    const raw =
+      typeof localStorage !== 'undefined' ? localStorage.getItem('followup-ui') : null
+    expect(raw).toBeTruthy()
+    const parsed = raw ? JSON.parse(raw) : null
+    expect(parsed?.state?.criticalOnly).toBe(true)
+    // Asegura que selección/drawer NO se persiste (regresión defensiva).
+    expect(parsed?.state?.selectedIds).toBeUndefined()
+    expect(parsed?.state?.drawerTaskId).toBeUndefined()
   })
 })
