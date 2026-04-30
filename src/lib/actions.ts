@@ -4,6 +4,7 @@ import prisma from '@/lib/prisma'
 import { revalidatePath } from 'next/cache'
 import { after } from 'next/server'
 import { sendMentionNotification } from '@/lib/email/mention-notification'
+import { invalidateCpmCache } from '@/lib/scheduling/invalidate'
 import type {
   TaskType,
   ProjectStatus,
@@ -210,6 +211,7 @@ export async function createTask(formData: FormData) {
       ...(referenceUrl ? { referenceUrl } : {}),
     }
   })
+  invalidateCpmCache(projectId)
   revalidatePath('/list')
   revalidatePath('/kanban')
   revalidatePath('/gantt')
@@ -296,6 +298,11 @@ export async function updateTask(formData: FormData) {
     })] : [])
   ])
 
+  // Invalidar cache CPM si la mutación afectó a campos relevantes
+  // (fechas, hito). El resto de campos no afecta al grafo, pero el coste
+  // de invalidar es trivial frente a la complejidad de discriminar.
+  invalidateCpmCache(taskToUpdate.projectId)
+
   revalidatePath('/list')
   revalidatePath('/kanban')
   revalidatePath('/gantt')
@@ -308,7 +315,14 @@ export async function deleteTask(formData: FormData) {
   const id = formData.get('id') as string
   if (!id) throw new Error('ID es requerido')
 
+  // Capturar projectId antes del delete para invalidar el cache CPM.
+  const t = await prisma.task.findUnique({
+    where: { id },
+    select: { projectId: true },
+  })
+
   await prisma.task.delete({ where: { id } })
+  if (t) invalidateCpmCache(t.projectId)
   revalidatePath('/list')
   revalidatePath('/kanban')
   revalidatePath('/gantt')
@@ -327,6 +341,14 @@ export async function addDependency(formData: FormData) {
     update: { type: type as DependencyType },
     create: { predecessorId, successorId, type: type as DependencyType }
   })
+
+  // Invalidar CPM del proyecto del predecesor (mismo proyecto que el sucesor
+  // por construcción en el resto del código).
+  const pred = await prisma.task.findUnique({
+    where: { id: predecessorId },
+    select: { projectId: true },
+  })
+  if (pred) invalidateCpmCache(pred.projectId)
   revalidatePath('/gantt')
 }
 
@@ -334,9 +356,16 @@ export async function removeDependency(formData: FormData) {
   const predecessorId = formData.get('predecessorId') as string
   const successorId = formData.get('successorId') as string
 
+  // Capturar projectId antes del delete (para invalidar cache).
+  const pred = await prisma.task.findUnique({
+    where: { id: predecessorId },
+    select: { projectId: true },
+  })
+
   await prisma.taskDependency.delete({
     where: { predecessorId_successorId: { predecessorId, successorId } }
   })
+  if (pred) invalidateCpmCache(pred.projectId)
   revalidatePath('/gantt')
 }
 
