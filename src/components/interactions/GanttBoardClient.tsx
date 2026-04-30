@@ -5,7 +5,11 @@ import { MessageSquare } from 'lucide-react'
 import { clsx } from 'clsx'
 import type { SerializedTask } from '@/lib/types'
 import { updateTaskDates, shiftTaskDates } from '@/lib/actions/schedule'
-import { createDependency } from '@/lib/actions/dependencies'
+import {
+  createDependency,
+  deleteDependency,
+  updateDependency,
+} from '@/lib/actions/dependencies'
 import { useHorizontalDrag } from '@/lib/hooks/useHorizontalDrag'
 import { TaskWithContextMenu } from './TaskContextMenuItems'
 import { TaskDrawer } from './TaskDrawer'
@@ -20,6 +24,10 @@ import {
   type GanttDependencyEdge,
   type GanttTaskPosition,
 } from './GanttDependencyLayer'
+import {
+  DependencyEditor,
+  type DependencyEditorPayload,
+} from './DependencyEditor'
 
 type ParentOption = Pick<SerializedTask, 'id' | 'title' | 'mnemonic'> & {
   project?: { id: string; name: string } | null
@@ -39,6 +47,8 @@ export type GanttCpmInfo = {
 
 /** Dependencia serializable con tipo Prisma (mapeada a 2-letras para la capa SVG). */
 export type GanttDependencyDescriptor = {
+  /** Id de la fila en BD; necesario para `updateDependency` (HU-1.4). */
+  id: string
   predecessorId: string
   successorId: string
   type: 'FS' | 'SS' | 'FF' | 'SF'
@@ -412,13 +422,99 @@ export function GanttBoardClient({
         (d) => visibleIdSet.has(d.predecessorId) && visibleIdSet.has(d.successorId),
       )
       .map((d) => ({
+        id: d.id,
         predecessorId: d.predecessorId,
         successorId: d.successorId,
         type: d.type,
+        lagDays: d.lagDays,
         isCritical:
           criticalIds.has(d.predecessorId) && criticalIds.has(d.successorId),
       }))
   }, [dependencies, visibleIdSet, criticalIds])
+
+  // ─── HU-1.4 · estado del editor de dependencias y del menú contextual ───
+  //
+  // `contextMenu` se setea al click derecho sobre la flecha → renderiza un
+  // mini-popover con [Editar / Cambiar tipo › / Eliminar]. El sub-menú
+  // "Cambiar tipo" llama updateDependency directamente; los otros items
+  // abren el `DependencyEditor` (Dialog).
+  const [editorState, setEditorState] = useState<{
+    payload: DependencyEditorPayload
+    position: { x: number; y: number }
+  } | null>(null)
+  const [depMenu, setDepMenu] = useState<{
+    edge: GanttDependencyEdge
+    position: { x: number; y: number }
+  } | null>(null)
+
+  // Mapa rápido id → tarea para construir el payload del editor (mnemonic+title).
+  const taskById = useMemo(() => {
+    const m = new Map<string, SerializedTask>()
+    for (const t of local) m.set(t.id, t)
+    return m
+  }, [local])
+
+  function buildEditorPayload(
+    edge: GanttDependencyEdge,
+  ): DependencyEditorPayload | null {
+    const dep = dependencies?.find((d) => d.id === edge.id)
+    if (!dep) return null
+    const pred = taskById.get(dep.predecessorId)
+    const succ = taskById.get(dep.successorId)
+    if (!pred || !succ) return null
+    return {
+      id: dep.id,
+      predecessorId: dep.predecessorId,
+      successorId: dep.successorId,
+      type: dep.type,
+      lagDays: dep.lagDays,
+      predecessor: { mnemonic: pred.mnemonic, title: pred.title },
+      successor: { mnemonic: succ.mnemonic, title: succ.title },
+    }
+  }
+
+  function openEditorFromEdge(
+    edge: GanttDependencyEdge,
+    pos: { x: number; y: number },
+  ) {
+    const payload = buildEditorPayload(edge)
+    if (!payload) {
+      toast.error('No se pudo cargar la dependencia')
+      return
+    }
+    setEditorState({ payload, position: pos })
+  }
+
+  async function changeDepType(
+    edge: GanttDependencyEdge,
+    nextType: 'FS' | 'SS' | 'FF' | 'SF',
+  ) {
+    if (edge.type === nextType) return
+    try {
+      await updateDependency({ id: edge.id, type: nextType })
+      toast.success(`Tipo cambiado a ${nextType}`)
+      announce(`Tipo cambiado a ${nextType}`)
+    } catch (err) {
+      const { code, detail } = parseActionError(err)
+      toast.error(
+        code === 'CYCLE_DETECTED' ? `Ciclo detectado · ${detail}` : detail,
+      )
+    }
+  }
+
+  async function deleteEdge(edge: GanttDependencyEdge) {
+    try {
+      await deleteDependency({
+        predecessorId: edge.predecessorId,
+        successorId: edge.successorId,
+      })
+      toast.success('Dependencia eliminada')
+      announce('Dependencia eliminada')
+    } catch (err) {
+      const { detail } = parseActionError(err)
+      toast.error(detail)
+    }
+  }
 
   return (
     <>
@@ -548,13 +644,20 @@ export function GanttBoardClient({
                 />
               ))}
 
-              {/* Capa SVG superpuesta — flechas de dependencias FS (HU-1.2). */}
+              {/* Capa SVG superpuesta — flechas de dependencias FS (HU-1.2).
+                  HU-1.4: clic derecho sobre la flecha abre el mini-menú. */}
               {edges.length > 0 && (
                 <GanttDependencyLayer
                   tasks={positions}
                   dependencies={edges}
                   width={totalWidth}
                   height={canvasHeight}
+                  onDependencyContextMenu={(edge, ev) => {
+                    setDepMenu({
+                      edge,
+                      position: { x: ev.clientX, y: ev.clientY },
+                    })
+                  }}
                 />
               )}
 
@@ -622,7 +725,157 @@ export function GanttBoardClient({
           />
         ) : null}
       </TaskDrawer>
+
+      {/* HU-1.4 · mini-menú contextual sobre la flecha. Implementado a mano
+          (no Radix ContextMenu) porque el trigger es un <path> SVG y los
+          primitives de Radix esperan un trigger DOM-element con eventos
+          delegables; lanzar el menú vía coordenadas sigue siendo accesible
+          si cerramos con Escape y outside-click. */}
+      {depMenu && (
+        <DependencyArrowMenu
+          edge={depMenu.edge}
+          position={depMenu.position}
+          onClose={() => setDepMenu(null)}
+          onEdit={() => {
+            const pos = depMenu.position
+            const edge = depMenu.edge
+            setDepMenu(null)
+            openEditorFromEdge(edge, pos)
+          }}
+          onChangeType={async (next) => {
+            const edge = depMenu.edge
+            setDepMenu(null)
+            await changeDepType(edge, next)
+          }}
+          onDelete={async () => {
+            const edge = depMenu.edge
+            setDepMenu(null)
+            await deleteEdge(edge)
+          }}
+        />
+      )}
+
+      <DependencyEditor
+        dependency={editorState?.payload ?? null}
+        position={editorState?.position ?? null}
+        onClose={() => setEditorState(null)}
+      />
     </>
+  )
+}
+
+// ─────────────────── Mini-menú de la flecha (HU-1.4) ───────────────────
+
+function DependencyArrowMenu({
+  edge,
+  position,
+  onClose,
+  onEdit,
+  onChangeType,
+  onDelete,
+}: {
+  edge: GanttDependencyEdge
+  position: { x: number; y: number }
+  onClose: () => void
+  onEdit: () => void
+  onChangeType: (next: 'FS' | 'SS' | 'FF' | 'SF') => void
+  onDelete: () => void
+}) {
+  const [showSubmenu, setShowSubmenu] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose()
+    }
+    const onDocMouseDown = (e: MouseEvent) => {
+      if (!ref.current) return
+      if (e.target instanceof Node && !ref.current.contains(e.target)) onClose()
+    }
+    document.addEventListener('keydown', onKey)
+    document.addEventListener('mousedown', onDocMouseDown)
+    return () => {
+      document.removeEventListener('keydown', onKey)
+      document.removeEventListener('mousedown', onDocMouseDown)
+    }
+  }, [onClose])
+
+  const ITEM = clsx(
+    'flex w-full items-center justify-between gap-3 rounded-md px-2 py-1.5 text-left text-sm text-foreground',
+    'hover:bg-secondary/60 focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-indigo-500',
+  )
+
+  // Anclaje al click. Clamp básico al viewport.
+  const W = typeof window !== 'undefined' ? window.innerWidth : 1024
+  const H = typeof window !== 'undefined' ? window.innerHeight : 768
+  const left = Math.max(8, Math.min(position.x, W - 240))
+  const top = Math.max(8, Math.min(position.y, H - 220))
+
+  return (
+    <div
+      ref={ref}
+      role="menu"
+      aria-label="Acciones de dependencia"
+      className="fixed z-50 min-w-[220px] overflow-visible rounded-[10px] border border-border bg-card p-1 shadow-lg"
+      style={{ left, top }}
+    >
+      <button type="button" role="menuitem" className={ITEM} onClick={onEdit}>
+        <span>Editar dependencia…</span>
+      </button>
+      <div
+        role="menuitem"
+        aria-haspopup="menu"
+        aria-expanded={showSubmenu}
+        tabIndex={0}
+        onMouseEnter={() => setShowSubmenu(true)}
+        onMouseLeave={() => setShowSubmenu(false)}
+        onFocus={() => setShowSubmenu(true)}
+        onBlur={() => setShowSubmenu(false)}
+        className="relative"
+      >
+        <button type="button" className={ITEM}>
+          <span>Cambiar tipo</span>
+          <span aria-hidden>›</span>
+        </button>
+        {showSubmenu && (
+          <div
+            className="absolute left-full top-0 ml-1 min-w-[120px] rounded-[10px] border border-border bg-card p-1 shadow-lg"
+            role="menu"
+          >
+            {(['FS', 'SS', 'FF', 'SF'] as const).map((t) => (
+              <button
+                key={t}
+                type="button"
+                role="menuitemradio"
+                aria-checked={edge.type === t}
+                disabled={edge.type === t}
+                onClick={() => onChangeType(t)}
+                className={clsx(
+                  ITEM,
+                  edge.type === t && 'bg-indigo-500/15 text-indigo-200',
+                )}
+              >
+                <span>{t}</span>
+                {edge.type === t && (
+                  <span aria-hidden className="text-xs">
+                    ✓
+                  </span>
+                )}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+      <div role="separator" className="my-1 h-px bg-border" />
+      <button
+        type="button"
+        role="menuitem"
+        onClick={onDelete}
+        className={clsx(ITEM, 'text-red-400 hover:bg-red-500/10')}
+      >
+        <span>Eliminar dependencia</span>
+      </button>
+    </div>
   )
 }
 

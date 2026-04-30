@@ -19,9 +19,12 @@ export interface GanttTaskPosition {
 
 /** Dependencia entre dos tareas. POC sólo dibuja FS. */
 export interface GanttDependencyEdge {
+  /** Id de BD — necesario para que el editor (HU-1.4) pueda actualizar/borrar. */
+  id: string
   predecessorId: string
   successorId: string
   type: 'FS' | 'SS' | 'FF' | 'SF'
+  lagDays: number
   /** Si la dependencia forma parte de la ruta crítica (color rojo). */
   isCritical?: boolean
 }
@@ -33,6 +36,14 @@ interface Props {
   width: number
   /** Alto total del lienzo (px) — coincide con (#filas * altura de fila). */
   height: number
+  /**
+   * HU-1.4 · Click derecho sobre la flecha. Recibe la dep y la posición
+   * (clientX/clientY del evento, para anclar el menú/dialog en pantalla).
+   */
+  onDependencyContextMenu?: (
+    dep: GanttDependencyEdge,
+    event: { clientX: number; clientY: number },
+  ) => void
 }
 
 /**
@@ -53,6 +64,7 @@ export function GanttDependencyLayer({
   dependencies,
   width,
   height,
+  onDependencyContextMenu,
 }: Props) {
   const positionMap = useMemo(() => {
     const m = new Map<string, GanttTaskPosition>()
@@ -61,7 +73,12 @@ export function GanttDependencyLayer({
   }, [tasks])
 
   const paths = useMemo(() => {
-    const result: { d: string; key: string; isCritical: boolean }[] = []
+    const result: {
+      d: string
+      key: string
+      isCritical: boolean
+      dep: GanttDependencyEdge
+    }[] = []
     const HORIZ_OFFSET = 12 // px de salida horizontal antes de doblar
 
     for (const dep of dependencies) {
@@ -90,17 +107,27 @@ export function GanttDependencyLayer({
       }
       result.push({
         d,
-        key: `${dep.predecessorId}->${dep.successorId}`,
+        key: dep.id || `${dep.predecessorId}->${dep.successorId}`,
         isCritical: !!dep.isCritical,
+        dep,
       })
     }
     return result
   }, [dependencies, positionMap])
 
+  // Si hay handler de menú, las flechas reciben pointer events (clic derecho).
+  // En modo "view-only" la capa entera mantiene `pointer-events-none` para no
+  // robar foco al canvas (drag, etc).
+  const interactive = !!onDependencyContextMenu
+
   return (
     <svg
-      aria-hidden
-      className="pointer-events-none absolute left-0 top-0"
+      aria-hidden={!interactive}
+      className={
+        interactive
+          ? 'absolute left-0 top-0 pointer-events-none'
+          : 'pointer-events-none absolute left-0 top-0'
+      }
       width={width}
       height={height}
       viewBox={`0 0 ${width} ${height}`}
@@ -131,22 +158,42 @@ export function GanttDependencyLayer({
         </marker>
       </defs>
       {paths.map((p) => (
-        <path
-          key={p.key}
-          d={p.d}
-          fill="none"
-          strokeWidth={p.isCritical ? 2 : 1.5}
-          className={
-            p.isCritical
-              ? 'stroke-red-500'
-              : 'stroke-muted-foreground/70'
-          }
-          markerEnd={
-            p.isCritical
-              ? 'url(#gantt-arrow-critical)'
-              : 'url(#gantt-arrow-default)'
-          }
-        />
+        <g key={p.key}>
+          {/* Path ancho transparente (hit-area) para que el clic derecho sea
+              fácil de aterrizar — la flecha visible es de 1.5–2 px. */}
+          {interactive && (
+            <path
+              d={p.d}
+              fill="none"
+              strokeWidth={12}
+              stroke="transparent"
+              className="pointer-events-stroke cursor-context-menu"
+              data-dep-id={p.dep.id}
+              onContextMenu={(e) => {
+                e.preventDefault()
+                onDependencyContextMenu?.(p.dep, {
+                  clientX: e.clientX,
+                  clientY: e.clientY,
+                })
+              }}
+            />
+          )}
+          <path
+            d={p.d}
+            fill="none"
+            strokeWidth={p.isCritical ? 2 : 1.5}
+            className={
+              p.isCritical
+                ? 'stroke-red-500 pointer-events-none'
+                : 'stroke-muted-foreground/70 pointer-events-none'
+            }
+            markerEnd={
+              p.isCritical
+                ? 'url(#gantt-arrow-critical)'
+                : 'url(#gantt-arrow-default)'
+            }
+          />
+        </g>
       ))}
     </svg>
   )

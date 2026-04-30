@@ -15,6 +15,8 @@ import { wouldCreateCycle } from '@/lib/scheduling/cycle'
 
 export type DependencyErrorCode =
   | 'INVALID_INPUT'
+  | 'INVALID_LAG'
+  | 'INVALID_TYPE'
   | 'NOT_FOUND'
   | 'SELF_DEPENDENCY'
   | 'CROSS_PROJECT'
@@ -37,14 +39,40 @@ const DEP_TYPE_2L_TO_PRISMA: Record<
   SF: 'START_TO_FINISH',
 }
 
+// Límites de lag/lead expuestos al cliente (también validados aquí). Negativos
+// son leads (solapamientos), positivos son lags (esperas). Los límites son
+// pragmáticos: un mes de adelanto, un año de espera. Ajustables si el negocio
+// lo pide.
+const LAG_MIN_DAYS = -30
+const LAG_MAX_DAYS = 365
+
+const TWO_LETTER_TYPE = z.enum(['FS', 'SS', 'FF', 'SF'])
+const LAG_DAYS_SCHEMA = z
+  .number()
+  .int()
+  .min(LAG_MIN_DAYS)
+  .max(LAG_MAX_DAYS)
+
 const createSchema = z.object({
   predecessorId: z.string().min(1),
   successorId: z.string().min(1),
-  type: z.enum(['FS', 'SS', 'FF', 'SF']).default('FS'),
-  lagDays: z.number().int().default(0).optional(),
+  type: TWO_LETTER_TYPE.default('FS'),
+  lagDays: LAG_DAYS_SCHEMA.default(0).optional(),
 })
 
 export type CreateDependencyInput = z.input<typeof createSchema>
+
+const updateSchema = z
+  .object({
+    id: z.string().min(1),
+    type: TWO_LETTER_TYPE.optional(),
+    lagDays: LAG_DAYS_SCHEMA.optional(),
+  })
+  .refine((v) => v.type !== undefined || v.lagDays !== undefined, {
+    message: 'Debe especificar al menos `type` o `lagDays`',
+  })
+
+export type UpdateDependencyInput = z.input<typeof updateSchema>
 
 // ───────────────────────── Server actions ─────────────────────────
 
@@ -139,6 +167,99 @@ export async function createDependency(
   invalidateCpmCache(pred.projectId)
   revalidatePath('/gantt')
   return created
+}
+
+/**
+ * HU-1.4 · Actualiza tipo y/o lag de una dependencia existente.
+ *
+ * Validaciones (en orden):
+ *   1. Esquema (zod): id no vacío, tipo válido, lag ∈ [-30, 365] enteros, al
+ *      menos uno de {type, lagDays} presente.
+ *   2. Existe la dep en BD → `[NOT_FOUND]`.
+ *   3. Si se cambia el tipo, recalcular ciclos sobre el grafo del proyecto
+ *      excluyendo la propia arista (la actualización no debe colisionar consigo
+ *      misma) → `[CYCLE_DETECTED]`.
+ *
+ * D3 confirmada: cambiar tipo NO mueve sucesores. El CPM se recomputa al
+ * invalidar el cache del proyecto, pero las fechas reales de Task no se tocan.
+ */
+export async function updateDependency(
+  input: UpdateDependencyInput,
+): Promise<{ id: string }> {
+  const parsed = updateSchema.safeParse(input)
+  if (!parsed.success) {
+    // Distinguimos lag fuera de rango como `[INVALID_LAG]` para UX más fina.
+    const issues = parsed.error.issues
+    const lagIssue = issues.find((i) => i.path[0] === 'lagDays')
+    if (lagIssue) {
+      actionError('INVALID_LAG', `Lag debe ser entero entre ${LAG_MIN_DAYS} y ${LAG_MAX_DAYS}`)
+    }
+    const typeIssue = issues.find((i) => i.path[0] === 'type')
+    if (typeIssue) {
+      actionError('INVALID_TYPE', 'Tipo debe ser FS, SS, FF o SF')
+    }
+    actionError('INVALID_INPUT', issues.map((i) => i.message).join('; '))
+  }
+  const { id, type, lagDays } = parsed.data
+
+  const existing = await prisma.taskDependency.findUnique({
+    where: { id },
+    select: {
+      id: true,
+      predecessorId: true,
+      successorId: true,
+      type: true,
+      predecessor: { select: { projectId: true } },
+    },
+  })
+  if (!existing) actionError('NOT_FOUND', 'La dependencia no existe')
+
+  const projectId = existing.predecessor.projectId
+  if (!projectId) {
+    actionError('NOT_FOUND', 'La dependencia carece de proyecto asociado')
+  }
+
+  // Si cambia el tipo, revalidar ciclos. SS/FF/SF no introducen aristas en el
+  // DAG (la dirección sigue siendo predecessor → successor) pero queda como
+  // checkeo defensivo barato y consistente con `createDependency`.
+  if (type !== undefined) {
+    const projectTaskIds = await prisma.task.findMany({
+      where: { projectId, archivedAt: null },
+      select: { id: true },
+    })
+    const idSet = new Set(projectTaskIds.map((t) => t.id))
+    const projectDeps = await prisma.taskDependency.findMany({
+      where: {
+        AND: [
+          { predecessorId: { in: [...idSet] } },
+          { successorId: { in: [...idSet] } },
+        ],
+      },
+      select: { id: true, predecessorId: true, successorId: true },
+    })
+    // Excluir la propia arista del grafo para que la verificación no la cuente
+    // como pre-existente.
+    const remaining = projectDeps.filter((d) => d.id !== existing.id)
+    if (
+      wouldCreateCycle(remaining, existing.predecessorId, existing.successorId)
+    ) {
+      actionError('CYCLE_DETECTED', 'El cambio generaría un ciclo')
+    }
+  }
+
+  const data: { type?: PrismaDependencyType; lagDays?: number } = {}
+  if (type !== undefined) data.type = DEP_TYPE_2L_TO_PRISMA[type]
+  if (lagDays !== undefined) data.lagDays = lagDays
+
+  const updated = await prisma.taskDependency.update({
+    where: { id },
+    data,
+    select: { id: true },
+  })
+
+  invalidateCpmCache(projectId)
+  revalidatePath('/gantt')
+  return updated
 }
 
 /**

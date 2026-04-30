@@ -169,6 +169,7 @@ export default async function GanttTimeline({
             ],
           },
           select: {
+            id: true,
             predecessorId: true,
             successorId: true,
             type: true,
@@ -179,6 +180,7 @@ export default async function GanttTimeline({
       ])
 
       dependencies = depsDb.map((d) => ({
+        id: d.id,
         predecessorId: d.predecessorId,
         successorId: d.successorId,
         type: mapPrismaDepType(d.type),
