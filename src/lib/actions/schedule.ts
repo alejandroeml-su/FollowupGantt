@@ -2,6 +2,7 @@
 
 import prisma from '@/lib/prisma'
 import { revalidatePath } from 'next/cache'
+import { invalidateCpmCache } from '@/lib/scheduling/invalidate'
 
 // Ver ADR-001 y patrón de errores en `reorder.ts`
 export type ScheduleErrorCode =
@@ -55,14 +56,16 @@ export async function updateTaskDates(
     }
   }
 
-  await prisma.task.update({
+  const updated = await prisma.task.update({
     where: { id },
     data: {
       ...(startDate !== undefined && { startDate }),
       ...(endDate !== undefined && { endDate }),
     },
+    select: { projectId: true },
   })
 
+  invalidateCpmCache(updated.projectId)
   revalidateAllBoards()
   return { ok: true as const }
 }

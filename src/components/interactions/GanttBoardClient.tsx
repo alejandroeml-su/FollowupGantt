@@ -1,10 +1,15 @@
 'use client'
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { MessageSquare } from 'lucide-react'
 import { clsx } from 'clsx'
 import type { SerializedTask } from '@/lib/types'
 import { updateTaskDates, shiftTaskDates } from '@/lib/actions/schedule'
+import {
+  createDependency,
+  deleteDependency,
+  updateDependency,
+} from '@/lib/actions/dependencies'
 import { useHorizontalDrag } from '@/lib/hooks/useHorizontalDrag'
 import { TaskWithContextMenu } from './TaskContextMenuItems'
 import { TaskDrawer } from './TaskDrawer'
@@ -14,10 +19,40 @@ import { useTaskShortcuts } from '@/lib/hooks/useTaskShortcuts'
 import { toast } from './Toaster'
 import { TaskFiltersBar } from './TaskFiltersBar'
 import { EMPTY_TASK_FILTERS, filterTasks, type TaskFilters } from '@/lib/taskFilters'
+import {
+  GanttDependencyLayer,
+  type GanttDependencyEdge,
+  type GanttTaskPosition,
+} from './GanttDependencyLayer'
+import {
+  DependencyEditor,
+  type DependencyEditorPayload,
+} from './DependencyEditor'
 
 type ParentOption = Pick<SerializedTask, 'id' | 'title' | 'mnemonic'> & {
   project?: { id: string; name: string } | null
   projectId?: string
+}
+
+/** CPM info por tarea (subset serializable que llega del RSC). */
+export type GanttCpmInfo = {
+  id: string
+  ES: number
+  EF: number
+  LS: number
+  LF: number
+  totalFloat: number
+  isCritical: boolean
+}
+
+/** Dependencia serializable con tipo Prisma (mapeada a 2-letras para la capa SVG). */
+export type GanttDependencyDescriptor = {
+  /** Id de la fila en BD; necesario para `updateDependency` (HU-1.4). */
+  id: string
+  predecessorId: string
+  successorId: string
+  type: 'FS' | 'SS' | 'FF' | 'SF'
+  lagDays: number
 }
 
 type Props = {
@@ -31,9 +66,16 @@ type Props = {
   gerencias?: { id: string; name: string }[]
   areas?: { id: string; name: string; gerenciaId?: string | null }[]
   allTasks?: ParentOption[]
+  /** Resultados CPM agregados de todos los proyectos visibles (HU-1.2). */
+  cpmByTaskId?: Record<string, GanttCpmInfo>
+  /** Dependencias inter-tareas (todas las que conectan tareas visibles). */
+  dependencies?: GanttDependencyDescriptor[]
+  /** Si CPM detectó al menos un ciclo en cualquier proyecto, render banner. */
+  hasCpmCycle?: boolean
 }
 
 const DAY_WIDTH = 40 // px por día — balance legibilidad / densidad
+const ROW_HEIGHT = 40 // px — altura fija por fila para alinear SVG <-> barras
 
 function parseISO(s: string | null | undefined): Date | null {
   if (!s) return null
@@ -82,6 +124,9 @@ export function GanttBoardClient({
   users,
   gerencias = [],
   areas = [],
+  cpmByTaskId,
+  dependencies,
+  hasCpmCycle,
 }: Props) {
   const start = useMemo(() => new Date(rangeStart), [rangeStart])
   const days = useMemo(
@@ -222,6 +267,254 @@ export function GanttBoardClient({
   }
 
   const totalWidth = rangeDays * DAY_WIDTH
+  const canvasHeight = Math.max(ROW_HEIGHT, visibleLocal.length * ROW_HEIGHT)
+
+  // ─── HU-1.3: modo conexión (drag-handle para crear dependencia) ───
+  //
+  // `connection.from` apunta al taskId origen y a las coordenadas (en el
+  // sistema del canvas) del punto donde nació el drag — ahí ancla la línea
+  // SVG. `cursor` se actualiza en cada mousemove. `targetTaskId` se setea
+  // cuando el cursor está dentro de una barra (hover-target). `mouseup`
+  // cierra el modo: si hay target válido → invoca server action; si no
+  // (drop fuera o Escape) → cancela.
+  const canvasRef = useRef<HTMLDivElement>(null)
+  const [connection, setConnection] = useState<{
+    fromTaskId: string
+    fromX: number
+    fromY: number
+    cursorX: number
+    cursorY: number
+    targetTaskId: string | null
+  } | null>(null)
+  const connectionRef = useRef(connection)
+  connectionRef.current = connection
+
+  /**
+   * Convierte coordenadas globales (clientX/Y del MouseEvent) al sistema
+   * de píxeles del canvas. Si no hay canvas montado (caso degenerado),
+   * retorna {0,0}.
+   */
+  const toCanvasCoords = useCallback((clientX: number, clientY: number) => {
+    const el = canvasRef.current
+    if (!el) return { x: 0, y: 0 }
+    const r = el.getBoundingClientRect()
+    return { x: clientX - r.left, y: clientY - r.top }
+  }, [])
+
+  const beginConnection = useCallback(
+    (taskId: string, fromX: number, fromY: number) => {
+      setConnection({
+        fromTaskId: taskId,
+        fromX,
+        fromY,
+        cursorX: fromX,
+        cursorY: fromY,
+        targetTaskId: null,
+      })
+    },
+    [],
+  )
+
+  // Mousemove global mientras dura el modo conexión — actualiza la punta
+  // de la línea temporal y resuelve hover-target consultando el dataset
+  // `data-gantt-task-id` de los elementos bajo el cursor.
+  useEffect(() => {
+    if (!connection) return
+    const onMove = (e: MouseEvent) => {
+      const cur = connectionRef.current
+      if (!cur) return
+      const { x, y } = toCanvasCoords(e.clientX, e.clientY)
+      // Detección de target via elementsFromPoint — funciona aunque la
+      // capa SVG esté encima (es pointer-events:none).
+      let targetId: string | null = null
+      if (typeof document !== 'undefined') {
+        const els = document.elementsFromPoint(e.clientX, e.clientY)
+        for (const el of els) {
+          if (!(el instanceof HTMLElement)) continue
+          const id = el.dataset.ganttTaskId
+          if (id && id !== cur.fromTaskId) {
+            targetId = id
+            break
+          }
+        }
+      }
+      setConnection({ ...cur, cursorX: x, cursorY: y, targetTaskId: targetId })
+    }
+    const onUp = async () => {
+      const cur = connectionRef.current
+      setConnection(null)
+      if (!cur) return
+      const targetId = cur.targetTaskId
+      if (!targetId) return
+      // Self-dep ya filtrado en mousemove (targetId !== fromTaskId).
+      try {
+        await createDependency({
+          predecessorId: cur.fromTaskId,
+          successorId: targetId,
+          type: 'FS',
+          lagDays: 0,
+        })
+        toast.success('Dependencia FS creada')
+      } catch (err) {
+        const { code, detail } = parseActionError(err)
+        const msg =
+          code === 'CYCLE_DETECTED'
+            ? `Ciclo detectado · ${detail}`
+            : code === 'DEPENDENCY_EXISTS'
+              ? `Ya existe · ${detail}`
+              : code === 'CROSS_PROJECT'
+                ? `Proyectos distintos · ${detail}`
+                : detail
+        toast.error(msg)
+      }
+    }
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setConnection(null)
+    }
+    window.addEventListener('mousemove', onMove)
+    window.addEventListener('mouseup', onUp)
+    window.addEventListener('keydown', onKey)
+    return () => {
+      window.removeEventListener('mousemove', onMove)
+      window.removeEventListener('mouseup', onUp)
+      window.removeEventListener('keydown', onKey)
+    }
+  }, [connection, toCanvasCoords])
+
+  // Posiciones de barras visibles (para la capa SVG). Solo tareas con fechas
+  // dentro del rango aparecen aquí; el resto no tiene flechas.
+  const positions = useMemo<GanttTaskPosition[]>(() => {
+    const result: GanttTaskPosition[] = []
+    visibleLocal.forEach((task, i) => {
+      const s = parseISO(task.startDate)
+      const e = parseISO(task.endDate)
+      if (!s || !e) return
+      const startDay = Math.max(0, daysBetween(start, s))
+      const endDay = Math.min(rangeDays, daysBetween(start, e) + 1)
+      if (endDay <= 0 || startDay >= rangeDays) return
+      const left = startDay * DAY_WIDTH
+      const width = Math.max(DAY_WIDTH, (endDay - startDay) * DAY_WIDTH)
+      const right = left + width
+      const middleY = i * ROW_HEIGHT + ROW_HEIGHT / 2
+      result.push({ id: task.id, left, right, middleY })
+    })
+    return result
+  }, [visibleLocal, start, rangeDays])
+
+  // Edges para la capa SVG: solo los que conectan tareas visibles. La capa
+  // del POC ya filtra por type !== 'FS'; las demás se difieren a HU-1.3.
+  const visibleIdSet = useMemo(
+    () => new Set(visibleLocal.map((t) => t.id)),
+    [visibleLocal],
+  )
+  const criticalIds = useMemo(() => {
+    const out = new Set<string>()
+    if (!cpmByTaskId) return out
+    for (const id of visibleIdSet) {
+      if (cpmByTaskId[id]?.isCritical) out.add(id)
+    }
+    return out
+  }, [cpmByTaskId, visibleIdSet])
+  const edges = useMemo<GanttDependencyEdge[]>(() => {
+    if (!dependencies) return []
+    return dependencies
+      .filter(
+        (d) => visibleIdSet.has(d.predecessorId) && visibleIdSet.has(d.successorId),
+      )
+      .map((d) => ({
+        id: d.id,
+        predecessorId: d.predecessorId,
+        successorId: d.successorId,
+        type: d.type,
+        lagDays: d.lagDays,
+        isCritical:
+          criticalIds.has(d.predecessorId) && criticalIds.has(d.successorId),
+      }))
+  }, [dependencies, visibleIdSet, criticalIds])
+
+  // ─── HU-1.4 · estado del editor de dependencias y del menú contextual ───
+  //
+  // `contextMenu` se setea al click derecho sobre la flecha → renderiza un
+  // mini-popover con [Editar / Cambiar tipo › / Eliminar]. El sub-menú
+  // "Cambiar tipo" llama updateDependency directamente; los otros items
+  // abren el `DependencyEditor` (Dialog).
+  const [editorState, setEditorState] = useState<{
+    payload: DependencyEditorPayload
+    position: { x: number; y: number }
+  } | null>(null)
+  const [depMenu, setDepMenu] = useState<{
+    edge: GanttDependencyEdge
+    position: { x: number; y: number }
+  } | null>(null)
+
+  // Mapa rápido id → tarea para construir el payload del editor (mnemonic+title).
+  const taskById = useMemo(() => {
+    const m = new Map<string, SerializedTask>()
+    for (const t of local) m.set(t.id, t)
+    return m
+  }, [local])
+
+  function buildEditorPayload(
+    edge: GanttDependencyEdge,
+  ): DependencyEditorPayload | null {
+    const dep = dependencies?.find((d) => d.id === edge.id)
+    if (!dep) return null
+    const pred = taskById.get(dep.predecessorId)
+    const succ = taskById.get(dep.successorId)
+    if (!pred || !succ) return null
+    return {
+      id: dep.id,
+      predecessorId: dep.predecessorId,
+      successorId: dep.successorId,
+      type: dep.type,
+      lagDays: dep.lagDays,
+      predecessor: { mnemonic: pred.mnemonic, title: pred.title },
+      successor: { mnemonic: succ.mnemonic, title: succ.title },
+    }
+  }
+
+  function openEditorFromEdge(
+    edge: GanttDependencyEdge,
+    pos: { x: number; y: number },
+  ) {
+    const payload = buildEditorPayload(edge)
+    if (!payload) {
+      toast.error('No se pudo cargar la dependencia')
+      return
+    }
+    setEditorState({ payload, position: pos })
+  }
+
+  async function changeDepType(
+    edge: GanttDependencyEdge,
+    nextType: 'FS' | 'SS' | 'FF' | 'SF',
+  ) {
+    if (edge.type === nextType) return
+    try {
+      await updateDependency({ id: edge.id, type: nextType })
+      toast.success(`Tipo cambiado a ${nextType}`)
+      announce(`Tipo cambiado a ${nextType}`)
+    } catch (err) {
+      const { code, detail } = parseActionError(err)
+      toast.error(
+        code === 'CYCLE_DETECTED' ? `Ciclo detectado · ${detail}` : detail,
+      )
+    }
+  }
+
+  async function deleteEdge(edge: GanttDependencyEdge) {
+    try {
+      await deleteDependency({
+        predecessorId: edge.predecessorId,
+        successorId: edge.successorId,
+      })
+      toast.success('Dependencia eliminada')
+      announce('Dependencia eliminada')
+    } catch (err) {
+      const { detail } = parseActionError(err)
+      toast.error(detail)
+    }
+  }
 
   return (
     <>
@@ -234,6 +527,17 @@ export function GanttBoardClient({
         users={users}
         className="rounded-lg mb-4 border border-border"
       />
+
+      {hasCpmCycle && (
+        <div
+          role="alert"
+          className="mb-3 rounded-md border border-red-500/40 bg-red-950/30 px-3 py-2 text-xs text-red-300"
+        >
+          CPM: se detectó al menos un ciclo en las dependencias. Las flechas
+          afectadas se omiten hasta que se rompa el ciclo.
+        </div>
+      )}
+
       <div className="rounded-xl border border-border bg-subtle/80 shadow-sm">
         {/* Header: etiquetas de nombre + escala de días */}
         <div className="flex border-b border-border">
@@ -263,40 +567,129 @@ export function GanttBoardClient({
           </div>
         </div>
 
-        {/* Filas de tareas */}
-        <div className="divide-y divide-border/50">
-          {visibleLocal.length === 0 && (
-            <div className="p-8 text-center text-sm text-muted-foreground">
-              {local.length === 0
-                ? 'No hay tareas planificadas en este rango.'
-                : 'Ninguna tarea coincide con los filtros.'}
+        {/* Cuerpo: dos columnas hermanas (labels + canvas relative compartido). */}
+        {visibleLocal.length === 0 ? (
+          <div className="p-8 text-center text-sm text-muted-foreground">
+            {local.length === 0
+              ? 'No hay tareas planificadas en este rango.'
+              : 'Ninguna tarea coincide con los filtros.'}
+          </div>
+        ) : (
+          <div className="flex">
+            {/* Columna de labels — una fila por tarea, alineada en altura con el canvas. */}
+            <div className="w-64 shrink-0 border-r border-border">
+              {visibleLocal.map((task) => (
+                <GanttLabelRow
+                  key={task.id}
+                  task={task}
+                  focused={focusedId === task.id}
+                  onFocus={() => setFocusedId(task.id)}
+                  rowHeight={ROW_HEIGHT}
+                />
+              ))}
             </div>
-          )}
-          {visibleLocal.map((task) => (
-            <GanttRow
-              key={task.id}
-              task={task}
-              focused={focusedId === task.id}
-              onFocus={() => setFocusedId(task.id)}
-              rangeStart={start}
-              rangeDays={rangeDays}
-              totalWidth={totalWidth}
-              onShift={(delta) => commitShift(task.id, delta)}
-              onResizeStart={(delta) => {
-                const s = parseISO(task.startDate)
-                const e = parseISO(task.endDate)
-                if (!s || !e) return
-                commitDates(task.id, addDays(s, delta), e, 'resize-start')
-              }}
-              onResizeEnd={(delta) => {
-                const s = parseISO(task.startDate)
-                const e = parseISO(task.endDate)
-                if (!s || !e) return
-                commitDates(task.id, s, addDays(e, delta), 'resize-end')
-              }}
-            />
-          ))}
-        </div>
+
+            {/* Canvas único: relative para anclar la capa SVG global y todas las barras. */}
+            <div
+              ref={canvasRef}
+              className={clsx('relative', connection && 'cursor-crosshair')}
+              style={{ width: totalWidth, height: canvasHeight, minWidth: totalWidth }}
+            >
+              {/* Tinte de fines de semana — columnas verticales por día. */}
+              <div aria-hidden className="pointer-events-none absolute inset-0 flex">
+                {days.map((d, i) => {
+                  const isWeekend = d.getUTCDay() === 0 || d.getUTCDay() === 6
+                  return (
+                    <div
+                      key={i}
+                      className={clsx(
+                        'shrink-0 border-r border-border/30',
+                        isWeekend && 'bg-card/40',
+                      )}
+                      style={{ width: DAY_WIDTH }}
+                    />
+                  )
+                })}
+              </div>
+
+              {/* Líneas horizontales por fila + zona clickeable de la fila. */}
+              {visibleLocal.map((task, i) => (
+                <GanttBarSlot
+                  key={task.id}
+                  task={task}
+                  index={i}
+                  focused={focusedId === task.id}
+                  onFocus={() => setFocusedId(task.id)}
+                  rangeStart={start}
+                  rangeDays={rangeDays}
+                  rowHeight={ROW_HEIGHT}
+                  cpm={cpmByTaskId?.[task.id]}
+                  onShift={(delta) => commitShift(task.id, delta)}
+                  onResizeStart={(delta) => {
+                    const s = parseISO(task.startDate)
+                    const e = parseISO(task.endDate)
+                    if (!s || !e) return
+                    commitDates(task.id, addDays(s, delta), e, 'resize-start')
+                  }}
+                  onResizeEnd={(delta) => {
+                    const s = parseISO(task.startDate)
+                    const e = parseISO(task.endDate)
+                    if (!s || !e) return
+                    commitDates(task.id, s, addDays(e, delta), 'resize-end')
+                  }}
+                  // HU-1.3: drag-handle activo solo si la tarea tiene fechas;
+                  // se renderiza un círculo en el borde derecho de la barra.
+                  isConnectionTarget={connection?.targetTaskId === task.id}
+                  onConnectStart={(x, y) => beginConnection(task.id, x, y)}
+                />
+              ))}
+
+              {/* Capa SVG superpuesta — flechas de dependencias FS (HU-1.2).
+                  HU-1.4: clic derecho sobre la flecha abre el mini-menú. */}
+              {edges.length > 0 && (
+                <GanttDependencyLayer
+                  tasks={positions}
+                  dependencies={edges}
+                  width={totalWidth}
+                  height={canvasHeight}
+                  onDependencyContextMenu={(edge, ev) => {
+                    setDepMenu({
+                      edge,
+                      position: { x: ev.clientX, y: ev.clientY },
+                    })
+                  }}
+                />
+              )}
+
+              {/* HU-1.3: línea temporal del modo conexión. Va por encima
+                  de la capa de dependencias persistentes. */}
+              {connection && (
+                <svg
+                  aria-hidden
+                  className="pointer-events-none absolute left-0 top-0"
+                  width={totalWidth}
+                  height={canvasHeight}
+                  style={{ overflow: 'visible' }}
+                >
+                  <line
+                    x1={connection.fromX}
+                    y1={connection.fromY}
+                    x2={connection.cursorX}
+                    y2={connection.cursorY}
+                    stroke="currentColor"
+                    strokeWidth={2}
+                    strokeDasharray="4 2"
+                    className={
+                      connection.targetTaskId
+                        ? 'text-emerald-500'
+                        : 'text-indigo-500'
+                    }
+                  />
+                </svg>
+              )}
+            </div>
+          </div>
+        )}
       </div>
 
       <TaskDrawer
@@ -325,39 +718,249 @@ export function GanttBoardClient({
         }}
       >
         {drawerTask ? (
-          <TaskDrawerContent 
-            task={drawerTask} 
-            projects={projects} 
-            users={users} 
+          <TaskDrawerContent
+            task={drawerTask}
+            projects={projects}
+            users={users}
           />
         ) : null}
       </TaskDrawer>
+
+      {/* HU-1.4 · mini-menú contextual sobre la flecha. Implementado a mano
+          (no Radix ContextMenu) porque el trigger es un <path> SVG y los
+          primitives de Radix esperan un trigger DOM-element con eventos
+          delegables; lanzar el menú vía coordenadas sigue siendo accesible
+          si cerramos con Escape y outside-click. */}
+      {depMenu && (
+        <DependencyArrowMenu
+          edge={depMenu.edge}
+          position={depMenu.position}
+          onClose={() => setDepMenu(null)}
+          onEdit={() => {
+            const pos = depMenu.position
+            const edge = depMenu.edge
+            setDepMenu(null)
+            openEditorFromEdge(edge, pos)
+          }}
+          onChangeType={async (next) => {
+            const edge = depMenu.edge
+            setDepMenu(null)
+            await changeDepType(edge, next)
+          }}
+          onDelete={async () => {
+            const edge = depMenu.edge
+            setDepMenu(null)
+            await deleteEdge(edge)
+          }}
+        />
+      )}
+
+      <DependencyEditor
+        dependency={editorState?.payload ?? null}
+        position={editorState?.position ?? null}
+        onClose={() => setEditorState(null)}
+      />
     </>
   )
 }
 
-// ─────────────────── Row ────────────────────────────────────────
+// ─────────────────── Mini-menú de la flecha (HU-1.4) ───────────────────
 
-function GanttRow({
+function DependencyArrowMenu({
+  edge,
+  position,
+  onClose,
+  onEdit,
+  onChangeType,
+  onDelete,
+}: {
+  edge: GanttDependencyEdge
+  position: { x: number; y: number }
+  onClose: () => void
+  onEdit: () => void
+  onChangeType: (next: 'FS' | 'SS' | 'FF' | 'SF') => void
+  onDelete: () => void
+}) {
+  const [showSubmenu, setShowSubmenu] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose()
+    }
+    const onDocMouseDown = (e: MouseEvent) => {
+      if (!ref.current) return
+      if (e.target instanceof Node && !ref.current.contains(e.target)) onClose()
+    }
+    document.addEventListener('keydown', onKey)
+    document.addEventListener('mousedown', onDocMouseDown)
+    return () => {
+      document.removeEventListener('keydown', onKey)
+      document.removeEventListener('mousedown', onDocMouseDown)
+    }
+  }, [onClose])
+
+  const ITEM = clsx(
+    'flex w-full items-center justify-between gap-3 rounded-md px-2 py-1.5 text-left text-sm text-foreground',
+    'hover:bg-secondary/60 focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-indigo-500',
+  )
+
+  // Anclaje al click. Clamp básico al viewport.
+  const W = typeof window !== 'undefined' ? window.innerWidth : 1024
+  const H = typeof window !== 'undefined' ? window.innerHeight : 768
+  const left = Math.max(8, Math.min(position.x, W - 240))
+  const top = Math.max(8, Math.min(position.y, H - 220))
+
+  return (
+    <div
+      ref={ref}
+      role="menu"
+      aria-label="Acciones de dependencia"
+      className="fixed z-50 min-w-[220px] overflow-visible rounded-[10px] border border-border bg-card p-1 shadow-lg"
+      style={{ left, top }}
+    >
+      <button type="button" role="menuitem" className={ITEM} onClick={onEdit}>
+        <span>Editar dependencia…</span>
+      </button>
+      <div
+        role="menuitem"
+        aria-haspopup="menu"
+        aria-expanded={showSubmenu}
+        tabIndex={0}
+        onMouseEnter={() => setShowSubmenu(true)}
+        onMouseLeave={() => setShowSubmenu(false)}
+        onFocus={() => setShowSubmenu(true)}
+        onBlur={() => setShowSubmenu(false)}
+        className="relative"
+      >
+        <button type="button" className={ITEM}>
+          <span>Cambiar tipo</span>
+          <span aria-hidden>›</span>
+        </button>
+        {showSubmenu && (
+          <div
+            className="absolute left-full top-0 ml-1 min-w-[120px] rounded-[10px] border border-border bg-card p-1 shadow-lg"
+            role="menu"
+          >
+            {(['FS', 'SS', 'FF', 'SF'] as const).map((t) => (
+              <button
+                key={t}
+                type="button"
+                role="menuitemradio"
+                aria-checked={edge.type === t}
+                disabled={edge.type === t}
+                onClick={() => onChangeType(t)}
+                className={clsx(
+                  ITEM,
+                  edge.type === t && 'bg-indigo-500/15 text-indigo-200',
+                )}
+              >
+                <span>{t}</span>
+                {edge.type === t && (
+                  <span aria-hidden className="text-xs">
+                    ✓
+                  </span>
+                )}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+      <div role="separator" className="my-1 h-px bg-border" />
+      <button
+        type="button"
+        role="menuitem"
+        onClick={onDelete}
+        className={clsx(ITEM, 'text-red-400 hover:bg-red-500/10')}
+      >
+        <span>Eliminar dependencia</span>
+      </button>
+    </div>
+  )
+}
+
+// ─────────────────── Label Row (columna izquierda) ───────────────────
+
+function GanttLabelRow({
   task,
   focused,
   onFocus,
-  rangeStart,
-  rangeDays,
-  totalWidth,
-  onShift,
-  onResizeStart,
-  onResizeEnd,
+  rowHeight,
 }: {
   task: SerializedTask
   focused: boolean
   onFocus: () => void
+  rowHeight: number
+}) {
+  const openDrawer = useUIStore((st) => st.openDrawer)
+  return (
+    <TaskWithContextMenu ctx={{ taskId: task.id }}>
+      <div
+        className={clsx(
+          'group flex cursor-pointer items-center gap-3 border-b border-border/50 px-4 transition-colors',
+          focused ? 'bg-secondary/60' : 'hover:bg-secondary/30',
+        )}
+        style={{ height: rowHeight }}
+        onClick={() => {
+          onFocus()
+          openDrawer(task.id)
+        }}
+      >
+        <div
+          className={clsx(
+            'h-2 w-2 rounded-full',
+            task.type === 'PMI_TASK' ? 'bg-emerald-500' : 'bg-indigo-500',
+          )}
+        />
+        <span
+          className="truncate text-sm font-medium text-foreground/90 group-hover:text-white"
+          title={task.title}
+        >
+          {task.title}
+        </span>
+        {(task.comments?.length ?? 0) > 0 && (
+          <span className="flex flex-shrink-0 items-center gap-0.5 text-[10px] text-muted-foreground">
+            <MessageSquare className="h-3 w-3" />
+            {task.comments?.length}
+          </span>
+        )}
+      </div>
+    </TaskWithContextMenu>
+  )
+}
+
+// ─────────────────── Bar Slot (canvas absoluto por fila) ───────────────────
+
+function GanttBarSlot({
+  task,
+  index,
+  focused,
+  onFocus,
+  rangeStart,
+  rangeDays,
+  rowHeight,
+  cpm,
+  onShift,
+  onResizeStart,
+  onResizeEnd,
+  isConnectionTarget,
+  onConnectStart,
+}: {
+  task: SerializedTask
+  index: number
+  focused: boolean
+  onFocus: () => void
   rangeStart: Date
   rangeDays: number
-  totalWidth: number
+  rowHeight: number
+  cpm?: GanttCpmInfo
   onShift: (deltaDays: number) => void
   onResizeStart: (deltaDays: number) => void
   onResizeEnd: (deltaDays: number) => void
+  /** True cuando el cursor está sobre esta barra durante un drag de conexión. */
+  isConnectionTarget?: boolean
+  /** Inicia el modo conexión desde esta barra (HU-1.3). x/y son coords del canvas. */
+  onConnectStart?: (canvasX: number, canvasY: number) => void
 }) {
   const s = parseISO(task.startDate)
   const e = parseISO(task.endDate)
@@ -375,7 +978,6 @@ function GanttRow({
       : 0
 
   const bodyRef = useRef<HTMLDivElement>(null)
-  const openDrawer = useUIStore((st) => st.openDrawer)
 
   const bodyDrag = useHorizontalDrag({
     dayWidth: DAY_WIDTH,
@@ -398,141 +1000,196 @@ function GanttRow({
 
   const isMilestone = !!task.isMilestone
   const progress = task.progress ?? 0
+  const isCritical = !!cpm?.isCritical
 
+  // Tooltip CPM (HU-2.2): forward+backward pass visible en hover. Usamos
+  // \n (saltos nativos del attribute `title`) ya que Radix Tooltip no está
+  // disponible en el stack (ver AGENTS.md). El formato emula MS Project.
+  const float = cpm?.totalFloat ?? 0
+  const slackTight = !!cpm && !cpm.isCritical && float > 0 && float <= 3
+  const slackNegative = !!cpm && float < 0
+  const cpmTooltip = cpm
+    ? `${task.mnemonic ? `${task.mnemonic} · ` : ''}${task.title}\n` +
+      `─────────────────────\n` +
+      `ES: día ${cpm.ES} · EF: día ${cpm.EF}\n` +
+      `LS: día ${cpm.LS} · LF: día ${cpm.LF}\n` +
+      `Float: ${cpm.totalFloat} día${Math.abs(cpm.totalFloat) !== 1 ? 's' : ''}\n` +
+      `─────────────────────` +
+      (cpm.isCritical
+        ? `\n[Crítica]`
+        : slackNegative
+          ? `\n⚠ Float negativo — restricción imposible`
+          : slackTight
+            ? `\nSlack apretado`
+            : '')
+    : task.title
+
+  // Slot absoluto por fila — incluye línea horizontal de fila + barra/hito.
   return (
-    <TaskWithContextMenu ctx={{ taskId: task.id }}>
+    <div
+      className="absolute inset-x-0"
+      style={{ top: index * rowHeight, height: rowHeight }}
+    >
+      {/* Línea horizontal de la fila (separador). */}
       <div
-        className={clsx(
-          'group flex transition-colors cursor-pointer',
-          focused ? 'bg-secondary/60' : 'hover:bg-secondary/30',
-        )}
-        onClick={() => {
-          onFocus()
-          openDrawer(task.id)
-        }}
-      >
-        <div className="flex w-64 shrink-0 items-center gap-3 border-r border-border p-4">
-          <div
-            className={clsx(
-              'h-2 w-2 rounded-full',
-              task.type === 'PMI_TASK' ? 'bg-emerald-500' : 'bg-indigo-500',
-            )}
-          />
-          <span
-            className="truncate text-sm font-medium text-foreground/90 group-hover:text-white"
-            title={task.title}
-          >
-            {task.title}
-          </span>
-          {(task.comments?.length ?? 0) > 0 && (
-            <span className="flex flex-shrink-0 items-center gap-0.5 text-[10px] text-muted-foreground">
-              <MessageSquare className="h-3 w-3" />
-              {task.comments?.length}
-            </span>
-          )}
-        </div>
+        aria-hidden
+        className="pointer-events-none absolute inset-x-0 bottom-0 border-b border-border/30"
+      />
 
+      {!hasDates && (
         <div
-          className="relative flex-1 p-2"
-          style={{ minWidth: totalWidth }}
+          className="absolute left-2 top-1/2 z-10 inline-flex -translate-y-1/2 items-center rounded border border-dashed border-border px-2 py-1 text-xs text-muted-foreground"
+          onClick={onFocus}
         >
-          {/* grid columnas */}
-          <div aria-hidden className="pointer-events-none absolute inset-0 flex">
-            {Array.from({ length: rangeDays }).map((_, i) => (
-              <div
-                key={i}
-                className="shrink-0 border-r border-border/30"
-                style={{ width: DAY_WIDTH }}
-              />
-            ))}
+          Sin fechas
+        </div>
+      )}
+
+      {hasDates && !isMilestone && (
+        <div
+          ref={bodyRef}
+          role="slider"
+          tabIndex={0}
+          aria-label={`Barra de ${task.title}`}
+          aria-valuemin={0}
+          aria-valuemax={rangeDays}
+          aria-valuenow={startDay ?? 0}
+          aria-valuetext={`${fmt(s)} a ${fmt(e)}`}
+          data-gantt-task-id={task.id}
+          onFocus={onFocus}
+          title={cpmTooltip}
+          style={{
+            left,
+            width,
+            transform: bodyDrag.isDragging
+              ? `translateX(${bodyDrag.deltaPx}px)`
+              : undefined,
+          }}
+          className={clsx(
+            'group/bar absolute top-1/2 z-10 h-6 -translate-y-1/2 rounded-md shadow-sm',
+            'flex cursor-grab active:cursor-grabbing',
+            'border focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-500',
+            // HU-2.2: jerarquía visual por slack.
+            //   negative → rojo destructivo (restricción imposible)
+            //   crítica  → rojo (float = 0, ya implementado)
+            //   tight    → ámbar (slack ∈ (0, 3])
+            //   default  → color por tipo (PMI/scrum)
+            slackNegative
+              ? 'border-red-600/80 bg-red-950/40'
+              : isCritical
+                ? 'border-red-500/60 bg-red-900/40'
+                : slackTight
+                  ? 'border-amber-500/60 bg-amber-900/30'
+                  : task.type === 'PMI_TASK'
+                    ? 'border-emerald-500/50 bg-emerald-900/40'
+                    : 'border-indigo-500/50 bg-indigo-900/40',
+            focused && 'ring-2 ring-indigo-500/60',
+            isConnectionTarget && 'outline outline-2 outline-offset-2 outline-emerald-500',
+            bodyDrag.isDragging && 'opacity-80',
+          )}
+          {...bodyDrag.dragProps}
+        >
+          {/* progreso (overlay clipeado) */}
+          <div
+            className="pointer-events-none absolute inset-0 overflow-hidden rounded-md"
+            aria-hidden
+          >
+            <div
+              className={clsx(
+                'h-full transition-all',
+                isCritical
+                  ? 'bg-red-500'
+                  : task.type === 'PMI_TASK'
+                    ? 'bg-emerald-500'
+                    : 'bg-indigo-500',
+              )}
+              style={{ width: `${progress}%` }}
+            />
           </div>
 
-          {!hasDates && (
-            <div className="relative z-10 inline-flex items-center rounded border border-dashed border-border px-2 py-1 text-xs text-muted-foreground">
-              Sin fechas
-            </div>
-          )}
-
-          {hasDates && !isMilestone && (
-            <div
-              ref={bodyRef}
-              role="slider"
-              tabIndex={0}
-              aria-label={`Barra de ${task.title}`}
-              aria-valuemin={0}
-              aria-valuemax={rangeDays}
-              aria-valuenow={startDay ?? 0}
-              aria-valuetext={`${fmt(s)} a ${fmt(e)}`}
-              onFocus={onFocus}
-              style={{
-                left,
-                width,
-                transform: bodyDrag.isDragging
-                  ? `translateX(${bodyDrag.deltaPx}px)`
-                  : undefined,
-              }}
-              className={clsx(
-                'absolute top-1/2 z-10 h-6 -translate-y-1/2 overflow-hidden rounded-md shadow-sm',
-                'flex cursor-grab active:cursor-grabbing',
-                'border focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-500',
-                task.type === 'PMI_TASK'
-                  ? 'border-emerald-500/50 bg-emerald-900/40'
-                  : 'border-indigo-500/50 bg-indigo-900/40',
-                focused && 'ring-2 ring-indigo-500/60',
-                bodyDrag.isDragging && 'opacity-80',
-              )}
-              {...bodyDrag.dragProps}
+          {/* HU-2.2 · Indicador de float negativo (restricción imposible).
+              Renderizado encima del progreso, no bloquea drag. */}
+          {slackNegative && (
+            <span
+              aria-hidden
+              className="pointer-events-none absolute right-2 top-1/2 z-10 -translate-y-1/2 text-[10px] font-bold text-red-200"
+              title={`Float ${cpm?.totalFloat}`}
             >
-              {/* progreso */}
-              <div
-                className={clsx(
-                  'h-full transition-all',
-                  task.type === 'PMI_TASK' ? 'bg-emerald-500' : 'bg-indigo-500',
-                )}
-                style={{ width: `${progress}%` }}
-              />
-
-              {/* handle izquierdo */}
-              <div
-                role="button"
-                aria-label="Redimensionar inicio"
-                className="absolute left-0 top-0 h-full w-1.5 cursor-ew-resize bg-white/10 hover:bg-white/20"
-                {...leftDrag.dragProps}
-                onClick={(e) => e.stopPropagation()}
-              />
-              {/* handle derecho */}
-              <div
-                role="button"
-                aria-label="Redimensionar fin"
-                className="absolute right-0 top-0 h-full w-1.5 cursor-ew-resize bg-white/10 hover:bg-white/20"
-                {...rightDrag.dragProps}
-                onClick={(e) => e.stopPropagation()}
-              />
-            </div>
+              ⚠
+            </span>
           )}
 
-          {hasDates && isMilestone && (
+          {/* handle izquierdo */}
+          <div
+            role="button"
+            aria-label="Redimensionar inicio"
+            className="absolute left-0 top-0 h-full w-1.5 cursor-ew-resize bg-white/10 hover:bg-white/20"
+            {...leftDrag.dragProps}
+            onClick={(e) => e.stopPropagation()}
+          />
+          {/* handle derecho */}
+          <div
+            role="button"
+            aria-label="Redimensionar fin"
+            className="absolute right-0 top-0 h-full w-1.5 cursor-ew-resize bg-white/10 hover:bg-white/20"
+            {...rightDrag.dragProps}
+            onClick={(e) => e.stopPropagation()}
+          />
+
+          {/* HU-1.3 · drag-handle de conexión (borde derecho, hover-only).
+              z-20 para quedar por encima del handle de resize. La detención
+              del propagation evita que el mousedown active el body-drag
+              antes de iniciar el modo conexión. */}
+          {onConnectStart && (
             <div
-              role="img"
-              aria-label={`Hito ${task.title} el ${fmt(s)}`}
-              tabIndex={0}
-              onFocus={onFocus}
-              style={{
-                left: left + DAY_WIDTH / 2 - 8,
-                transform: bodyDrag.isDragging
-                  ? `translateX(${bodyDrag.deltaPx}px) rotate(45deg)`
-                  : 'rotate(45deg)',
-              }}
+              role="button"
+              aria-label={`Crear dependencia desde ${task.title}`}
               className={clsx(
-                'absolute top-1/2 z-10 h-4 w-4 -translate-y-1/2 bg-amber-400 shadow-[0_0_10px_rgba(251,191,36,0.4)]',
-                focused && 'ring-2 ring-amber-300',
+                'absolute right-0 top-1/2 z-20 h-2 w-2 -translate-y-1/2 translate-x-1/2 rounded-full',
+                'cursor-crosshair bg-indigo-400 opacity-0 transition-opacity',
+                'group-hover/bar:opacity-70 hover:opacity-100',
+                isCritical && 'bg-red-400',
               )}
-              title={task.title}
-              {...bodyDrag.dragProps}
+              onMouseDown={(e) => {
+                e.stopPropagation()
+                e.preventDefault()
+                // Coordenadas del centro del handle en el sistema del canvas.
+                // Como la barra está absoluta dentro del canvas, basta con
+                // (left + width, middleY).
+                const x = (left ?? 0) + (width ?? 0)
+                const y = index * rowHeight + rowHeight / 2
+                onConnectStart(x, y)
+              }}
+              onClick={(e) => e.stopPropagation()}
             />
           )}
         </div>
-      </div>
-    </TaskWithContextMenu>
+      )}
+
+      {hasDates && isMilestone && (
+        <div
+          role="img"
+          aria-label={`Hito ${task.title} el ${fmt(s)}`}
+          tabIndex={0}
+          data-gantt-task-id={task.id}
+          onFocus={onFocus}
+          style={{
+            left: left + DAY_WIDTH / 2 - 8,
+            top: '50%',
+            transform: bodyDrag.isDragging
+              ? `translate(0, -50%) translateX(${bodyDrag.deltaPx}px) rotate(45deg)`
+              : 'translate(0, -50%) rotate(45deg)',
+          }}
+          className={clsx(
+            'absolute z-10 h-4 w-4 shadow-[0_0_10px_rgba(251,191,36,0.4)]',
+            isCritical ? 'bg-red-500' : 'bg-amber-400',
+            focused && 'ring-2 ring-amber-300',
+            isConnectionTarget && 'outline outline-2 outline-offset-2 outline-emerald-500',
+          )}
+          title={cpmTooltip}
+          {...bodyDrag.dragProps}
+        />
+      )}
+    </div>
   )
 }

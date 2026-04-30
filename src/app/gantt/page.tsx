@@ -2,10 +2,15 @@ import { Calendar, ChevronLeft, ChevronRight, Filter } from 'lucide-react'
 import Link from 'next/link'
 import prisma from '@/lib/prisma'
 import { serializeTask } from '@/lib/types'
-import { GanttBoardClient } from '@/components/interactions/GanttBoardClient'
+import {
+  GanttBoardClient,
+  type GanttCpmInfo,
+  type GanttDependencyDescriptor,
+} from '@/components/interactions/GanttBoardClient'
 import { GlobalBreadcrumbs } from '@/components/interactions/GlobalBreadcrumbs'
 import { ViewSwitcher } from '@/components/interactions/ViewSwitcher'
 import { NewTaskButton } from '@/components/interactions/NewTaskButton'
+import { getCachedCpmForProject } from '@/lib/scheduling/cache'
 
 export const dynamic = 'force-dynamic'
 
@@ -41,6 +46,58 @@ function monthWindow(monthParam?: string): {
   const fmt = (d: Date) => `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}`
 
   return { start, days, label, prev: fmt(prevD), next: fmt(next) }
+}
+
+function mapPrismaDepType(t: string): 'FS' | 'SS' | 'FF' | 'SF' {
+  switch (t) {
+    case 'START_TO_START':
+      return 'SS'
+    case 'FINISH_TO_FINISH':
+      return 'FF'
+    case 'START_TO_FINISH':
+      return 'SF'
+    case 'FINISH_TO_START':
+    default:
+      return 'FS'
+  }
+}
+
+/**
+ * Calcula CPM para todos los proyectos con tareas visibles y agrega los
+ * resultados en un único mapa indexado por taskId. Decisión D8: el Gantt
+ * sigue mostrando fechas reales de BD; CPM solo informa visualmente
+ * (críticas en rojo + tooltip con float).
+ */
+async function computeCpmForProjects(projectIds: string[]): Promise<{
+  cpmByTaskId: Record<string, GanttCpmInfo>
+  hasCycle: boolean
+}> {
+  const cpmByTaskId: Record<string, GanttCpmInfo> = {}
+  let hasCycle = false
+
+  // En paralelo — cada proyecto es independiente. Cada llamada está
+  // cacheada con tag `cpm:<projectId>` (HU-2.1); ver invalidate.ts.
+  const outputs = await Promise.all(
+    projectIds.map((pid) => getCachedCpmForProject(pid)),
+  )
+
+  for (const out of outputs) {
+    if (!out) continue
+    if (out.warnings.some((w) => w.code === 'CYCLE')) hasCycle = true
+    for (const r of out.results) {
+      cpmByTaskId[r.id] = {
+        id: r.id,
+        ES: r.ES,
+        EF: r.EF,
+        LS: r.LS,
+        LF: r.LF,
+        totalFloat: r.totalFloat,
+        isCritical: r.isCritical,
+      }
+    }
+  }
+
+  return { cpmByTaskId, hasCycle }
 }
 
 export default async function GanttTimeline({
@@ -90,6 +147,58 @@ export default async function GanttTimeline({
     prisma.gerencia.findMany({ select: { id: true, name: true }, orderBy: { name: 'asc' } }),
     prisma.area.findMany({ select: { id: true, name: true, gerenciaId: true }, orderBy: { name: 'asc' } }),
   ])
+
+  // ───── HU-1.2: cargar dependencias y CPM de los proyectos visibles ─────
+  const visibleTaskIds = dbTasks.map((t) => t.id)
+  const visibleProjectIds = Array.from(
+    new Set(dbTasks.map((t) => t.projectId).filter((p): p is string => !!p)),
+  )
+
+  let dependencies: GanttDependencyDescriptor[] = []
+  let cpmByTaskId: Record<string, GanttCpmInfo> = {}
+  let hasCpmCycle = false
+
+  if (visibleTaskIds.length > 0) {
+    try {
+      const [depsDb, cpmAgg] = await Promise.all([
+        prisma.taskDependency.findMany({
+          where: {
+            AND: [
+              { predecessorId: { in: visibleTaskIds } },
+              { successorId: { in: visibleTaskIds } },
+            ],
+          },
+          select: {
+            id: true,
+            predecessorId: true,
+            successorId: true,
+            type: true,
+            lagDays: true,
+          },
+        }),
+        computeCpmForProjects(visibleProjectIds),
+      ])
+
+      dependencies = depsDb.map((d) => ({
+        id: d.id,
+        predecessorId: d.predecessorId,
+        successorId: d.successorId,
+        type: mapPrismaDepType(d.type),
+        // Lectura defensiva: la columna lagDays puede no existir aún en la
+        // BD productiva (migración pendiente). Prisma 7 retorna undefined
+        // si el cliente generado no incluye el campo.
+        lagDays: d.lagDays ?? 0,
+      }))
+      cpmByTaskId = cpmAgg.cpmByTaskId
+      hasCpmCycle = cpmAgg.hasCycle
+    } catch {
+      // Si la query de dependencias falla (ej. lagDays missing),
+      // degradamos sin flechas pero sin romper el Gantt.
+      dependencies = []
+      cpmByTaskId = {}
+      hasCpmCycle = false
+    }
+  }
 
   return (
     <div className="flex h-full flex-col bg-background transition-colors duration-300">
@@ -144,6 +253,9 @@ export default async function GanttTimeline({
           gerencias={gerencias}
           areas={areas}
           allTasks={allTasksRaw}
+          cpmByTaskId={cpmByTaskId}
+          dependencies={dependencies}
+          hasCpmCycle={hasCpmCycle}
         />
       </div>
     </div>

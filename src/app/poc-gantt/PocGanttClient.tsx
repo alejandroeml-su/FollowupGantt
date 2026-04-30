@@ -94,10 +94,13 @@ export function PocGanttClient() {
   // Edges para la capa SVG: marca como críticas las que conectan dos
   // tareas críticas (heurística simple para POC).
   const edges = useMemo<GanttDependencyEdge[]>(() => {
-    return ALL_DEPS.map((d) => ({
+    return ALL_DEPS.map((d, i) => ({
+      // POC sintético: id estable a partir del par para no romper React keys.
+      id: `${d.predecessorId}->${d.successorId}-${i}`,
       predecessorId: d.predecessorId,
       successorId: d.successorId,
       type: d.type,
+      lagDays: 0,
       isCritical:
         criticalSet.has(d.predecessorId) && criticalSet.has(d.successorId),
     }))
