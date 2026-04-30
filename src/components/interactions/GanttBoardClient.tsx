@@ -1002,13 +1002,26 @@ function GanttBarSlot({
   const progress = task.progress ?? 0
   const isCritical = !!cpm?.isCritical
 
-  // Tooltip CPM (HU-2.4 simplificada): se construye solo si hay datos CPM.
+  // Tooltip CPM (HU-2.2): forward+backward pass visible en hover. Usamos
+  // \n (saltos nativos del attribute `title`) ya que Radix Tooltip no está
+  // disponible en el stack (ver AGENTS.md). El formato emula MS Project.
+  const float = cpm?.totalFloat ?? 0
+  const slackTight = !!cpm && !cpm.isCritical && float > 0 && float <= 3
+  const slackNegative = !!cpm && float < 0
   const cpmTooltip = cpm
-    ? `${task.title}\n` +
+    ? `${task.mnemonic ? `${task.mnemonic} · ` : ''}${task.title}\n` +
+      `─────────────────────\n` +
       `ES: día ${cpm.ES} · EF: día ${cpm.EF}\n` +
       `LS: día ${cpm.LS} · LF: día ${cpm.LF}\n` +
-      `Float: ${cpm.totalFloat} día${Math.abs(cpm.totalFloat) !== 1 ? 's' : ''}` +
-      (cpm.isCritical ? '  · Crítica' : '')
+      `Float: ${cpm.totalFloat} día${Math.abs(cpm.totalFloat) !== 1 ? 's' : ''}\n` +
+      `─────────────────────` +
+      (cpm.isCritical
+        ? `\n[Crítica]`
+        : slackNegative
+          ? `\n⚠ Float negativo — restricción imposible`
+          : slackTight
+            ? `\nSlack apretado`
+            : '')
     : task.title
 
   // Slot absoluto por fila — incluye línea horizontal de fila + barra/hito.
@@ -1056,11 +1069,20 @@ function GanttBarSlot({
             'group/bar absolute top-1/2 z-10 h-6 -translate-y-1/2 rounded-md shadow-sm',
             'flex cursor-grab active:cursor-grabbing',
             'border focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-500',
-            isCritical
-              ? 'border-red-500/60 bg-red-900/40'
-              : task.type === 'PMI_TASK'
-                ? 'border-emerald-500/50 bg-emerald-900/40'
-                : 'border-indigo-500/50 bg-indigo-900/40',
+            // HU-2.2: jerarquía visual por slack.
+            //   negative → rojo destructivo (restricción imposible)
+            //   crítica  → rojo (float = 0, ya implementado)
+            //   tight    → ámbar (slack ∈ (0, 3])
+            //   default  → color por tipo (PMI/scrum)
+            slackNegative
+              ? 'border-red-600/80 bg-red-950/40'
+              : isCritical
+                ? 'border-red-500/60 bg-red-900/40'
+                : slackTight
+                  ? 'border-amber-500/60 bg-amber-900/30'
+                  : task.type === 'PMI_TASK'
+                    ? 'border-emerald-500/50 bg-emerald-900/40'
+                    : 'border-indigo-500/50 bg-indigo-900/40',
             focused && 'ring-2 ring-indigo-500/60',
             isConnectionTarget && 'outline outline-2 outline-offset-2 outline-emerald-500',
             bodyDrag.isDragging && 'opacity-80',
@@ -1084,6 +1106,18 @@ function GanttBarSlot({
               style={{ width: `${progress}%` }}
             />
           </div>
+
+          {/* HU-2.2 · Indicador de float negativo (restricción imposible).
+              Renderizado encima del progreso, no bloquea drag. */}
+          {slackNegative && (
+            <span
+              aria-hidden
+              className="pointer-events-none absolute right-2 top-1/2 z-10 -translate-y-1/2 text-[10px] font-bold text-red-200"
+              title={`Float ${cpm?.totalFloat}`}
+            >
+              ⚠
+            </span>
+          )}
 
           {/* handle izquierdo */}
           <div

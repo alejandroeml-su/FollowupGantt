@@ -206,6 +206,69 @@ describe('computeCpm', () => {
     expect(elapsed).toBeLessThan(50)
   })
 
+  // ───────────────── Backward pass · LS / LF / totalFloat (HU-2.2) ─────────────────
+
+  it('backward pass: LF de la tarea final = projectDuration; LS = LF - duration', () => {
+    const input: CpmInput = {
+      projectStart: PROJECT_START,
+      tasks: [task('A', 3), task('B', 2), task('C', 4)],
+      dependencies: [dep('A', 'B'), dep('B', 'C')],
+    }
+    const out = computeCpm(input)
+    // C es final
+    expect(out.results.get('C')!.LF).toBe(9)
+    expect(out.results.get('C')!.LS).toBe(5)
+    // En cadena lineal todo tiene float=0 y LS=ES
+    for (const id of ['A', 'B', 'C'] as const) {
+      const r = out.results.get(id)!
+      expect(r.LS).toBe(r.ES)
+      expect(r.LF).toBe(r.EF)
+      expect(r.totalFloat).toBe(0)
+      expect(r.isCritical).toBe(true)
+    }
+  })
+
+  it('backward pass: rama paralela no crítica tiene float = (camino crítico - propio)', () => {
+    // A(3) → B(2) → D(4)  (crítica, suma 9)
+    // A(3) → C(1) → D(4)  (holgura 1)
+    const input: CpmInput = {
+      projectStart: PROJECT_START,
+      tasks: [task('A', 3), task('B', 2), task('C', 1), task('D', 4)],
+      dependencies: [
+        dep('A', 'B'),
+        dep('A', 'C'),
+        dep('B', 'D'),
+        dep('C', 'D'),
+      ],
+    }
+    const out = computeCpm(input)
+    const c = out.results.get('C')!
+    expect(c.ES).toBe(3)
+    expect(c.EF).toBe(4)
+    // C podría empezar 1 día más tarde sin afectar al proyecto:
+    expect(c.LS).toBe(4)
+    expect(c.LF).toBe(5)
+    expect(c.totalFloat).toBe(1)
+    expect(c.isCritical).toBe(false)
+  })
+
+  it('backward pass propaga LS/LF correctamente con FF', () => {
+    // A(6) → B(3) FF lag=0 → ambas terminan al mismo tiempo (día 6)
+    // B.LF debe ser 6, B.LS = 3
+    const input: CpmInput = {
+      projectStart: PROJECT_START,
+      tasks: [task('A', 6), task('B', 3)],
+      dependencies: [dep('A', 'B', 'FF', 0)],
+    }
+    const out = computeCpm(input)
+    const a = out.results.get('A')!
+    const b = out.results.get('B')!
+    expect(a.LF).toBe(6)
+    expect(b.LF).toBe(6)
+    expect(b.LS).toBe(3)
+    expect(b.totalFloat).toBe(0)
+  })
+
   it('dependencia con extremo inexistente reporta ORPHAN sin romper', () => {
     const input: CpmInput = {
       projectStart: PROJECT_START,
