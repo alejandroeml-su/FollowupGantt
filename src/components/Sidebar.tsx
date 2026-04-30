@@ -7,7 +7,7 @@ import {
   LayoutDashboard, Columns, CalendarDays, Target, FolderKanban, Building2,
   List, Users, Table, Network, FileText, ClipboardList,
   Zap, LayoutTemplate, Sparkles, ChevronDown, Eye, Settings, Briefcase,
-  Menu, PanelLeftClose,
+  Menu, PanelLeftClose, BarChart3,
   type LucideIcon
 } from 'lucide-react';
 import { clsx } from 'clsx';
@@ -56,6 +56,7 @@ const menuGroups: RouteGroup[] = [
       { name: 'Formularios', path: '/forms', icon: ClipboardList },
       { name: 'Automatizaciones', path: '/automations', icon: Zap },
       { name: 'Dashboards KPI', path: '/dashboards', icon: LayoutTemplate },
+      { name: 'KPIs de Proyectos', path: '/project-kpis', icon: BarChart3 },
     ],
   },
   {
