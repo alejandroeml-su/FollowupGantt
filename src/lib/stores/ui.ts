@@ -20,6 +20,8 @@ type UIState = {
   columnPrefs: Record<string, ColumnPrefs>
   mobileSidebarOpen: boolean
   sidebarCollapsed: boolean
+  /** HU-2.3 — toggle global "Mostrar solo ruta crítica" en Gantt. */
+  criticalOnly: boolean
 
   toggleSelection: (id: string, additive?: boolean) => void
   selectRange: (ids: string[]) => void
@@ -33,6 +35,7 @@ type UIState = {
   resetColumnPrefs: (id: string) => void
   setMobileSidebarOpen: (open: boolean) => void
   toggleSidebarCollapsed: (collapsed?: boolean) => void
+  toggleCriticalOnly: (on?: boolean) => void
 }
 
 export const useUIStore = create<UIState>()(
@@ -46,6 +49,7 @@ export const useUIStore = create<UIState>()(
       columnPrefs: {},
       mobileSidebarOpen: false,
       sidebarCollapsed: false,
+      criticalOnly: false,
 
       toggleSelection: (id, additive = false) =>
         set((s) => {
@@ -79,13 +83,19 @@ export const useUIStore = create<UIState>()(
       setMobileSidebarOpen: (open) => set({ mobileSidebarOpen: open }),
       toggleSidebarCollapsed: (collapsed) =>
         set((s) => ({ sidebarCollapsed: collapsed ?? !s.sidebarCollapsed })),
+      toggleCriticalOnly: (on) =>
+        set((s) => ({ criticalOnly: on ?? !s.criticalOnly })),
     }),
     {
       name: 'followup-ui',
       storage: createJSONStorage(() => localStorage),
       // Sólo persistimos preferencias visuales, no la selección ni el drawer.
       partialize: (s) =>
-        ({ columnPrefs: s.columnPrefs, sidebarCollapsed: s.sidebarCollapsed }) as Partial<UIState>,
+        ({
+          columnPrefs: s.columnPrefs,
+          sidebarCollapsed: s.sidebarCollapsed,
+          criticalOnly: s.criticalOnly,
+        }) as Partial<UIState>,
     },
   ),
 )

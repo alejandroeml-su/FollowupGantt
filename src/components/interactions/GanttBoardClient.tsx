@@ -140,7 +140,17 @@ export function GanttBoardClient({
 
   const [local, setLocal] = useState(tasks)
   const [filters, setFilters] = useState<TaskFilters>(EMPTY_TASK_FILTERS)
-  const visibleLocal = useMemo(() => filterTasks(local, filters), [local, filters])
+  // HU-2.3 — toggle global "Solo ruta crítica" persistido en zustand. Al
+  // activarse, el filtro se aplica DESPUÉS de los TaskFilters habituales
+  // para que ambos puedan combinarse (p. ej. ruta crítica de un proyecto).
+  const criticalOnly = useUIStore((s) => s.criticalOnly)
+  const toggleCriticalOnly = useUIStore((s) => s.toggleCriticalOnly)
+  const filteredByBar = useMemo(() => filterTasks(local, filters), [local, filters])
+  const visibleLocal = useMemo(() => {
+    if (!criticalOnly) return filteredByBar
+    if (!cpmByTaskId) return filteredByBar
+    return filteredByBar.filter((t) => cpmByTaskId[t.id]?.isCritical === true)
+  }, [filteredByBar, criticalOnly, cpmByTaskId])
   // Re-sync con el snapshot del server tras revalidatePath (patrón RSC).
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -421,6 +431,16 @@ export function GanttBoardClient({
       .filter(
         (d) => visibleIdSet.has(d.predecessorId) && visibleIdSet.has(d.successorId),
       )
+      .filter((d) =>
+        // HU-2.3 — en modo solo-crítica, ambos extremos deben estar en la
+        // ruta crítica. Esto se cumple automáticamente cuando filtramos
+        // visibleLocal por isCritical (visibleIdSet ya solo contiene
+        // críticas), pero lo dejamos explícito como defensa en profundidad
+        // por si se cambia el orden del filtrado.
+        criticalOnly
+          ? criticalIds.has(d.predecessorId) && criticalIds.has(d.successorId)
+          : true,
+      )
       .map((d) => ({
         id: d.id,
         predecessorId: d.predecessorId,
@@ -430,7 +450,30 @@ export function GanttBoardClient({
         isCritical:
           criticalIds.has(d.predecessorId) && criticalIds.has(d.successorId),
       }))
-  }, [dependencies, visibleIdSet, criticalIds])
+  }, [dependencies, visibleIdSet, criticalIds, criticalOnly])
+
+  // HU-2.3 — anuncio vivo cuando cambia el toggle, con conteo en vivo.
+  // Usamos un ref para evitar anunciar en el primer render (estado inicial
+  // hidratado desde localStorage no debe disparar feedback sonoro).
+  const criticalOnlyMounted = useRef(false)
+  useEffect(() => {
+    if (!criticalOnlyMounted.current) {
+      criticalOnlyMounted.current = true
+      return
+    }
+    if (criticalOnly) {
+      announce(
+        `Mostrando solo ruta crítica: ${visibleLocal.length} tarea${
+          visibleLocal.length !== 1 ? 's' : ''
+        }, ${edges.length} dependencia${edges.length !== 1 ? 's' : ''}`,
+      )
+    } else {
+      announce('Mostrando todas las tareas')
+    }
+    // visibleLocal/edges se evalúan en el render donde el toggle cambió,
+    // por lo que no necesitamos suscribirnos a ellos como deps.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [criticalOnly])
 
   // ─── HU-1.4 · estado del editor de dependencias y del menú contextual ───
   //
@@ -525,6 +568,7 @@ export function GanttBoardClient({
         areas={areas}
         projects={projects}
         users={users}
+        showCriticalOnly
         className="rounded-lg mb-4 border border-border"
       />
 
@@ -569,10 +613,23 @@ export function GanttBoardClient({
 
         {/* Cuerpo: dos columnas hermanas (labels + canvas relative compartido). */}
         {visibleLocal.length === 0 ? (
-          <div className="p-8 text-center text-sm text-muted-foreground">
-            {local.length === 0
-              ? 'No hay tareas planificadas en este rango.'
-              : 'Ninguna tarea coincide con los filtros.'}
+          <div className="flex flex-col items-center gap-3 p-8 text-center text-sm text-muted-foreground">
+            <p>
+              {criticalOnly
+                ? 'No hay tareas en la ruta crítica para este rango de fechas.'
+                : local.length === 0
+                  ? 'No hay tareas planificadas en este rango.'
+                  : 'Ninguna tarea coincide con los filtros.'}
+            </p>
+            {criticalOnly && (
+              <button
+                type="button"
+                onClick={() => toggleCriticalOnly(false)}
+                className="inline-flex items-center gap-1.5 rounded-md border border-border bg-background px-3 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-secondary"
+              >
+                Mostrar todas las tareas
+              </button>
+            )}
           </div>
         ) : (
           <div className="flex">

@@ -1,10 +1,11 @@
 'use client'
 
 import { useMemo } from 'react'
-import { Filter, X } from 'lucide-react'
+import { Filter, X, Zap } from 'lucide-react'
 import { clsx } from 'clsx'
 import type { TaskFilters } from '@/lib/taskFilters'
 import { countActiveFilters, EMPTY_TASK_FILTERS, UNASSIGNED_VALUE } from '@/lib/taskFilters'
+import { useUIStore } from '@/lib/stores/ui'
 
 type Catalogs = {
   gerencias?: { id: string; name: string }[]
@@ -19,6 +20,8 @@ type Props = Catalogs & {
   /** Controla qué filtros mostrar (todos por defecto). */
   show?: Partial<Record<keyof TaskFilters, boolean>>
   className?: string
+  /** HU-2.3 — render del toggle "Solo ruta crítica" (solo aplica en Gantt). */
+  showCriticalOnly?: boolean
 }
 
 const STATUS_OPTIONS = [
@@ -50,9 +53,15 @@ export function TaskFiltersBar({
   users = [],
   show,
   className,
+  showCriticalOnly = false,
 }: Props) {
   const visible = (key: keyof TaskFilters) => show?.[key] !== false
   const active = countActiveFilters(value)
+
+  // HU-2.3 — toggle "Solo ruta crítica" persistido en zustand. Subscripción
+  // selectiva para evitar re-renders cuando cambian otros flags del store.
+  const criticalOnly = useUIStore((s) => s.criticalOnly)
+  const toggleCriticalOnly = useUIStore((s) => s.toggleCriticalOnly)
 
   // Las áreas disponibles dependen de la gerencia seleccionada.
   const visibleAreas = useMemo(() => {
@@ -229,11 +238,37 @@ export function TaskFiltersBar({
         </div>
       )}
 
+      {showCriticalOnly && (
+        <button
+          type="button"
+          aria-pressed={criticalOnly}
+          aria-label={
+            criticalOnly
+              ? 'Mostrando solo la ruta crítica. Pulsa para mostrar todas las tareas.'
+              : 'Mostrar solo las tareas en la ruta crítica.'
+          }
+          onClick={() => toggleCriticalOnly()}
+          className={clsx(
+            'inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-xs font-medium transition-colors',
+            criticalOnly
+              ? 'border-destructive/40 bg-destructive/10 text-destructive'
+              : 'border-border bg-background text-foreground hover:bg-secondary',
+            !active && 'ml-auto',
+          )}
+        >
+          <Zap className="h-3.5 w-3.5" />
+          {criticalOnly ? 'Mostrando ruta crítica' : 'Solo ruta crítica'}
+        </button>
+      )}
+
       {active > 0 && (
         <button
           type="button"
           onClick={reset}
-          className="flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-muted-foreground hover:bg-accent hover:text-foreground transition-colors ml-auto"
+          className={clsx(
+            'flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-muted-foreground hover:bg-accent hover:text-foreground transition-colors',
+            !showCriticalOnly && 'ml-auto',
+          )}
         >
           <X className="h-3 w-3" />
           Limpiar ({active})
