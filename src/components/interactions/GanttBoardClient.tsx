@@ -236,7 +236,15 @@ export function GanttBoardClient({
       )
     } catch (err) {
       const { code, detail } = parseActionError(err)
-      toast.error(code === 'DEPENDENCY_VIOLATION' ? `Dependencia · ${detail}` : detail)
+      const msg =
+        code === 'DEPENDENCY_VIOLATION'
+          ? `Dependencia · ${detail}`
+          : code === 'NEGATIVE_FLOAT'
+            ? `Holgura negativa · ${detail}`
+            : code === 'CYCLE_DETECTED'
+              ? `Ciclo detectado · ${detail}`
+              : detail
+      toast.error(msg)
       setLocal(tasks)
     }
   }
@@ -270,7 +278,11 @@ export function GanttBoardClient({
           ? `Rango inválido · ${detail}`
           : code === 'DEPENDENCY_VIOLATION'
             ? `Dependencia · ${detail}`
-            : detail,
+            : code === 'NEGATIVE_FLOAT'
+              ? `Holgura negativa · ${detail}`
+              : code === 'CYCLE_DETECTED'
+                ? `Ciclo detectado · ${detail}`
+                : detail,
       )
       setLocal(tasks)
     }
@@ -374,7 +386,9 @@ export function GanttBoardClient({
               ? `Ya existe · ${detail}`
               : code === 'CROSS_PROJECT'
                 ? `Proyectos distintos · ${detail}`
-                : detail
+                : code === 'NEGATIVE_FLOAT'
+                  ? `Holgura negativa · ${detail}`
+                  : detail
         toast.error(msg)
       }
     }

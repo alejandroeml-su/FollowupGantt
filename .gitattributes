@@ -1,0 +1,16 @@
+# Normaliza fines de línea: el repo siempre guarda LF.
+# En Windows, los archivos pueden seguir como CRLF en disco, pero git almacena LF.
+* text=auto eol=lf
+
+# Binarios — git no los toca
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.pdf binary
+*.zip binary
+*.woff binary
+*.woff2 binary
+*.ttf binary
+*.eot binary

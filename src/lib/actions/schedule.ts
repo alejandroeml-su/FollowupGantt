@@ -3,15 +3,28 @@
 import prisma from '@/lib/prisma'
 import { revalidatePath } from 'next/cache'
 import { invalidateCpmCache } from '@/lib/scheduling/invalidate'
+import { validateScheduledChange } from '@/lib/scheduling/validate'
 
 // Ver ADR-001 y patrón de errores en `reorder.ts`
 export type ScheduleErrorCode =
   | 'INVALID_RANGE'
   | 'NOT_FOUND'
   | 'DEPENDENCY_VIOLATION'
+  | 'NEGATIVE_FLOAT'
+  | 'CYCLE_DETECTED'
 
 function actionError(code: ScheduleErrorCode, detail: string): never {
   throw new Error(`[${code}] ${detail}`)
+}
+
+const MS_PER_DAY = 86_400_000
+
+function diffDaysUTC(a: Date, b: Date): number {
+  return Math.round(
+    (Date.UTC(b.getUTCFullYear(), b.getUTCMonth(), b.getUTCDate()) -
+      Date.UTC(a.getUTCFullYear(), a.getUTCMonth(), a.getUTCDate())) /
+      MS_PER_DAY,
+  )
 }
 
 function revalidateAllBoards() {
@@ -56,6 +69,22 @@ export async function updateTaskDates(
     }
   }
 
+  // HU-1.5 · Validación CPM pre-commit: simular el cambio en memoria y
+  // rechazar si genera tareas con holgura negativa. Se hace después del
+  // check FS clásico (más barato) y antes de tocar BD.
+  const taskMeta = await prisma.task.findUnique({
+    where: { id },
+    select: { projectId: true, isMilestone: true },
+  })
+  if (!taskMeta) actionError('NOT_FOUND', 'tarea inexistente')
+  await validateScheduledChangeForTaskDates(
+    id,
+    taskMeta.projectId,
+    !!taskMeta.isMilestone,
+    startDate,
+    endDate,
+  )
+
   const updated = await prisma.task.update({
     where: { id },
     data: {
@@ -68,6 +97,53 @@ export async function updateTaskDates(
   invalidateCpmCache(updated.projectId)
   revalidateAllBoards()
   return { ok: true as const }
+}
+
+/**
+ * Llama a `validateScheduledChange` mapeando los nuevos `startDate`/`endDate`
+ * al override de CpmInput (duration + earliestStartConstraint relativos al
+ * projectStart calculado por `loadCpmInputForProject`). Si la simulación
+ * detecta slack negativo o ciclos, lanza `[NEGATIVE_FLOAT]` /
+ * `[CYCLE_DETECTED]`.
+ *
+ * Se exporta vía wrapper en lugar de inline para mantener `updateTaskDates`
+ * legible y permitir reuso desde `shiftTaskDates` (que delega).
+ */
+async function validateScheduledChangeForTaskDates(
+  taskId: string,
+  projectId: string | null,
+  isMilestone: boolean,
+  startDate: Date | null,
+  endDate: Date | null,
+): Promise<void> {
+  if (!projectId) return
+
+  // Replica la heurística de `prismaAdapter.loadCpmInputForProject` para
+  // calcular la nueva `duration`. Si la mutación deja la tarea sin fechas,
+  // no podemos estimarla → no validamos (caso degenerado, queda al CPM
+  // posterior reportarlo como ORPHAN si aplica).
+  let duration: number | undefined
+  if (isMilestone) {
+    duration = 0
+  } else if (startDate && endDate) {
+    duration = Math.max(1, diffDaysUTC(startDate, endDate))
+  }
+
+  // earliestStartConstraint depende del projectStart, que la simulación
+  // recalcula al cargar el grafo. Pasamos el delta real respecto a la
+  // fecha mínima del proyecto: dejamos que `applyOverrideToCpmInput`
+  // sobrescriba sin tocar `projectStart` (la nueva fecha podría correr el
+  // origen del proyecto, pero CPM trabaja en deltas; un origen ligeramente
+  // distinto no cambia los floats).
+  await validateScheduledChange(projectId, {
+    taskUpdates: [
+      {
+        id: taskId,
+        ...(duration !== undefined ? { duration } : {}),
+        ...(startDate ? { startDate } : {}),
+      },
+    ],
+  })
 }
 
 /**
