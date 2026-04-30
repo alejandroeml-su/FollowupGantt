@@ -6,6 +6,7 @@ import type { DependencyType as PrismaDependencyType } from '@prisma/client'
 import prisma from '@/lib/prisma'
 import { invalidateCpmCache } from '@/lib/scheduling/invalidate'
 import { wouldCreateCycle } from '@/lib/scheduling/cycle'
+import { validateScheduledChange } from '@/lib/scheduling/validate'
 
 // ───────────────────────── Errores tipados ─────────────────────────
 //
@@ -22,6 +23,7 @@ export type DependencyErrorCode =
   | 'CROSS_PROJECT'
   | 'DEPENDENCY_EXISTS'
   | 'CYCLE_DETECTED'
+  | 'NEGATIVE_FLOAT'
 
 function actionError(code: DependencyErrorCode, detail: string): never {
   throw new Error(`[${code}] ${detail}`)
@@ -154,6 +156,21 @@ export async function createDependency(
     actionError('CYCLE_DETECTED', 'La dependencia generaría un ciclo')
   }
 
+  // HU-1.5 · Validación CPM pre-commit. La nueva arista podría generar
+  // slack negativo aunque no cierre ciclo (p. ej. lag positivo que excede
+  // la holgura disponible). `validateScheduledChange` lanza
+  // `[NEGATIVE_FLOAT]` o `[CYCLE_DETECTED]` si aplica.
+  await validateScheduledChange(pred.projectId, {
+    addDependencies: [
+      {
+        predecessorId,
+        successorId,
+        type,
+        lag: lagDays ?? 0,
+      },
+    ],
+  })
+
   const created = await prisma.taskDependency.create({
     data: {
       predecessorId,
@@ -246,6 +263,19 @@ export async function updateDependency(
       actionError('CYCLE_DETECTED', 'El cambio generaría un ciclo')
     }
   }
+
+  // HU-1.5 · Validación CPM pre-commit del nuevo tipo/lag. El override
+  // mantiene el resto del grafo intacto y reemplaza esta única arista.
+  await validateScheduledChange(projectId, {
+    updateDependencies: [
+      {
+        predecessorId: existing.predecessorId,
+        successorId: existing.successorId,
+        ...(type !== undefined ? { type } : {}),
+        ...(lagDays !== undefined ? { lag: lagDays } : {}),
+      },
+    ],
+  })
 
   const data: { type?: PrismaDependencyType; lagDays?: number } = {}
   if (type !== undefined) data.type = DEP_TYPE_2L_TO_PRISMA[type]

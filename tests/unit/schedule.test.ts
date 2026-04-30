@@ -12,6 +12,14 @@ vi.mock('@/lib/prisma', () => ({
   },
 }))
 
+// HU-1.5 · `updateTaskDates` ahora invoca `validateScheduledChange` que
+// lee el grafo del proyecto. Mockeamos a no-op para aislar la lógica
+// específica de schedule (validación de rangos + dep FS clásica). El
+// validador tiene su propia suite (`validate.test.ts`).
+vi.mock('@/lib/scheduling/validate', () => ({
+  validateScheduledChange: vi.fn().mockResolvedValue(undefined),
+}))
+
 import prisma from '@/lib/prisma'
 import { updateTaskDates, shiftTaskDates } from '@/lib/actions/schedule'
 
@@ -50,6 +58,10 @@ describe('schedule · updateTaskDates', () => {
 
   it('acepta cuando no hay predecesores', async () => {
     mock.taskDependency.findMany.mockResolvedValue([])
+    mock.task.findUnique.mockResolvedValue({
+      projectId: 'proj-1',
+      isMilestone: false,
+    })
     mock.task.update.mockResolvedValue({})
     const r = await updateTaskDates(
       't1',
@@ -63,6 +75,10 @@ describe('schedule · updateTaskDates', () => {
   })
 
   it('ignora check de dependencias si startDate es null', async () => {
+    mock.task.findUnique.mockResolvedValue({
+      projectId: 'proj-1',
+      isMilestone: false,
+    })
     mock.task.update.mockResolvedValue({})
     await updateTaskDates('t1', null, new Date('2026-05-05'))
     expect(mock.taskDependency.findMany).not.toHaveBeenCalled()

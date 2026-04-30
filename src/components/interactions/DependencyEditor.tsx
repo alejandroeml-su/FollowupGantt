@@ -147,7 +147,9 @@ export function DependencyEditor({ dependency, position, onClose }: Props) {
                 ? `Tipo inválido · ${detail}`
                 : code === 'NOT_FOUND'
                   ? `No encontrada · ${detail}`
-                  : detail
+                  : code === 'NEGATIVE_FLOAT'
+                    ? `Holgura negativa · ${detail}`
+                    : detail
         toast.error(msg)
       }
     })
