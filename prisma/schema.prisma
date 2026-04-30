@@ -387,6 +387,12 @@ model TaskDependency {
 
   type DependencyType @default(FINISH_TO_START)
 
+  // Lag/Lead en días aplicado a la dependencia. Positivo = espera obligatoria
+  // (ej. FS+2 = sucesor inicia 2 días después de que el predecesor termine);
+  // negativo = lead/solapamiento (ej. FS-1 = sucesor inicia 1 día antes).
+  // Usado por el cálculo CPM (forward/backward pass).
+  lagDays Int @default(0)
+
   @@unique([predecessorId, successorId])
 }
 
