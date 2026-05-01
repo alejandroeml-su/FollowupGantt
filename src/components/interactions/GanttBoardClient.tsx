@@ -596,7 +596,10 @@ export function GanttBoardClient({
         </div>
       )}
 
-      <div className="rounded-xl border border-border bg-subtle/80 shadow-sm">
+      <div
+        data-testid="gantt-board"
+        className="rounded-xl border border-border bg-subtle/80 shadow-sm"
+      >
         {/* Header: etiquetas de nombre + escala de días */}
         <div className="flex border-b border-border">
           <div className="flex w-64 shrink-0 items-center border-r border-border bg-card p-4 text-sm font-medium text-foreground/90">
