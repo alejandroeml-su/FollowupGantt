@@ -399,13 +399,24 @@ model TaskDependency {
 // Módulo PMI: Líneas Base (Snapshots para calcular Schedule Variance)
 model Baseline {
   id           String @id @default(uuid())
-  version      Int // Versión 1, 2, 3...
+  version      Int // Versión 1, 2, 3... (por proyecto, monótonamente creciente)
   snapshotData Json // Json estructurado con el estado de las tareas (fechas, PV, EV, AC)
+  // Etiqueta libre opcional capturada por el usuario para distinguir
+  // versiones (≤80 chars). Persistida como columna primera-clase para
+  // permitir mostrarla sin parsear el JSON.
+  label        String?
 
   projectId String
   project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
   createdAt DateTime @default(now())
+
+  // HU-3.1 · Garantía de unicidad por proyecto+versión. Sirve también
+  // como guard contra race conditions cuando dos clientes capturan
+  // simultáneamente: la 2ª transacción falla con P2002 y la action
+  // reintenta con max(version)+1.
+  @@unique([projectId, version])
+  @@index([projectId, createdAt])
 }
 
 // ─────────────────────────────────────────────────────────────
