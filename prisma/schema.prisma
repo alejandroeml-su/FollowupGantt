@@ -69,6 +69,17 @@ enum NotificationType {
   IMPORT_COMPLETED
 }
 
+// Ola P2 · Equipo P2-1 — Vistas guardadas multi-surface.
+// Cada SavedView fija una "superficie" (qué tablero la consume) para que
+// los filtros, grouping y columnPrefs sean coherentes con la UI destino.
+enum ViewSurface {
+  LIST
+  KANBAN
+  GANTT
+  CALENDAR
+  TABLE
+}
+
 // ---------------------------------------------------------
 // ENTIDADES PRINCIPALES
 // ---------------------------------------------------------
@@ -108,6 +119,9 @@ model User {
   // Ola P1 · Centro de notificaciones in-app (HU-N1.x).
   notifications          Notification[]
   notificationPreference NotificationPreference?
+
+  // Ola P2 · Vistas guardadas (Equipo P2-1).
+  savedViews SavedView[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -712,4 +726,45 @@ model NotificationPreference {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+// ─────────────────────────────────────────────────────────────
+// Módulo Vistas Guardadas (Ola P2 · Equipo P2-1)
+//
+// Persistencia de configuraciones de filtros + grouping + columnas para
+// equiparar paridad con ClickUp. Cada vista pertenece a un usuario y a una
+// superficie (LIST/KANBAN/GANTT/CALENDAR/TABLE). `isShared=true` permite
+// que la vista sea visible para todos los users del proyecto/org (la
+// permission real se verifica en el server action vía requireUser).
+// ─────────────────────────────────────────────────────────────
+
+model SavedView {
+  id          String      @id @default(uuid())
+  userId      String
+  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name        String
+  surface     ViewSurface
+  // Estructura serializada de TaskFilters (zod-validada en server action).
+  filters     Json
+  // null | 'assignee' | 'sprint' | 'phase' | 'status' | 'tags' | 'priority' |
+  // 'custom_field:<id>'. Validado contra GROUPING_KEYS en runtime.
+  grouping    String?
+  // { field, direction: 'asc' | 'desc' } opcional.
+  sorting     Json?
+  // visibility/order de columnas (para Table). Shape libre validado en cliente.
+  columnPrefs Json?
+  // true ⇒ visible para todos los users (lectura compartida; la edición
+  // sigue restringida al owner).
+  isShared    Boolean     @default(false)
+  // 1 default por usuario por surface. Mantenemos la unicidad en código
+  // (setDefaultView lo desmarca antes de marcar) para evitar migraciones
+  // condicionales con WHERE en Postgres.
+  isDefault   Boolean     @default(false)
+  // Fractional indexing para reordenar sin reescribir todos los registros.
+  position    Float       @default(1)
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  @@index([userId, surface])
+  @@index([surface, isShared])
 }

@@ -5,6 +5,13 @@ import { persist, createJSONStorage } from 'zustand/middleware'
 
 type View = 'list' | 'kanban' | 'gantt' | 'calendar' | 'table' | 'workload'
 
+/**
+ * Ola P2 · Equipo P2-1 — superficies que aceptan vistas guardadas.
+ * Mantenemos en lowercase aquí (matching con `currentView`) y mapeamos al
+ * enum `ViewSurface` (UPPER) en la frontera con server actions.
+ */
+export type SavedViewSurface = 'list' | 'kanban' | 'gantt' | 'calendar' | 'table'
+
 export type ColumnPrefs = {
   collapsed?: boolean
   accent?: string           // hex color
@@ -40,6 +47,13 @@ type UIState = {
    * Default `false` (panel colapsado en la primera carga).
    */
   baselineTrendOpen: boolean
+  /**
+   * Ola P2 · Equipo P2-1 — vista guardada activa por superficie. Permite
+   * que la última vista seleccionada por el usuario sobreviva al refresh.
+   * `null` = vista "Default" (sin SavedView aplicada). Indexado por
+   * superficie para que cambiar de tablero no pierda la vista anterior.
+   */
+  activeViewByPath: Record<SavedViewSurface, string | null>
 
   toggleSelection: (id: string, additive?: boolean) => void
   selectRange: (ids: string[]) => void
@@ -57,6 +71,8 @@ type UIState = {
   setActiveBaseline: (projectId: string, baselineId: string | null) => void
   clearActiveBaseline: (projectId: string) => void
   toggleBaselineTrend: (open?: boolean) => void
+  setActiveView: (surface: SavedViewSurface, viewId: string | null) => void
+  clearActiveView: (surface: SavedViewSurface) => void
 }
 
 export const useUIStore = create<UIState>()(
@@ -73,6 +89,13 @@ export const useUIStore = create<UIState>()(
       criticalOnly: false,
       activeBaselineId: {},
       baselineTrendOpen: false,
+      activeViewByPath: {
+        list: null,
+        kanban: null,
+        gantt: null,
+        calendar: null,
+        table: null,
+      },
 
       toggleSelection: (id, additive = false) =>
         set((s) => {
@@ -127,6 +150,20 @@ export const useUIStore = create<UIState>()(
         }),
       toggleBaselineTrend: (open) =>
         set((s) => ({ baselineTrendOpen: open ?? !s.baselineTrendOpen })),
+      setActiveView: (surface, viewId) =>
+        set((s) => ({
+          activeViewByPath: {
+            ...s.activeViewByPath,
+            [surface]: viewId,
+          },
+        })),
+      clearActiveView: (surface) =>
+        set((s) => ({
+          activeViewByPath: {
+            ...s.activeViewByPath,
+            [surface]: null,
+          },
+        })),
     }),
     {
       name: 'followup-ui',
@@ -139,6 +176,7 @@ export const useUIStore = create<UIState>()(
           criticalOnly: s.criticalOnly,
           activeBaselineId: s.activeBaselineId,
           baselineTrendOpen: s.baselineTrendOpen,
+          activeViewByPath: s.activeViewByPath,
         }) as Partial<UIState>,
     },
   ),
