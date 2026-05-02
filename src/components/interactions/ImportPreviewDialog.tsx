@@ -9,22 +9,34 @@ import type {
 } from '@/lib/import-export/MAPPING'
 
 /**
- * HU-4.2 · Modal de pre-flight para importación.
+ * HU-4.2 / HU-4.1 · Modal de pre-flight para importación.
+ *
+ * Generalizado para soportar dos formatos vía prop `format`:
+ *   - 'excel': muestra columnas (mnemonic, parent_mnemonic).
+ *   - 'msp-xml': muestra columnas (outline, parent_outline) — el mnemonic
+ *     se autogenera (`MSP-${uid}`) y no aporta info al usuario.
  *
  * Muestra:
  *  - Conteos (tareas, dependencias, recursos, usuarios resueltos).
  *  - Warnings agrupados (parents inválidos, lag clamped, emails sin
- *    match) en banner amarillo.
+ *    match, constraints/calendarios MSP ignorados) en banner amarillo.
  *  - Errors en banner rojo + botón confirmar disabled.
- *  - Sample 10 filas en tabla compacta.
+ *  - Sample 20 filas en tabla compacta.
  *  - Botón confirmar dispara `onConfirm` que la página padre orquesta
- *    via Server Action `importExcel`.
+ *    via Server Action correspondiente (`importExcel` o `importMspXml`).
  */
 
+export type PreviewFormat = 'excel' | 'msp-xml'
+
 export type PreviewSampleRow = {
-  mnemonic: string
+  /** Excel: mnemonic; MSP: undefined (se muestra outline en su lugar). */
+  mnemonic?: string
+  /** MSP: OutlineNumber jerárquico "1.2.3"; Excel: undefined. */
+  outline?: string
   title: string
-  parent_mnemonic: string | null
+  /** Excel: parent_mnemonic; MSP: parent_outline. Ambos pueden ser null. */
+  parent_mnemonic?: string | null
+  parent_outline?: string
   start_date: string | Date
   end_date: string | Date
   priority: string
@@ -57,6 +69,8 @@ type Props = {
   state: PreviewState
   onConfirm: () => void
   onCancel: () => void
+  /** Default: 'excel'. */
+  format?: PreviewFormat
 }
 
 function fmtDate(d: string | Date): string {
@@ -72,11 +86,20 @@ export function ImportPreviewDialog({
   state,
   onConfirm,
   onCancel,
+  format = 'excel',
 }: Props) {
   const isCommitting = state.status === 'committing'
   const isLoading = state.status === 'loading'
   const isPreview = state.status === 'preview'
   const hasErrors = state.status === 'errors'
+
+  const isMsp = format === 'msp-xml'
+  const titleText = isMsp
+    ? 'Vista previa del import (MS Project)'
+    : 'Vista previa del import'
+  const fileHint = isMsp
+    ? 'Selecciona un archivo .xml (MSP 2003+) para continuar.'
+    : 'Selecciona un archivo .xlsx para continuar.'
 
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
@@ -90,15 +113,13 @@ export function ImportPreviewDialog({
           <div className="mb-4 flex items-start justify-between gap-4">
             <div>
               <Dialog.Title className="text-base font-semibold">
-                Vista previa del import
+                {titleText}
               </Dialog.Title>
               <Dialog.Description
                 id="import-preview-desc"
                 className="mt-1 text-xs text-muted-foreground"
               >
-                {filename
-                  ? `Archivo: ${filename}`
-                  : 'Selecciona un archivo .xlsx para continuar.'}
+                {filename ? `Archivo: ${filename}` : fileHint}
               </Dialog.Description>
             </div>
             <Dialog.Close
@@ -175,9 +196,9 @@ export function ImportPreviewDialog({
                 <table className="w-full text-xs">
                   <thead className="bg-muted/40">
                     <tr>
-                      <Th>mnemonic</Th>
+                      <Th>{isMsp ? 'outline' : 'mnemonic'}</Th>
                       <Th>title</Th>
-                      <Th>parent</Th>
+                      <Th>{isMsp ? 'padre' : 'parent'}</Th>
                       <Th>start</Th>
                       <Th>end</Th>
                       <Th>prior.</Th>
@@ -186,18 +207,29 @@ export function ImportPreviewDialog({
                     </tr>
                   </thead>
                   <tbody>
-                    {state.sample.map((t) => (
-                      <tr key={t.mnemonic} className="border-t border-border">
-                        <Td className="font-mono">{t.mnemonic}</Td>
-                        <Td>{t.title}</Td>
-                        <Td className="font-mono">{t.parent_mnemonic ?? '—'}</Td>
-                        <Td>{fmtDate(t.start_date)}</Td>
-                        <Td>{fmtDate(t.end_date)}</Td>
-                        <Td>{t.priority}</Td>
-                        <Td>{t.progress}%</Td>
-                        <Td>{t.is_milestone ? 'sí' : 'no'}</Td>
-                      </tr>
-                    ))}
+                    {state.sample.map((t, i) => {
+                      const idCol = isMsp
+                        ? t.outline ?? '—'
+                        : t.mnemonic ?? '—'
+                      const parentCol = isMsp
+                        ? t.parent_outline || '—'
+                        : t.parent_mnemonic ?? '—'
+                      const rowKey = isMsp
+                        ? `${t.outline ?? ''}-${i}`
+                        : t.mnemonic ?? `row-${i}`
+                      return (
+                        <tr key={rowKey} className="border-t border-border">
+                          <Td className="font-mono">{idCol}</Td>
+                          <Td>{t.title}</Td>
+                          <Td className="font-mono">{parentCol}</Td>
+                          <Td>{fmtDate(t.start_date)}</Td>
+                          <Td>{fmtDate(t.end_date)}</Td>
+                          <Td>{t.priority}</Td>
+                          <Td>{t.progress}%</Td>
+                          <Td>{t.is_milestone ? 'sí' : 'no'}</Td>
+                        </tr>
+                      )
+                    })}
                   </tbody>
                 </table>
                 {state.counts.tasks > state.sample.length && (

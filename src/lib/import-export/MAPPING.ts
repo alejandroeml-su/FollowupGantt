@@ -211,19 +211,37 @@ export type ImportWarningCode =
   | 'RESOURCE_NO_MATCH'
   | 'LAG_CLAMPED'
   | 'EMPTY_SHEET'
+  | 'CONSTRAINT_IGNORED'
+  | 'CALENDAR_IGNORED'
+  | 'MULTIPLE_ASSIGNMENTS_IGNORED'
+  | 'INACTIVE_TASK_SKIPPED'
+  | 'MATERIAL_RESOURCE_IGNORED'
+  | 'NEGATIVE_FLOAT_POST_IMPORT'
+
+/**
+ * Origen extendido del warning/error. Excel usa 'Tareas|Dependencias|Recursos';
+ * MSP XML reporta secciones lógicas equivalentes para reutilizar el render del
+ * preview dialog. `MSP` es un fallback para eventos a nivel proyecto (root tag,
+ * version, etc.).
+ */
+export type ImportSource =
+  | 'Tareas'
+  | 'Dependencias'
+  | 'Recursos'
+  | 'MSP'
 
 export interface ImportError {
   code: ImportErrorCode
   detail: string
-  /** Hoja origen (Tareas|Dependencias|Recursos) cuando aplica. */
-  sheet?: 'Tareas' | 'Dependencias' | 'Recursos'
-  /** Fila Excel 1-based (incluye header) cuando aplica. */
+  /** Hoja Excel u origen MSP cuando aplica. */
+  sheet?: ImportSource
+  /** Fila Excel 1-based (incluye header) o UID MSP cuando aplica. */
   row?: number
 }
 
 export interface ImportWarning {
   code: ImportWarningCode
   detail: string
-  sheet?: 'Tareas' | 'Dependencias' | 'Recursos'
+  sheet?: ImportSource
   row?: number
 }
