@@ -1,9 +1,16 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { MessageSquare } from 'lucide-react'
+import { AlertTriangle, MessageSquare } from 'lucide-react'
 import { clsx } from 'clsx'
 import type { SerializedTask } from '@/lib/types'
+import type { BaselineSnapshot } from '@/lib/scheduling/baseline-snapshot'
+import {
+  buildVarianceMap,
+  type TaskVariance,
+  type VarianceClassification,
+} from '@/lib/scheduling/baseline-variance'
+import { GanttBaselineLayer } from './GanttBaselineLayer'
 import { updateTaskDates, shiftTaskDates } from '@/lib/actions/schedule'
 import {
   createDependency,
@@ -30,6 +37,9 @@ import {
 } from './DependencyEditor'
 import { CaptureBaselineButton } from './CaptureBaselineButton'
 import { BaselineSelector, type BaselineOption } from './BaselineSelector'
+import { BaselineTrendPanel } from './BaselineTrendPanel'
+import { BaselineTrendToggle } from './BaselineTrendToggle'
+import { getBaselineSnapshot } from '@/lib/actions/baselines'
 
 type ParentOption = Pick<SerializedTask, 'id' | 'title' | 'mnemonic'> & {
   project?: { id: string; name: string } | null
@@ -609,6 +619,80 @@ export function GanttBoardClient({
       ? baselinesByProject[activeProjectId] ?? []
       : []
 
+  // HU-3.3 · lazy load del snapshot de la línea base activa. El zustand
+  // `activeBaselineId[projectId]` guarda la selección persistida; cuando
+  // cambia, hacemos fetch del snapshot completo (server action cacheable
+  // implícitamente por React + revalidatePath en captureBaseline).
+  //
+  // Cache local en `loadedSnapshotRef` evita refetches innecesarios si el
+  // mismo id ya está cargado (p. ej. al cambiar criticalOnly).
+  const activeBaselineIdForProject = useUIStore((s) =>
+    activeProjectId ? s.activeBaselineId[activeProjectId] ?? null : null,
+  )
+  const [overlaySnapshot, setOverlaySnapshot] = useState<{
+    id: string
+    projectId: string
+    version: number
+    snapshot: BaselineSnapshot
+  } | null>(null)
+
+  // El reset síncrono al cambiar de proyecto/baseline es deliberado para
+  // evitar que el render intermedio muestre el snapshot anterior con el
+  // mapa de tareas nuevo (mismatch visual). El lint warn de
+  // `set-state-in-effect` aplica para cascadas, no para sincronización
+  // con un id externo (zustand).
+  /* eslint-disable react-hooks/set-state-in-effect */
+  useEffect(() => {
+    if (!activeProjectId || !activeBaselineIdForProject) {
+      setOverlaySnapshot(null)
+      return
+    }
+    let cancelled = false
+    const run = async () => {
+      try {
+        const result = await getBaselineSnapshot(activeBaselineIdForProject)
+        if (cancelled) return
+        if (!result || result.projectId !== activeProjectId) {
+          setOverlaySnapshot(null)
+          return
+        }
+        setOverlaySnapshot(result)
+      } catch (err) {
+        if (cancelled) return
+        const { code, detail } = parseActionError(err)
+        toast.error(
+          code === 'INVALID_SNAPSHOT'
+            ? `Línea base corrupta · ${detail}`
+            : `No se pudo cargar la línea base · ${detail}`,
+        )
+        setOverlaySnapshot(null)
+      }
+    }
+    run()
+    return () => {
+      cancelled = true
+    }
+  }, [activeProjectId, activeBaselineIdForProject])
+  /* eslint-enable react-hooks/set-state-in-effect */
+
+  // Mapa de varianza pre-calculado para que cada fila aplique borde sin
+  // recomputar en cada render. Keyed por (overlaySnapshot, visibleLocal).
+  const varianceMap = useMemo<Map<string, TaskVariance>>(() => {
+    if (!overlaySnapshot) return new Map()
+    return buildVarianceMap(
+      visibleLocal.map((t) => ({
+        id: t.id,
+        startDate: t.startDate ?? null,
+        endDate: t.endDate ?? null,
+      })),
+      overlaySnapshot.snapshot,
+    )
+  }, [overlaySnapshot, visibleLocal])
+
+  const overlayCapturedAt = overlaySnapshot
+    ? overlaySnapshot.snapshot.capturedAt.slice(0, 10)
+    : null
+
   return (
     <>
       <TaskFiltersBar
@@ -639,6 +723,10 @@ export function GanttBoardClient({
           projectId={activeProjectId}
           baselines={activeBaselines}
         />
+        <BaselineTrendToggle
+          projectId={activeProjectId}
+          hasActiveBaseline={activeBaselineIdForProject != null}
+        />
       </div>
 
       {hasCpmCycle && (
@@ -651,9 +739,10 @@ export function GanttBoardClient({
         </div>
       )}
 
+      <div className="flex gap-3">
       <div
         data-testid="gantt-board"
-        className="rounded-xl border border-border bg-subtle/80 shadow-sm"
+        className="flex-1 min-w-0 rounded-xl border border-border bg-subtle/80 shadow-sm"
       >
         {/* Header: etiquetas de nombre + escala de días */}
         <div className="flex border-b border-border">
@@ -724,6 +813,58 @@ export function GanttBoardClient({
               className={clsx('relative', connection && 'cursor-crosshair')}
               style={{ width: totalWidth, height: canvasHeight, minWidth: totalWidth }}
             >
+              {/* HU-3.3 · capa de barras fantasma (línea base). z-5, debajo de
+                  filas/barras reales (z-10) y de las flechas (z-20). El
+                  componente se monta solo si hay snapshot activo cuyo
+                  projectId coincide con el filtro de proyecto. */}
+              {overlaySnapshot && (
+                <GanttBaselineLayer
+                  tasks={visibleLocal}
+                  snapshot={overlaySnapshot.snapshot}
+                  baselineVersion={overlaySnapshot.version}
+                  dayWidth={DAY_WIDTH}
+                  rangeStart={start}
+                  rangeDays={rangeDays}
+                  rowHeight={ROW_HEIGHT}
+                />
+              )}
+
+              {/* HU-3.3 · pill leyenda flotante. z-30 para quedar sobre las
+                  flechas SVG (z-20) y por debajo de cualquier modal (z-50). */}
+              {overlaySnapshot && (
+                <div
+                  data-testid="gantt-baseline-legend"
+                  role="status"
+                  aria-live="polite"
+                  className={clsx(
+                    'pointer-events-none absolute right-2 top-2 z-30 inline-flex items-center gap-2',
+                    'rounded-full border border-border bg-popover/95 px-3 py-1.5',
+                    'text-[11px] text-muted-foreground shadow-sm backdrop-blur',
+                  )}
+                >
+                  <span className="inline-flex items-center gap-1">
+                    <span
+                      aria-hidden
+                      className="inline-block h-[2px] w-4 rounded bg-foreground/80"
+                    />
+                    <span className="text-foreground/80">Activa</span>
+                  </span>
+                  <span aria-hidden className="text-border">
+                    ·
+                  </span>
+                  <span className="inline-flex items-center gap-1">
+                    <span
+                      aria-hidden
+                      className="inline-block h-0 w-4 rounded border-t-2 border-dashed border-muted-foreground/60"
+                    />
+                    <span>
+                      Línea base v.{overlaySnapshot.version}
+                      {overlayCapturedAt ? ` (cap. ${overlayCapturedAt})` : ''}
+                    </span>
+                  </span>
+                </div>
+              )}
+
               {/* Tinte de fines de semana — columnas verticales por día. */}
               <div aria-hidden className="pointer-events-none absolute inset-0 flex">
                 {days.map((d, i) => {
@@ -753,6 +894,7 @@ export function GanttBoardClient({
                   rangeDays={rangeDays}
                   rowHeight={ROW_HEIGHT}
                   cpm={cpmByTaskId?.[task.id]}
+                  variance={varianceMap.get(task.id) ?? null}
                   onShift={(delta) => commitShift(task.id, delta)}
                   onResizeStart={(delta) => {
                     const s = parseISO(task.startDate)
@@ -819,6 +961,9 @@ export function GanttBoardClient({
             </div>
           </div>
         )}
+      </div>
+
+      <BaselineTrendPanel projectId={activeProjectId} tasks={visibleLocal} />
       </div>
 
       <TaskDrawer
@@ -1069,6 +1214,7 @@ function GanttBarSlot({
   rangeDays,
   rowHeight,
   cpm,
+  variance,
   onShift,
   onResizeStart,
   onResizeEnd,
@@ -1083,6 +1229,8 @@ function GanttBarSlot({
   rangeDays: number
   rowHeight: number
   cpm?: GanttCpmInfo
+  /** HU-3.3 · varianza pre-calculada respecto a la línea base activa. */
+  variance?: TaskVariance | null
   onShift: (deltaDays: number) => void
   onResizeStart: (deltaDays: number) => void
   onResizeEnd: (deltaDays: number) => void
@@ -1130,6 +1278,30 @@ function GanttBarSlot({
   const isMilestone = !!task.isMilestone
   const progress = task.progress ?? 0
   const isCritical = !!cpm?.isCritical
+
+  // HU-3.3 · clase de borde según severidad de la varianza vs baseline.
+  // Solo aplicamos borde extra si la severidad es ≥ minor; on-plan se
+  // queda con el borde por defecto del CPM/tipo. La doble codificación
+  // (color + icono + tooltip <title>) cubre WCAG AA.
+  const varianceClass = (variance?.classification ?? null) as
+    | VarianceClassification
+    | null
+  const varianceBorder =
+    varianceClass === 'critical'
+      ? 'border-2 border-red-500'
+      : varianceClass === 'moderate'
+        ? 'border-2 border-amber-500'
+        : varianceClass === 'minor'
+          ? 'border-2 border-amber-500/60'
+          : ''
+  const varianceTooltip =
+    variance && variance.deltaDays != null && variance.classification !== 'on-plan'
+      ? `\n─────────────────────\nDesvío vs línea base: ${
+          variance.deltaDays > 0 ? '+' : ''
+        }${variance.deltaDays} día${
+          Math.abs(variance.deltaDays) !== 1 ? 's' : ''
+        }`
+      : ''
 
   // Tooltip CPM (HU-2.2): forward+backward pass visible en hover. Usamos
   // \n (saltos nativos del attribute `title`) ya que Radix Tooltip no está
@@ -1190,7 +1362,7 @@ function GanttBarSlot({
           aria-valuetext={`${fmt(s)} a ${fmt(e)}`}
           data-gantt-task-id={task.id}
           onFocus={onFocus}
-          title={cpmTooltip}
+          title={cpmTooltip + varianceTooltip}
           style={{
             left,
             width,
@@ -1216,6 +1388,10 @@ function GanttBarSlot({
                   : task.type === 'PMI_TASK'
                     ? 'border-emerald-500/50 bg-emerald-900/40'
                     : 'border-indigo-500/50 bg-indigo-900/40',
+            // HU-3.3 · borde de variance vs baseline (override visual). Se
+            // aplica DESPUÉS del border de tipo/CPM para que prevalezca
+            // el indicador de desvío contra la línea base.
+            varianceBorder,
             focused && 'ring-2 ring-indigo-500/60',
             isConnectionTarget && 'outline outline-2 outline-offset-2 outline-emerald-500',
             bodyDrag.isDragging && 'opacity-80',
@@ -1251,6 +1427,31 @@ function GanttBarSlot({
               ⚠
             </span>
           )}
+
+          {/* HU-3.3 · Indicador de variance moderada/crítica vs baseline.
+              Se ubica al borde derecho cuando hay slack negativo no para
+              no solaparse con su icono. Doble codificación: borde +
+              icono + tooltip — un usuario daltónico distingue por la
+              forma del triángulo y por el tooltip. */}
+          {(varianceClass === 'moderate' || varianceClass === 'critical') &&
+            !slackNegative && (
+              <span
+                aria-hidden
+                className={clsx(
+                  'pointer-events-none absolute right-1.5 top-1/2 z-10 -translate-y-1/2',
+                  varianceClass === 'critical' ? 'text-red-300' : 'text-amber-300',
+                )}
+                title={`Desvío vs línea base: ${
+                  variance?.deltaDays != null && variance.deltaDays > 0 ? '+' : ''
+                }${variance?.deltaDays ?? 0}d`}
+              >
+                <AlertTriangle
+                  className={clsx(
+                    varianceClass === 'critical' ? 'h-3.5 w-3.5' : 'h-3 w-3',
+                  )}
+                />
+              </span>
+            )}
 
           {/* handle izquierdo */}
           <div
