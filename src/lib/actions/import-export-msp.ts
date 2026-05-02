@@ -71,6 +71,7 @@ import {
 } from '@/lib/import-export/MAPPING'
 import { invalidateCpmCache } from '@/lib/scheduling/invalidate'
 import { validateProjectSchedule } from '@/lib/scheduling/validate'
+import { createNotification } from '@/lib/actions/notifications'
 
 // ───────────────────────── Errores tipados ─────────────────────────
 
@@ -323,6 +324,12 @@ export interface MspImportInput {
   projectId: string
   /** D12 · Solo `replace` en P0. Default: 'replace'. */
   mode?: 'replace'
+  /**
+   * Ola P1 · Usuario que disparó el import. Si se provee, recibe una
+   * notificación in-app `IMPORT_COMPLETED` cuando termina ok. Compat:
+   * callers viejos siguen funcionando si lo omiten.
+   */
+  userId?: string | null
 }
 
 export interface MspImportResult {
@@ -591,6 +598,35 @@ export async function importMspXml(
     }
 
     revalidatePath('/gantt')
+
+    // Notificación in-app al usuario que importó (Ola P1). Side-effect
+    // tolerante: la transacción ya cerró ok.
+    if (input.userId) {
+      try {
+        const warnCount = warnings.length
+        const warnSuffix =
+          warnCount === 1 ? '1 advertencia' : `${warnCount} advertencias`
+        await createNotification({
+          userId: input.userId,
+          type: 'IMPORT_COMPLETED',
+          title: 'Import MS Project completado',
+          body: `${result.tasksCreated} tareas, ${result.depsCreated} dependencias, ${resourcesMatched} recursos asignados, ${warnSuffix}`,
+          link: `/gantt?projectId=${encodeURIComponent(input.projectId)}`,
+          data: {
+            projectId: input.projectId,
+            filename: input.filename,
+            counts: {
+              ...result,
+              resourcesMatched,
+              resourcesUnmatched,
+            },
+            warningsCount: warnCount,
+          },
+        })
+      } catch (err) {
+        console.error('[notifications] importMspXml notify falló', err)
+      }
+    }
 
     return {
       ok: true,
