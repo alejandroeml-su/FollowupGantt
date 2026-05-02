@@ -9,6 +9,9 @@
  * el caller usa `startDate`/`endDate` de cada `CpmTaskResult` para presentar.
  */
 
+import type { WorkCalendarLike } from './work-calendar'
+import { addWorkdays, isWorkday, startOfDayUTC } from './work-calendar'
+
 export type DependencyType = 'FS' | 'SS' | 'FF' | 'SF'
 
 export interface CpmTaskInput {
@@ -35,6 +38,13 @@ export interface CpmInput {
   projectStart: Date
   tasks: CpmTaskInput[]
   dependencies: CpmDependencyInput[]
+  /**
+   * Calendario laboral opcional (Ola P1.5). Si está presente, las
+   * conversiones de "días desde projectStart" → `startDate`/`endDate`
+   * solo cuentan días laborables (no-workdays se saltan). Si ausente,
+   * fallback al comportamiento legacy (días corridos).
+   */
+  calendar?: WorkCalendarLike
 }
 
 export interface CpmTaskResult {
@@ -72,6 +82,34 @@ function addDaysUTC(d: Date, days: number): Date {
   const out = new Date(d)
   out.setUTCDate(out.getUTCDate() + days)
   return out
+}
+
+/**
+ * Convierte "días desde projectStart" a fecha calendario.
+ *  - Sin calendar: suma días corridos (legacy).
+ *  - Con calendar: la unidad CPM se interpreta como "días laborables",
+ *    así que sumamos `n` workdays empezando desde `projectStart`.
+ *    Si projectStart no es laborable, saltamos al primer workday y
+ *    sumamos `n` desde ahí (n=0 → primer workday ≥ projectStart).
+ */
+function daysToDate(
+  projectStart: Date,
+  n: number,
+  calendar: WorkCalendarLike | undefined,
+): Date {
+  if (!calendar) return addDaysUTC(projectStart, n)
+  const start = startOfDayUTC(projectStart)
+  // Anclar projectStart al primer día laborable disponible.
+  let anchor = start
+  if (!isWorkday(anchor, calendar)) {
+    // Buscar el primer workday >= start
+    anchor = addWorkdays(anchor, 1, calendar)
+    // Si la suma de 1 nos pasó del start (siempre lo hace al no ser
+    // laborable), retrocedemos: addWorkdays con días=0 simplemente
+    // normaliza, pero ya tenemos `anchor` como el siguiente workday.
+  }
+  if (n <= 0) return anchor
+  return addWorkdays(anchor, n, calendar)
 }
 
 /**
@@ -277,8 +315,8 @@ export function computeCpm(input: CpmInput): CpmOutput {
       LF: lf,
       totalFloat,
       isCritical: totalFloat === 0,
-      startDate: addDaysUTC(input.projectStart, es),
-      endDate: addDaysUTC(input.projectStart, ef),
+      startDate: daysToDate(input.projectStart, es, input.calendar),
+      endDate: daysToDate(input.projectStart, ef, input.calendar),
     })
     void task // unused but kept for clarity
   }

@@ -216,6 +216,11 @@ model Project {
   cpi Float? // Cost Performance Index
   spi Float? // Schedule Performance Index
 
+  // Calendario laboral aplicable al proyecto (Ola P1.5).
+  // Si NULL → CPM y workload usan días corridos (legacy).
+  calendarId String?
+  calendar   WorkCalendar? @relation(fields: [calendarId], references: [id])
+
   // Relaciones
   phases      Phase[]
   sprints     Sprint[]
@@ -463,6 +468,43 @@ model Baseline {
   // reintenta con max(version)+1.
   @@unique([projectId, version])
   @@index([projectId, createdAt])
+}
+
+// ─────────────────────────────────────────────────────────────
+// Módulo Calendarios Laborales (Ola P1.5)
+// ─────────────────────────────────────────────────────────────
+
+model WorkCalendar {
+  id           String  @id @default(uuid())
+  name         String
+  isDefault    Boolean @default(false)
+  // Bitmask de días laborables (bit 0 = lun, bit 6 = dom).
+  // Default: lun-vie = 0b0011111 = 31 (sin sábado ni domingo).
+  workdays     Int     @default(31)
+  // Horas estándar de jornada laboral (8.00 por defecto).
+  workdayHours Decimal @default(8.00) @db.Decimal(4, 2)
+
+  holidays Holiday[]
+  projects Project[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Holiday {
+  id         String       @id @default(uuid())
+  calendarId String
+  calendar   WorkCalendar @relation(fields: [calendarId], references: [id], onDelete: Cascade)
+  // Fecha del festivo (almacenada como UTC midnight).
+  date       DateTime
+  name       String
+  // Si true ⇒ se repite cada año (se compara solo mes/día).
+  recurring  Boolean      @default(false)
+
+  createdAt DateTime @default(now())
+
+  @@unique([calendarId, date])
+  @@index([calendarId, date])
 }
 
 // ─────────────────────────────────────────────────────────────

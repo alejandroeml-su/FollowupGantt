@@ -69,7 +69,8 @@ const menuGroups: RouteGroup[] = [
       { name: 'Gerencias', path: '/gerencias', icon: Building2 },
       { name: 'Proyectos', path: '/projects', icon: FolderKanban },
       { name: 'Usuarios', path: '/settings/users', icon: Users },
-      { name: 'Capacidad (WIP)', path: '/workload', icon: ClipboardList },
+      { name: 'Calendarios laborales', path: '/settings/calendars', icon: CalendarDays },
+      { name: 'Cargas de trabajo', path: '/workload', icon: ClipboardList },
     ],
   },
 ];

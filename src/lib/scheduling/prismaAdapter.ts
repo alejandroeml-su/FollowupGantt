@@ -5,6 +5,7 @@ import type {
   CpmTaskInput,
   DependencyType,
 } from './cpm'
+import type { WorkCalendarLike } from './work-calendar'
 
 const MS_PER_DAY = 86_400_000
 
@@ -53,6 +54,47 @@ export async function loadCpmInputForProject(
       isMilestone: true,
     },
   })
+
+  // Cargar el calendar laboral asociado al proyecto (si lo hay).
+  // Ola P1.5: si NULL ⇒ CPM cae a comportamiento legacy (días corridos).
+  let calendar: WorkCalendarLike | undefined = undefined
+  try {
+    const project = await (prisma as unknown as {
+      project: {
+        findUnique: (args: {
+          where: { id: string }
+          select: {
+            calendar: { select: { workdays: true; holidays: { select: { date: true; recurring: true } } } }
+          }
+        }) => Promise<{
+          calendar: {
+            workdays: number
+            holidays: Array<{ date: Date; recurring: boolean }>
+          } | null
+        } | null>
+      }
+    }).project.findUnique({
+      where: { id: projectId },
+      select: {
+        calendar: {
+          select: {
+            workdays: true,
+            holidays: { select: { date: true, recurring: true } },
+          },
+        },
+      },
+    })
+    if (project?.calendar) {
+      calendar = {
+        workdays: project.calendar.workdays,
+        holidays: project.calendar.holidays,
+      }
+    }
+  } catch {
+    // Si la migración aún no corrió (model.calendar no existe), seguimos
+    // con calendar=undefined para preservar el comportamiento legacy.
+    calendar = undefined
+  }
 
   const taskIds = tasksDb.map((t) => t.id)
   const depsDb = taskIds.length
@@ -109,5 +151,5 @@ export async function loadCpmInputForProject(
     lag: d.lagDays ?? 0,
   }))
 
-  return { projectStart, tasks, dependencies }
+  return { projectStart, tasks, dependencies, calendar }
 }
