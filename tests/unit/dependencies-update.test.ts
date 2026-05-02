@@ -109,6 +109,18 @@ vi.mock('@/lib/scheduling/cache', () => ({
   getCachedCpmForProject: vi.fn(async () => null),
 }))
 
+// Auth (Ola P1): `updateDependency` ahora invoca `requireProjectAccess`.
+// Mockeamos como no-op que devuelve user admin sintético.
+vi.mock('@/lib/auth/check-project-access', () => ({
+  requireProjectAccess: vi.fn(async () => ({
+    id: 'test-user',
+    email: 'test@local',
+    name: 'Test',
+    roles: ['SUPER_ADMIN'],
+  })),
+  canAccessProject: vi.fn(async () => true),
+}))
+
 // ─────────────────────── Reset entre tests ───────────────────────
 
 const DEFAULT_DEP_ROW = {

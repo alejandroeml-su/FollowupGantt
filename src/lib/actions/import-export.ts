@@ -48,6 +48,7 @@ import {
 } from '@/lib/import-export/MAPPING'
 import { invalidateCpmCache } from '@/lib/scheduling/invalidate'
 import { createNotification } from '@/lib/actions/notifications'
+import { requireProjectAccess } from '@/lib/auth/check-project-access'
 
 // ───────────────────────── Errores tipados ─────────────────────────
 
@@ -132,6 +133,10 @@ export async function exportExcel(projectId: string): Promise<ExportResult> {
       errors: [{ code: 'INVALID_INPUT', detail: 'projectId requerido' }],
     }
   }
+
+  // Auth (Ola P1): lanza [UNAUTHORIZED]/[FORBIDDEN] que el cliente parsea
+  // como cualquier otro error tipado. Consistente con baselines/deps.
+  await requireProjectAccess(projectId)
 
   try {
     const project = await prisma.project.findUnique({
@@ -341,6 +346,11 @@ export async function buildImportPreview(args: {
       errors: [{ code: 'INVALID_INPUT', detail: 'projectId requerido' }],
     }
   }
+
+  // Auth (Ola P1): el preview también debe estar protegido — lee tareas
+  // del proyecto para resolver mnemónicos y eso es información sensible.
+  await requireProjectAccess(projectId)
+
   if (buffer.byteLength > FILE_SIZE_LIMIT_BYTES) {
     return {
       ok: false,
@@ -476,6 +486,10 @@ export async function importExcel(
       ],
     }
   }
+
+  // Auth (Ola P1): defensa explícita además del chequeo en
+  // `buildImportPreview` invocado más abajo. Lanza error tipado.
+  await requireProjectAccess(input.projectId)
 
   let buffer: Buffer
   try {
