@@ -7,6 +7,7 @@ import prisma from '@/lib/prisma'
 import { invalidateCpmCache } from '@/lib/scheduling/invalidate'
 import { wouldCreateCycle } from '@/lib/scheduling/cycle'
 import { validateScheduledChange } from '@/lib/scheduling/validate'
+import { requireProjectAccess } from '@/lib/auth/check-project-access'
 
 // ───────────────────────── Errores tipados ─────────────────────────
 //
@@ -128,6 +129,9 @@ export async function createDependency(
     )
   }
 
+  // Auth (Ola P1): el usuario debe tener acceso al proyecto compartido.
+  await requireProjectAccess(pred.projectId)
+
   // Carga deps del proyecto para validar duplicado y ciclo en una sola
   // query (más barato que dos round-trips).
   const projectTaskIds = await prisma.task.findMany({
@@ -236,6 +240,9 @@ export async function updateDependency(
     actionError('NOT_FOUND', 'La dependencia carece de proyecto asociado')
   }
 
+  // Auth (Ola P1): solo miembros o admins pueden mutar dependencias.
+  await requireProjectAccess(projectId)
+
   // Si cambia el tipo, revalidar ciclos. SS/FF/SF no introducen aristas en el
   // DAG (la dirección sigue siendo predecessor → successor) pero queda como
   // checkeo defensivo barato y consistente con `createDependency`.
@@ -316,6 +323,11 @@ export async function deleteDependency(input: {
     select: { predecessor: { select: { projectId: true } } },
   })
   if (!dep) return { ok: true as const }
+
+  // Auth (Ola P1): chequeo después de localizar el projectId. El no-op
+  // anterior cuando la dep no existe se mantiene para preservar
+  // idempotencia.
+  await requireProjectAccess(dep.predecessor.projectId)
 
   await prisma.taskDependency.delete({
     where: {

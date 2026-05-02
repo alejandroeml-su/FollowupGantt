@@ -4,6 +4,7 @@ import prisma from '@/lib/prisma'
 import { revalidatePath } from 'next/cache'
 import { invalidateCpmCache } from '@/lib/scheduling/invalidate'
 import { validateScheduledChange } from '@/lib/scheduling/validate'
+import { requireProjectAccess } from '@/lib/auth/check-project-access'
 
 // Ver ADR-001 y patrón de errores en `reorder.ts`
 export type ScheduleErrorCode =
@@ -77,6 +78,11 @@ export async function updateTaskDates(
     select: { projectId: true, isMilestone: true },
   })
   if (!taskMeta) actionError('NOT_FOUND', 'tarea inexistente')
+
+  // Auth (Ola P1): solo miembros del proyecto o admins pueden mover
+  // tareas. Chequeo justo después de resolver el projectId.
+  await requireProjectAccess(taskMeta.projectId)
+
   await validateScheduledChangeForTaskDates(
     id,
     taskMeta.projectId,

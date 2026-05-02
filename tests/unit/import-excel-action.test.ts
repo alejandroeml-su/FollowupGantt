@@ -79,6 +79,18 @@ vi.mock('@/lib/scheduling/invalidate', () => ({
   invalidateCpmCache: vi.fn(),
 }))
 
+// Auth (Ola P1): server actions de import/export ahora invocan
+// `requireProjectAccess`. En unit tests no hay request scope, mock no-op.
+vi.mock('@/lib/auth/check-project-access', () => ({
+  requireProjectAccess: vi.fn(async () => ({
+    id: 'test-user',
+    email: 'test@local',
+    name: 'Test',
+    roles: ['SUPER_ADMIN'],
+  })),
+  canAccessProject: vi.fn(async () => true),
+}))
+
 beforeEach(() => {
   projectFindUnique.mockReset()
   userFindMany.mockReset()

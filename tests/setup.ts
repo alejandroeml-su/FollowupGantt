@@ -5,6 +5,12 @@ import { cleanup } from '@testing-library/react'
 // Limpia el DOM entre tests
 afterEach(() => cleanup())
 
+// `server-only` es un marker package de React/Next que en build-time
+// genera un error si se importa desde código cliente. En tests no aplica;
+// stubeamos con módulo vacío para que cualquier `import 'server-only'`
+// pase. Necesario para el módulo `@/lib/auth/*` (Ola P1).
+vi.mock('server-only', () => ({}))
+
 // Mock global para next/cache (usado por todas las server actions)
 vi.mock('next/cache', () => ({
   revalidatePath: vi.fn(),
