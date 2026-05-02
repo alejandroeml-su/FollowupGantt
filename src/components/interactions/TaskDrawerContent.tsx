@@ -19,6 +19,7 @@ import {
   TaskForm,
   TaskFormHeaderActions,
 } from './task-form/TaskForm'
+import { TaskCustomFieldsSection } from '@/components/custom-fields/TaskCustomFieldsSection'
 
 type Props = {
   task: SerializedTask
@@ -27,25 +28,44 @@ type Props = {
   allTasks?: SerializedTask[]
 }
 
+/**
+ * Drawer principal de tarea. Compone:
+ *   - `<TaskForm mode='edit'/>` (single source of truth de detalle, tabs).
+ *   - `<TaskCustomFieldsSection/>` (Ola P1 · Equipo 3) — sólo si la tarea
+ *     tiene `projectId`. Renderiza inputs por cada `CustomFieldDef` del
+ *     proyecto y autosalva on-blur. Ubicado después del form para no
+ *     interferir con la navegación de tabs (los CF aplican a todas las
+ *     tabs, conceptualmente "metadatos del proyecto").
+ */
 export function TaskDrawerContent({ task, projects, users, allTasks = [] }: Props) {
   return (
-    <TaskForm
-      mode="edit"
-      task={task}
-      projects={projects}
-      users={users}
-      allTasks={allTasks}
-      layout="drawer"
-      hideFooter
-      renderHeaderLeft={() => (
-        <TaskBreadcrumbs
-          segments={[
-            ...(task.project ? [{ label: task.project.name }] : []),
-            { label: `Tarea #${task.mnemonic || task.id.substring(0, 6)}` },
-          ]}
-        />
+    <div className="flex flex-1 flex-col overflow-hidden">
+      <TaskForm
+        mode="edit"
+        task={task}
+        projects={projects}
+        users={users}
+        allTasks={allTasks}
+        layout="drawer"
+        hideFooter
+        renderHeaderLeft={() => (
+          <TaskBreadcrumbs
+            segments={[
+              ...(task.project ? [{ label: task.project.name }] : []),
+              { label: `Tarea #${task.mnemonic || task.id.substring(0, 6)}` },
+            ]}
+          />
+        )}
+        renderHeaderActions={(ctx) => <TaskFormHeaderActions ctx={ctx} />}
+      />
+      {task.projectId && (
+        <div className="border-t border-border bg-card/40 px-6 py-4">
+          <TaskCustomFieldsSection
+            taskId={task.id}
+            projectId={task.projectId}
+          />
+        </div>
       )}
-      renderHeaderActions={(ctx) => <TaskFormHeaderActions ctx={ctx} />}
-    />
+    </div>
   )
 }

@@ -44,6 +44,19 @@ enum Priority {
   CRITICAL
 }
 
+// Tipos soportados por el módulo de Custom Fields (Ola P1, Equipo 3).
+// Cada definición de campo tiene un tipo fijo; la validación zod se
+// despacha por este enum en el server action.
+enum CustomFieldType {
+  TEXT
+  NUMBER
+  DATE
+  BOOLEAN
+  SELECT
+  MULTI_SELECT
+  URL
+}
+
 // Ola P1 · Centro de notificaciones in-app.
 // Añadido cuando todavía no existe sesión real: el `userId` lo provee el
 // caller (Sidebar hardcodea SUPER_ADMIN; futuro hook de auth).
@@ -245,6 +258,8 @@ model Project {
   baselines   Baseline[]
   assignments ProjectAssignment[]
   mindMaps    MindMap[]
+  // Custom Fields configurables por proyecto (Ola P1, Equipo 3).
+  customFieldDefs CustomFieldDef[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -369,6 +384,11 @@ model Task {
 
   // Enlace opcional desde nodos de Mapa Mental
   mindMapNodes MindMapNode[] @relation("TaskMindMapNodes")
+
+  // Custom Fields configurables (Ola P1). Una tarea acumula valores para
+  // las definiciones del proyecto; cascade desde la definición y desde la
+  // tarea garantiza limpieza al borrar el padre o la propia tarea.
+  customFieldValues CustomFieldValue[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -596,6 +616,55 @@ model MindMapEdge {
 }
 
 // ─────────────────────────────────────────────────────────────
+// Módulo Custom Fields (Ola P1 · Equipo 3)
+//
+// Permite que cada gerencia/proyecto defina campos personalizados sobre
+// `Task` (texto, número, fecha, select, multi-select, booleano, URL).
+// Cada `CustomFieldDef` pertenece a un único proyecto; los valores
+// (`CustomFieldValue`) están unidos a la tupla (definición, tarea) y
+// cascadean al borrarse la definición o la tarea.
+// ─────────────────────────────────────────────────────────────
+
+model CustomFieldDef {
+  id           String          @id @default(uuid())
+  projectId    String
+  project      Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  // Slug estable usado en API/exports (ej. "cliente_codigo"); único por
+  // proyecto. La label es la versión human-readable mostrada en la UI.
+  key          String
+  label        String
+  type         CustomFieldType
+  required     Boolean         @default(false)
+  defaultValue Json?
+  // Para SELECT/MULTI_SELECT, array de `{ value, label }` validado en el
+  // server action. Para otros tipos debe ser `null`.
+  options      Json?
+  // Orden visual configurable; permite reordenar con drag-handle sin
+  // reescribir todos los registros (esquema fractional indexing).
+  position     Float           @default(1)
+  createdAt    DateTime        @default(now())
+
+  values CustomFieldValue[]
+
+  @@unique([projectId, key])
+  @@index([projectId, position])
+}
+
+model CustomFieldValue {
+  id      String         @id @default(uuid())
+  fieldId String
+  field   CustomFieldDef @relation(fields: [fieldId], references: [id], onDelete: Cascade)
+  taskId  String
+  task    Task           @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  // Valor serializado en JSON; el shape concreto depende de `field.type`
+  // (string | number | ISO date | boolean | string | string[] | url).
+  // La validación se centraliza en `setTaskFieldValue`.
+  value   Json
+
+  @@unique([fieldId, taskId])
+  @@index([taskId])
+}
+
 // Módulo Centro de notificaciones (Ola P1 · HU-N1.x)
 // ─────────────────────────────────────────────────────────────
 
