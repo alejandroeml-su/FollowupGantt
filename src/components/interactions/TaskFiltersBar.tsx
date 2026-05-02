@@ -102,7 +102,10 @@ export function TaskFiltersBar({
     'rounded-md border border-border bg-background py-1.5 px-2 text-xs text-foreground focus:border-primary focus:outline-none min-w-[110px]'
 
   return (
-    <div className={clsx('flex flex-wrap items-center gap-2 px-6 py-3 border-b border-border bg-muted/20', className)}>
+    <div
+      data-testid="task-filters-bar"
+      className={clsx('flex flex-wrap items-center gap-2 px-6 py-3 border-b border-border bg-muted/20', className)}
+    >
       <div className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
         <Filter className="h-3.5 w-3.5" />
         Filtros

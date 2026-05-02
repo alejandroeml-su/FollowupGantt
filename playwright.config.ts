@@ -9,7 +9,13 @@ export default defineConfig({
   timeout: 30_000,
   expect: { timeout: 5_000 },
   retries: process.env.CI ? 2 : 0,
-  workers: process.env.CI ? 2 : undefined,
+  // Sprint 6.5: los specs `dependency-creation` y `dependency-editor` mutan
+  // la misma BD (Postgres compartida en local; efímera en CI). Para evitar
+  // race conditions entre workers, se serializa la suite con workers=1.
+  // En CI los specs se reparten entre browsers (chromium/firefox/webkit) en
+  // matrix-job — cada job tiene su propio Postgres efímero, así que workers
+  // por job sigue siendo 1 sin perder paralelismo entre browsers.
+  workers: 1,
   reporter: [
     ['list'],
     ['html', { outputFolder: 'playwright-report', open: 'never' }],

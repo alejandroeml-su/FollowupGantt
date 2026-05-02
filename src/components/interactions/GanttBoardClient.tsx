@@ -337,12 +337,15 @@ export function GanttBoardClient({
     [],
   )
 
-  // Mousemove global mientras dura el modo conexión — actualiza la punta
+  // Pointer move global mientras dura el modo conexión — actualiza la punta
   // de la línea temporal y resuelve hover-target consultando el dataset
-  // `data-gantt-task-id` de los elementos bajo el cursor.
+  // `data-gantt-task-id` de los elementos bajo el cursor. Usamos pointer
+  // events (no mouse events) porque el handle inicia el drag con
+  // `onPointerDown + preventDefault`, lo que suprime los mouse events
+  // sintetizados subsecuentes (mousemove/mouseup) en el mismo gesto.
   useEffect(() => {
     if (!connection) return
-    const onMove = (e: MouseEvent) => {
+    const onMove = (e: PointerEvent) => {
       const cur = connectionRef.current
       if (!cur) return
       const { x, y } = toCanvasCoords(e.clientX, e.clientY)
@@ -395,12 +398,12 @@ export function GanttBoardClient({
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') setConnection(null)
     }
-    window.addEventListener('mousemove', onMove)
-    window.addEventListener('mouseup', onUp)
+    window.addEventListener('pointermove', onMove)
+    window.addEventListener('pointerup', onUp)
     window.addEventListener('keydown', onKey)
     return () => {
-      window.removeEventListener('mousemove', onMove)
-      window.removeEventListener('mouseup', onUp)
+      window.removeEventListener('pointermove', onMove)
+      window.removeEventListener('pointerup', onUp)
       window.removeEventListener('keydown', onKey)
     }
   }, [connection, toCanvasCoords])
@@ -596,7 +599,10 @@ export function GanttBoardClient({
         </div>
       )}
 
-      <div className="rounded-xl border border-border bg-subtle/80 shadow-sm">
+      <div
+        data-testid="gantt-board"
+        className="rounded-xl border border-border bg-subtle/80 shadow-sm"
+      >
         {/* Header: etiquetas de nombre + escala de días */}
         <div className="flex border-b border-border">
           <div className="flex w-64 shrink-0 items-center border-r border-border bg-card p-4 text-sm font-medium text-foreground/90">
@@ -1096,9 +1102,13 @@ function GanttBarSlot({
     : task.title
 
   // Slot absoluto por fila — incluye línea horizontal de fila + barra/hito.
+  // `pointer-events-none` en el contenedor permite que la capa SVG de
+  // dependencias (renderizada al final del canvas) reciba clic derecho sobre
+  // las flechas. Los hijos que necesitan eventos (barra, hito, label "Sin
+  // fechas") restauran `pointer-events-auto` explícitamente.
   return (
     <div
-      className="absolute inset-x-0"
+      className="pointer-events-none absolute inset-x-0"
       style={{ top: index * rowHeight, height: rowHeight }}
     >
       {/* Línea horizontal de la fila (separador). */}
@@ -1109,7 +1119,7 @@ function GanttBarSlot({
 
       {!hasDates && (
         <div
-          className="absolute left-2 top-1/2 z-10 inline-flex -translate-y-1/2 items-center rounded border border-dashed border-border px-2 py-1 text-xs text-muted-foreground"
+          className="pointer-events-auto absolute left-2 top-1/2 z-10 inline-flex -translate-y-1/2 items-center rounded border border-dashed border-border px-2 py-1 text-xs text-muted-foreground"
           onClick={onFocus}
         >
           Sin fechas
@@ -1137,7 +1147,7 @@ function GanttBarSlot({
               : undefined,
           }}
           className={clsx(
-            'group/bar absolute top-1/2 z-10 h-6 -translate-y-1/2 rounded-md shadow-sm',
+            'pointer-events-auto group/bar absolute top-1/2 z-10 h-6 -translate-y-1/2 rounded-md shadow-sm',
             'flex cursor-grab active:cursor-grabbing',
             'border focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-500',
             // HU-2.2: jerarquía visual por slack.
@@ -1208,9 +1218,13 @@ function GanttBarSlot({
           />
 
           {/* HU-1.3 · drag-handle de conexión (borde derecho, hover-only).
-              z-20 para quedar por encima del handle de resize. La detención
-              del propagation evita que el mousedown active el body-drag
-              antes de iniciar el modo conexión. */}
+              z-20 para quedar por encima del handle de resize. Usamos
+              onPointerDown (no onMouseDown) para alinearnos con el sistema
+              de eventos del body-drag (`useHorizontalDrag` también usa
+              pointer events). Si solo usáramos `onMouseDown`, el navegador
+              dispara `pointerdown` PRIMERO al padre, donde body-drag
+              ejecutaría `preventDefault()` y cancelaría el `mousedown`
+              siguiente del handle, impidiendo iniciar la conexión. */}
           {onConnectStart && (
             <div
               role="button"
@@ -1221,7 +1235,8 @@ function GanttBarSlot({
                 'group-hover/bar:opacity-70 hover:opacity-100',
                 isCritical && 'bg-red-400',
               )}
-              onMouseDown={(e) => {
+              onPointerDown={(e) => {
+                if (e.button !== 0) return
                 e.stopPropagation()
                 e.preventDefault()
                 // Coordenadas del centro del handle en el sistema del canvas.
@@ -1252,7 +1267,7 @@ function GanttBarSlot({
               : 'translate(0, -50%) rotate(45deg)',
           }}
           className={clsx(
-            'absolute z-10 h-4 w-4 shadow-[0_0_10px_rgba(251,191,36,0.4)]',
+            'pointer-events-auto absolute z-10 h-4 w-4 shadow-[0_0_10px_rgba(251,191,36,0.4)]',
             isCritical ? 'bg-red-500' : 'bg-amber-400',
             focused && 'ring-2 ring-amber-300',
             isConnectionTarget && 'outline outline-2 outline-offset-2 outline-emerald-500',

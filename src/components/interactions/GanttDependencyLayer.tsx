@@ -1,6 +1,7 @@
 'use client'
 
 import { useMemo } from 'react'
+import { clsx } from 'clsx'
 
 /**
  * Posición pre-calculada de cada barra del Gantt en píxeles, lista para
@@ -123,11 +124,14 @@ export function GanttDependencyLayer({
   return (
     <svg
       aria-hidden={!interactive}
-      className={
-        interactive
-          ? 'absolute left-0 top-0 pointer-events-none'
-          : 'pointer-events-none absolute left-0 top-0'
-      }
+      className={clsx(
+        'absolute left-0 top-0',
+        // Modo view-only: el SVG entero ignora pointer events para no
+        // robar foco al canvas. Modo interactivo: el SVG sí los recibe,
+        // pero solo los `<path>` con `pointer-events-stroke` los procesan
+        // (los demás restauran `pointer-events-none` explícitamente).
+        interactive ? 'pointer-events-auto' : 'pointer-events-none',
+      )}
       width={width}
       height={height}
       viewBox={`0 0 ${width} ${height}`}
