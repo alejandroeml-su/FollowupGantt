@@ -41,6 +41,7 @@ import { BaselineTrendPanel } from './BaselineTrendPanel'
 import { BaselineTrendToggle } from './BaselineTrendToggle'
 import { ExportExcelButton } from './ExportExcelButton'
 import { DownloadTemplateButton } from './DownloadTemplateButton'
+import { ImportExcelButton } from './ImportExcelButton'
 import { getBaselineSnapshot } from '@/lib/actions/baselines'
 
 type ParentOption = Pick<SerializedTask, 'id' | 'title' | 'mnemonic'> & {
@@ -737,6 +738,7 @@ export function GanttBoardClient({
           projectId={activeProjectId}
           taskCount={activeTaskCount}
         />
+        <ImportExcelButton projectId={activeProjectId} />
         <DownloadTemplateButton />
       </div>
 
