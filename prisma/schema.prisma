@@ -605,7 +605,6 @@ model MindMapEdge {
 }
 
 // ─────────────────────────────────────────────────────────────
-<<<<<<< HEAD
 // Módulo Time Tracking (Ola P1 · Equipo 4)
 //
 // Permite que cada miembro registre tiempo trabajado en tareas, ya sea
