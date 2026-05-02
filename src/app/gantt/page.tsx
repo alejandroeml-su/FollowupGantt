@@ -11,6 +11,7 @@ import { GlobalBreadcrumbs } from '@/components/interactions/GlobalBreadcrumbs'
 import { ViewSwitcher } from '@/components/interactions/ViewSwitcher'
 import { NewTaskButton } from '@/components/interactions/NewTaskButton'
 import { getCachedCpmForProject } from '@/lib/scheduling/cache'
+import { getBaselinesForProject } from '@/lib/actions/baselines'
 
 export const dynamic = 'force-dynamic'
 
@@ -136,17 +137,62 @@ export default async function GanttTimeline({
 
   const tasks = dbTasks.map((t) => serializeTask(t))
 
-  const [projects, users, allTasksRaw, gerencias, areas] = await Promise.all([
-    prisma.project.findMany({ select: { id: true, name: true, areaId: true }, orderBy: { name: 'asc' } }),
-    prisma.user.findMany({ orderBy: { name: 'asc' } }),
-    prisma.task.findMany({
-      where: { archivedAt: null },
-      select: { id: true, title: true, mnemonic: true, projectId: true, project: { select: { id: true, name: true } } },
-      orderBy: [{ project: { name: 'asc' } }, { title: 'asc' }],
-    }),
-    prisma.gerencia.findMany({ select: { id: true, name: true }, orderBy: { name: 'asc' } }),
-    prisma.area.findMany({ select: { id: true, name: true, gerenciaId: true }, orderBy: { name: 'asc' } }),
-  ])
+  const [projects, users, allTasksRaw, gerencias, areas, taskCountsRaw, baselineCountsRaw] =
+    await Promise.all([
+      prisma.project.findMany({ select: { id: true, name: true, areaId: true }, orderBy: { name: 'asc' } }),
+      prisma.user.findMany({ orderBy: { name: 'asc' } }),
+      prisma.task.findMany({
+        where: { archivedAt: null },
+        select: { id: true, title: true, mnemonic: true, projectId: true, project: { select: { id: true, name: true } } },
+        orderBy: [{ project: { name: 'asc' } }, { title: 'asc' }],
+      }),
+      prisma.gerencia.findMany({ select: { id: true, name: true }, orderBy: { name: 'asc' } }),
+      prisma.area.findMany({ select: { id: true, name: true, gerenciaId: true }, orderBy: { name: 'asc' } }),
+      // HU-3.1 · conteo de tareas no archivadas por proyecto, para habilitar
+      // el botón de captura de línea base con el preview "se capturarán N
+      // tareas". groupBy es un round-trip barato comparado con cargar todas
+      // las tareas de todos los proyectos.
+      prisma.task.groupBy({
+        by: ['projectId'],
+        where: { archivedAt: null },
+        _count: { _all: true },
+      }),
+      // HU-3.1 · conteo de líneas base existentes por proyecto, para el
+      // banner de soft cap (D10).
+      prisma.baseline.groupBy({
+        by: ['projectId'],
+        _count: { _all: true },
+      }),
+    ])
+
+  const taskCountByProject: Record<string, number> = {}
+  for (const row of taskCountsRaw) {
+    if (row.projectId) taskCountByProject[row.projectId] = row._count._all
+  }
+  const baselineCountByProject: Record<string, number> = {}
+  for (const row of baselineCountsRaw) {
+    if (row.projectId) baselineCountByProject[row.projectId] = row._count._all
+  }
+
+  // HU-3.2 · listado descriptivo de líneas base solo para proyectos que ya
+  // tengan al menos una. Cada llamada está cacheada vía `unstable_cache`
+  // con tag `baselines:<projectId>`; tras `captureBaseline` se invalida y
+  // el siguiente render trae la lista actualizada.
+  const projectsWithBaselines = Object.entries(baselineCountByProject)
+    .filter(([, n]) => n > 0)
+    .map(([pid]) => pid)
+  const baselinesByProject: Record<
+    string,
+    Awaited<ReturnType<typeof getBaselinesForProject>>
+  > = {}
+  if (projectsWithBaselines.length > 0) {
+    const lists = await Promise.all(
+      projectsWithBaselines.map((pid) => getBaselinesForProject(pid)),
+    )
+    projectsWithBaselines.forEach((pid, i) => {
+      baselinesByProject[pid] = lists[i]
+    })
+  }
 
   // ───── HU-1.2: cargar dependencias y CPM de los proyectos visibles ─────
   const visibleTaskIds = dbTasks.map((t) => t.id)
@@ -256,6 +302,9 @@ export default async function GanttTimeline({
           cpmByTaskId={cpmByTaskId}
           dependencies={dependencies}
           hasCpmCycle={hasCpmCycle}
+          taskCountByProject={taskCountByProject}
+          baselineCountByProject={baselineCountByProject}
+          baselinesByProject={baselinesByProject}
         />
       </div>
     </div>

@@ -22,6 +22,18 @@ type UIState = {
   sidebarCollapsed: boolean
   /** HU-2.3 — toggle global "Mostrar solo ruta crítica" en Gantt. */
   criticalOnly: boolean
+  /**
+   * HU-3.2 — selección de línea base activa por proyecto. Clave compuesta
+   * (projectId) para evitar leakage cross-project (R2 del backlog @PO):
+   * cuando el usuario cambia el filtro de proyecto, la baseline activa
+   * del proyecto anterior NO se aplica automáticamente al nuevo, sino
+   * que cada proyecto recuerda su propia selección.
+   *
+   * `null` significa "Ninguna" explícitamente (overlay oculto en HU-3.3).
+   * `undefined` (clave ausente) significa "no se ha tocado el selector
+   * para ese proyecto" — se trata igual que `null` en el cliente.
+   */
+  activeBaselineId: Record<string, string | null>
 
   toggleSelection: (id: string, additive?: boolean) => void
   selectRange: (ids: string[]) => void
@@ -36,6 +48,8 @@ type UIState = {
   setMobileSidebarOpen: (open: boolean) => void
   toggleSidebarCollapsed: (collapsed?: boolean) => void
   toggleCriticalOnly: (on?: boolean) => void
+  setActiveBaseline: (projectId: string, baselineId: string | null) => void
+  clearActiveBaseline: (projectId: string) => void
 }
 
 export const useUIStore = create<UIState>()(
@@ -50,6 +64,7 @@ export const useUIStore = create<UIState>()(
       mobileSidebarOpen: false,
       sidebarCollapsed: false,
       criticalOnly: false,
+      activeBaselineId: {},
 
       toggleSelection: (id, additive = false) =>
         set((s) => {
@@ -85,6 +100,23 @@ export const useUIStore = create<UIState>()(
         set((s) => ({ sidebarCollapsed: collapsed ?? !s.sidebarCollapsed })),
       toggleCriticalOnly: (on) =>
         set((s) => ({ criticalOnly: on ?? !s.criticalOnly })),
+      setActiveBaseline: (projectId, baselineId) =>
+        set((s) => ({
+          activeBaselineId: {
+            ...s.activeBaselineId,
+            [projectId]: baselineId,
+          },
+        })),
+      clearActiveBaseline: (projectId) =>
+        set((s) => {
+          // Borramos la clave en lugar de setear `null` para evitar que el
+          // diccionario crezca indefinidamente con proyectos visitados.
+          // Para el cliente "no presente" === "null" (ver activeBaselineId).
+          if (!(projectId in s.activeBaselineId)) return {}
+          const next = { ...s.activeBaselineId }
+          delete next[projectId]
+          return { activeBaselineId: next }
+        }),
     }),
     {
       name: 'followup-ui',
@@ -95,6 +127,7 @@ export const useUIStore = create<UIState>()(
           columnPrefs: s.columnPrefs,
           sidebarCollapsed: s.sidebarCollapsed,
           criticalOnly: s.criticalOnly,
+          activeBaselineId: s.activeBaselineId,
         }) as Partial<UIState>,
     },
   ),

@@ -28,6 +28,8 @@ import {
   DependencyEditor,
   type DependencyEditorPayload,
 } from './DependencyEditor'
+import { CaptureBaselineButton } from './CaptureBaselineButton'
+import { BaselineSelector, type BaselineOption } from './BaselineSelector'
 
 type ParentOption = Pick<SerializedTask, 'id' | 'title' | 'mnemonic'> & {
   project?: { id: string; name: string } | null
@@ -72,6 +74,12 @@ type Props = {
   dependencies?: GanttDependencyDescriptor[]
   /** Si CPM detectó al menos un ciclo en cualquier proyecto, render banner. */
   hasCpmCycle?: boolean
+  /** HU-3.1 — conteo de tareas no archivadas por proyecto, para habilitar el botón de captura. */
+  taskCountByProject?: Record<string, number>
+  /** HU-3.1/3.2 — conteo de líneas base por proyecto (cap soft 20). */
+  baselineCountByProject?: Record<string, number>
+  /** HU-3.2 — listado descriptivo de líneas base por proyecto, para el selector. */
+  baselinesByProject?: Record<string, BaselineOption[]>
 }
 
 const DAY_WIDTH = 40 // px por día — balance legibilidad / densidad
@@ -127,6 +135,9 @@ export function GanttBoardClient({
   cpmByTaskId,
   dependencies,
   hasCpmCycle,
+  taskCountByProject,
+  baselineCountByProject,
+  baselinesByProject,
 }: Props) {
   const start = useMemo(() => new Date(rangeStart), [rangeStart])
   const days = useMemo(
@@ -576,6 +587,28 @@ export function GanttBoardClient({
     }
   }
 
+  // HU-3.1/3.2 · proyecto activo derivado del filtro. La línea base se
+  // captura/lista por-proyecto, así que requerimos selección explícita.
+  // Si el usuario no ha filtrado, los controles de baseline quedan
+  // disabled con tooltip explicativo.
+  const activeProjectId = filters.projectId ?? null
+  const activeProjectName = useMemo(() => {
+    if (!activeProjectId) return null
+    return projects.find((p) => p.id === activeProjectId)?.name ?? null
+  }, [activeProjectId, projects])
+  const activeBaselineCount =
+    activeProjectId && baselineCountByProject
+      ? baselineCountByProject[activeProjectId] ?? 0
+      : 0
+  const activeTaskCount =
+    activeProjectId && taskCountByProject
+      ? taskCountByProject[activeProjectId] ?? 0
+      : 0
+  const activeBaselines =
+    activeProjectId && baselinesByProject
+      ? baselinesByProject[activeProjectId] ?? []
+      : []
+
   return (
     <>
       <TaskFiltersBar
@@ -588,6 +621,25 @@ export function GanttBoardClient({
         showCriticalOnly
         className="rounded-lg mb-4 border border-border"
       />
+
+      <div
+        data-testid="gantt-baselines-toolbar"
+        className="mb-4 flex flex-wrap items-center gap-3 rounded-lg border border-border bg-muted/20 px-4 py-2"
+      >
+        <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+          Líneas base
+        </span>
+        <CaptureBaselineButton
+          projectId={activeProjectId}
+          projectName={activeProjectName}
+          taskCount={activeTaskCount}
+          baselineCount={activeBaselineCount}
+        />
+        <BaselineSelector
+          projectId={activeProjectId}
+          baselines={activeBaselines}
+        />
+      </div>
 
       {hasCpmCycle && (
         <div
