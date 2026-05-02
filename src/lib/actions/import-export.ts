@@ -47,6 +47,7 @@ import {
   type ImportWarning,
 } from '@/lib/import-export/MAPPING'
 import { invalidateCpmCache } from '@/lib/scheduling/invalidate'
+import { createNotification } from '@/lib/actions/notifications'
 import { requireProjectAccess } from '@/lib/auth/check-project-access'
 
 // ───────────────────────── Errores tipados ─────────────────────────
@@ -437,6 +438,12 @@ export interface ImportExecuteInput {
   projectId: string
   /** Solo `replace` en P0 (D12). */
   mode?: 'replace'
+  /**
+   * Ola P1 · Usuario que disparó el import. Si se provee, recibe una
+   * notificación in-app `IMPORT_COMPLETED` cuando termina (ok o no). Si
+   * se omite, el import sigue funcionando (compat con callers viejos).
+   */
+  userId?: string | null
 }
 
 export interface ImportExecuteResult {
@@ -626,6 +633,30 @@ export async function importExcel(
 
     invalidateCpmCache(input.projectId)
     revalidatePath('/gantt')
+
+    // Notificación in-app al usuario que importó (Ola P1). Side-effect
+    // tolerante: la operación crítica (transacción) ya cerró ok.
+    if (input.userId) {
+      try {
+        const warnCount = preview.warnings.length
+        const warnSuffix = warnCount === 1 ? '1 advertencia' : `${warnCount} advertencias`
+        await createNotification({
+          userId: input.userId,
+          type: 'IMPORT_COMPLETED',
+          title: 'Import Excel completado',
+          body: `${result.tasksCreated} tareas, ${result.depsCreated} dependencias, ${warnSuffix}`,
+          link: `/gantt?projectId=${encodeURIComponent(input.projectId)}`,
+          data: {
+            projectId: input.projectId,
+            filename: input.filename,
+            counts: result,
+            warningsCount: warnCount,
+          },
+        })
+      } catch (err) {
+        console.error('[notifications] importExcel notify falló', err)
+      }
+    }
 
     return {
       ok: true,

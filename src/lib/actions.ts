@@ -5,6 +5,7 @@ import { revalidatePath } from 'next/cache'
 import { after } from 'next/server'
 import { sendMentionNotification } from '@/lib/email/mention-notification'
 import { invalidateCpmCache } from '@/lib/scheduling/invalidate'
+import { createNotificationsBatch } from '@/lib/actions/notifications'
 import type {
   TaskType,
   ProjectStatus,
@@ -706,22 +707,61 @@ export async function createComment(formData: FormData) {
       // rate limiting aquí: deuda registrada del proyecto, separada.
       // Riesgo conocido: un comentario con `@todos` puede emitir N+M
       // correos donde M = colaboradores; documentado en el PR.
+      const mnemonicPrefix = task.mnemonic ? `[${task.mnemonic}] ` : ''
+      const inAppTitle = `${authorName} te mencionó en ${mnemonicPrefix}${task.title}`
+      const inAppBody = content.length > 280 ? `${content.slice(0, 277)}...` : content
+      const inAppLink = `/list?taskId=${encodeURIComponent(taskId)}`
+
       after(async () => {
-        await Promise.all(
-          recipients.map((user) =>
-            sendMentionNotification({
-              to: user.email,
-              recipientName: user.name,
-              authorName,
-              taskTitle: task.title,
-              taskMnemonic: task.mnemonic,
-              commentContent: content,
-              taskId,
-              parentTaskTitle: parentTitle,
-              isInternal,
-            }),
-          ),
+        // Canal email — respeta `NotificationPreference.emailMentions` por
+        // destinatario antes de invocar Resend (deshabilitar email no
+        // afecta in-app: el centro siempre recibe).
+        const prefs = await prisma.notificationPreference.findMany({
+          where: { userId: { in: recipients.map((r) => r.id) } },
+          select: { userId: true, emailMentions: true },
+        })
+        const optedOut = new Set(
+          prefs.filter((p) => !p.emailMentions).map((p) => p.userId),
         )
+        await Promise.all(
+          recipients
+            .filter((u) => !optedOut.has(u.id))
+            .map((user) =>
+              sendMentionNotification({
+                to: user.email,
+                recipientName: user.name,
+                authorName,
+                taskTitle: task.title,
+                taskMnemonic: task.mnemonic,
+                commentContent: content,
+                taskId,
+                parentTaskTitle: parentTitle,
+                isInternal,
+              }),
+            ),
+        )
+
+        // Canal in-app — siempre activo en P1. Tolera fallos: si Prisma
+        // rechaza por FK o JSON inválido se loguea sin tirar el batch.
+        try {
+          await createNotificationsBatch(
+            recipients.map((user) => ({
+              userId: user.id,
+              type: 'MENTION' as const,
+              title: inAppTitle,
+              body: inAppBody,
+              link: inAppLink,
+              data: {
+                taskId,
+                taskMnemonic: task.mnemonic ?? null,
+                authorName,
+                isInternal,
+              },
+            })),
+          )
+        } catch (err) {
+          console.error('[notifications] createComment batch falló', err)
+        }
       })
     }
   }

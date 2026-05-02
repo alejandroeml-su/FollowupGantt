@@ -69,13 +69,15 @@ const menuGroups: RouteGroup[] = [
       { name: 'Gerencias', path: '/gerencias', icon: Building2 },
       { name: 'Proyectos', path: '/projects', icon: FolderKanban },
       { name: 'Usuarios', path: '/settings/users', icon: Users },
-      { name: 'Capacidad (WIP)', path: '/workload', icon: ClipboardList },
+      { name: 'Calendarios laborales', path: '/settings/calendars', icon: CalendarDays },
+      { name: 'Cargas de trabajo', path: '/workload', icon: ClipboardList },
     ],
   },
 ];
 
 import { useUIStore } from '@/lib/stores/ui';
 import { ThemeToggle } from './ThemeToggle';
+import { NotificationsBell } from './notifications/NotificationsBell';
 import { X, ShieldAlert, ShieldCheck, UserCog } from 'lucide-react';
 
 // ─── Sidebar ─────────────────────────────────────────────────────
@@ -320,7 +322,7 @@ export default function Sidebar({ userSlot }: { userSlot?: React.ReactNode } = {
              </div>
           </div>
 
-          {/* Tema */}
+          {/* Notificaciones + Tema */}
           <div className={clsx(
             "flex items-center px-2",
             collapsed ? "lg:justify-center lg:px-0 justify-between" : "justify-between"
@@ -331,7 +333,10 @@ export default function Sidebar({ userSlot }: { userSlot?: React.ReactNode } = {
              )}>
                Tema
              </span>
-             <ThemeToggle />
+             <div className="flex items-center gap-1">
+               <NotificationsBell collapsed={collapsed} />
+               <ThemeToggle />
+             </div>
           </div>
 
           {/* Usuario · Auth real (server slot) si está disponible */}
