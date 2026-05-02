@@ -20,6 +20,7 @@ import {
   TaskFormHeaderActions,
 } from './task-form/TaskForm'
 import { TaskTimeTrackingSection } from '@/components/time-tracking/TaskTimeTrackingSection'
+import { TaskCustomFieldsSection } from '@/components/custom-fields/TaskCustomFieldsSection'
 
 type Props = {
   task: SerializedTask
@@ -28,6 +29,15 @@ type Props = {
   allTasks?: SerializedTask[]
 }
 
+/**
+ * Drawer principal de tarea. Compone:
+ *   - `<TaskForm mode='edit'/>` (single source of truth de detalle, tabs).
+ *   - `<TaskCustomFieldsSection/>` (Ola P1 · Equipo 3) — sólo si la tarea
+ *     tiene `projectId`. Renderiza inputs por cada `CustomFieldDef` del
+ *     proyecto y autosalva on-blur. Ubicado después del form para no
+ *     interferir con la navegación de tabs (los CF aplican a todas las
+ *     tabs, conceptualmente "metadatos del proyecto").
+ */
 export function TaskDrawerContent({ task, projects, users, allTasks = [] }: Props) {
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
@@ -64,6 +74,14 @@ export function TaskDrawerContent({ task, projects, users, allTasks = [] }: Prop
           />
         </div>
       ) : null}
+      {task.projectId && (
+        <div className="border-t border-border bg-card/40 px-6 py-4">
+          <TaskCustomFieldsSection
+            taskId={task.id}
+            projectId={task.projectId}
+          />
+        </div>
+      )}
     </div>
   )
 }
