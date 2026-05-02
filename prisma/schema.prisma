@@ -71,6 +71,11 @@ model User {
   attachments        Attachment[]
   mindMaps           MindMap[]          @relation("MindMapOwner")
 
+  // Time Tracking (Ola P1, Equipo 4) — un usuario tiene múltiples entries
+  // y un historial de tarifas horarias (efectivas por rango de fechas).
+  timeEntries TimeEntry[]
+  hourlyRates UserHourlyRate[]
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
@@ -303,6 +308,10 @@ model Task {
   // Enlace opcional desde nodos de Mapa Mental
   mindMapNodes MindMapNode[] @relation("TaskMindMapNodes")
 
+  // Time Tracking (Ola P1, Equipo 4). La suma de `timeEntries.cost`
+  // alimenta `actualCost` real para EVM (HU-2.1+).
+  timeEntries TimeEntry[]
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -398,7 +407,7 @@ model TaskDependency {
 
 // Módulo PMI: Líneas Base (Snapshots para calcular Schedule Variance)
 model Baseline {
-  id           String @id @default(uuid())
+  id           String  @id @default(uuid())
   version      Int // Versión 1, 2, 3... (por proyecto, monótonamente creciente)
   snapshotData Json // Json estructurado con el estado de las tareas (fechas, PV, EV, AC)
   // Etiqueta libre opcional capturada por el usuario para distinguir
@@ -489,4 +498,58 @@ model MindMapEdge {
 
   @@unique([sourceId, targetId])
   @@index([mindMapId])
+}
+
+// ─────────────────────────────────────────────────────────────
+// Módulo Time Tracking (Ola P1 · Equipo 4)
+//
+// Permite que cada miembro registre tiempo trabajado en tareas, ya sea
+// con un timer en vivo (`endedAt = null`) o como entrada manual con
+// rango cerrado. La suma de `cost` por tarea alimenta `Task.actualCost`
+// real para EVM (HU-2.1+), reemplazando el valor estimado.
+//
+// Decisiones:
+//   1. `hourlyRate` se persiste como SNAPSHOT al cerrar el timer (o al
+//      crear el entry manual). Esto evita que cambios futuros de tarifa
+//      reescriban la historia financiera.
+//   2. `durationMinutes` es 0 mientras el timer corre y se calcula al
+//      hacer stop. Mantenerlo materializado hace baratos los reportes de
+//      timesheet semanal sin necesidad de calcular `endedAt - startedAt`
+//      en cada query.
+//   3. `cost` es nullable: un entry sin tarifa vigente no rompe el flujo
+//      (sólo no contribuye a EVM). Operaciones administrativas pueden
+//      backfillear costos cuando se asigne tarifa retroactiva.
+// ─────────────────────────────────────────────────────────────
+
+model TimeEntry {
+  id              String    @id @default(uuid())
+  userId          String
+  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  taskId          String
+  task            Task      @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  startedAt       DateTime
+  endedAt         DateTime? // null mientras el timer corre
+  durationMinutes Int       @default(0) // 0 mientras corre; calculado al cerrar
+  description     String?
+  hourlyRate      Decimal?  @db.Decimal(10, 2) // snapshot al cerrar
+  cost            Decimal?  @db.Decimal(12, 2) // duration * rate
+  createdAt       DateTime  @default(now())
+
+  @@index([userId, startedAt(sort: Desc)])
+  @@index([taskId, startedAt(sort: Desc)])
+}
+
+// Tarifa horaria de un usuario, válida en un rango de fechas.
+// `validUntil = null` indica tarifa vigente. Históricamente conservamos
+// los rangos cerrados para auditoría y para snapshot retroactivo.
+model UserHourlyRate {
+  id         String    @id @default(uuid())
+  userId     String
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  rate       Decimal   @db.Decimal(10, 2)
+  validFrom  DateTime
+  validUntil DateTime?
+  createdAt  DateTime  @default(now())
+
+  @@index([userId, validFrom])
 }
