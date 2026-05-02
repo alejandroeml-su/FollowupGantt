@@ -43,6 +43,7 @@ import { ExportExcelButton } from './ExportExcelButton'
 import { ExportMspButton } from './ExportMspButton'
 import { DownloadTemplateButton } from './DownloadTemplateButton'
 import { ImportExcelButton } from './ImportExcelButton'
+import { ImportMspButton } from './ImportMspButton'
 import { getBaselineSnapshot } from '@/lib/actions/baselines'
 
 type ParentOption = Pick<SerializedTask, 'id' | 'title' | 'mnemonic'> & {
@@ -744,6 +745,7 @@ export function GanttBoardClient({
           taskCount={activeTaskCount}
         />
         <ImportExcelButton projectId={activeProjectId} />
+        <ImportMspButton projectId={activeProjectId} />
         <DownloadTemplateButton />
       </div>
 

@@ -81,7 +81,14 @@ function getBaselinesByProjectIdCached(projectId: string) {
   )(projectId)
 }
 
-export function invalidateBaselinesCache(projectId: string | null | undefined): void {
+// Next 16 con Turbopack es estricto: cualquier `export` desde un archivo
+// `'use server'` debe ser async function. `revalidateTag` ya devuelve void
+// síncrono en runtime, pero declaramos la función como async para cumplir
+// la regla del compilador. El caller (`captureBaseline`) ya hacía `await`
+// implícito (top-level), así que cambio binario-equivalente.
+export async function invalidateBaselinesCache(
+  projectId: string | null | undefined,
+): Promise<void> {
   if (!projectId) return
   // 'max' = stale-while-revalidate (consistente con invalidateCpmCache).
   revalidateTag(`baselines:${projectId}`, 'max')
@@ -248,7 +255,7 @@ export async function captureBaseline(
   }
 
   // 6. Invalidación de caches y rutas dependientes.
-  invalidateBaselinesCache(projectId)
+  await invalidateBaselinesCache(projectId)
   revalidatePath('/gantt')
   revalidatePath(`/projects/${projectId}`)
 
