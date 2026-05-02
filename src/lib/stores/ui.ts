@@ -34,6 +34,12 @@ type UIState = {
    * para ese proyecto" — se trata igual que `null` en el cliente.
    */
   activeBaselineId: Record<string, string | null>
+  /**
+   * HU-3.4 — abierto/cerrado del panel lateral "Evolución SV/SPI".
+   * Persistido para que el usuario reabra la sesión con la misma vista.
+   * Default `false` (panel colapsado en la primera carga).
+   */
+  baselineTrendOpen: boolean
 
   toggleSelection: (id: string, additive?: boolean) => void
   selectRange: (ids: string[]) => void
@@ -50,6 +56,7 @@ type UIState = {
   toggleCriticalOnly: (on?: boolean) => void
   setActiveBaseline: (projectId: string, baselineId: string | null) => void
   clearActiveBaseline: (projectId: string) => void
+  toggleBaselineTrend: (open?: boolean) => void
 }
 
 export const useUIStore = create<UIState>()(
@@ -65,6 +72,7 @@ export const useUIStore = create<UIState>()(
       sidebarCollapsed: false,
       criticalOnly: false,
       activeBaselineId: {},
+      baselineTrendOpen: false,
 
       toggleSelection: (id, additive = false) =>
         set((s) => {
@@ -117,6 +125,8 @@ export const useUIStore = create<UIState>()(
           delete next[projectId]
           return { activeBaselineId: next }
         }),
+      toggleBaselineTrend: (open) =>
+        set((s) => ({ baselineTrendOpen: open ?? !s.baselineTrendOpen })),
     }),
     {
       name: 'followup-ui',
@@ -128,6 +138,7 @@ export const useUIStore = create<UIState>()(
           sidebarCollapsed: s.sidebarCollapsed,
           criticalOnly: s.criticalOnly,
           activeBaselineId: s.activeBaselineId,
+          baselineTrendOpen: s.baselineTrendOpen,
         }) as Partial<UIState>,
     },
   ),

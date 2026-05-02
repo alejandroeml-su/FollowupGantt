@@ -10,6 +10,7 @@ beforeEach(() => {
     columnPrefs: {},
     criticalOnly: false,
     activeBaselineId: {},
+    baselineTrendOpen: false,
   })
 })
 
@@ -176,5 +177,33 @@ describe('uiStore · activeBaselineId (HU-3.2)', () => {
     expect(raw).toBeTruthy()
     const parsed = raw ? JSON.parse(raw) : null
     expect(parsed?.state?.activeBaselineId).toEqual({ 'proj-A': 'baseline-xyz' })
+  })
+})
+
+describe('uiStore · baselineTrendOpen (HU-3.4)', () => {
+  it('estado inicial false', () => {
+    expect(useUIStore.getState().baselineTrendOpen).toBe(false)
+  })
+
+  it('toggleBaselineTrend() alterna el flag', () => {
+    useUIStore.getState().toggleBaselineTrend()
+    expect(useUIStore.getState().baselineTrendOpen).toBe(true)
+    useUIStore.getState().toggleBaselineTrend()
+    expect(useUIStore.getState().baselineTrendOpen).toBe(false)
+  })
+
+  it('toggleBaselineTrend(true|false) fuerza estado explícito', () => {
+    useUIStore.getState().toggleBaselineTrend(true)
+    expect(useUIStore.getState().baselineTrendOpen).toBe(true)
+    useUIStore.getState().toggleBaselineTrend(false)
+    expect(useUIStore.getState().baselineTrendOpen).toBe(false)
+  })
+
+  it('persiste baselineTrendOpen en localStorage', () => {
+    useUIStore.getState().toggleBaselineTrend(true)
+    const raw =
+      typeof localStorage !== 'undefined' ? localStorage.getItem('followup-ui') : null
+    const parsed = raw ? JSON.parse(raw) : null
+    expect(parsed?.state?.baselineTrendOpen).toBe(true)
   })
 })

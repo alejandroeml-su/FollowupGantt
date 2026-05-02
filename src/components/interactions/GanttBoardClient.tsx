@@ -37,6 +37,8 @@ import {
 } from './DependencyEditor'
 import { CaptureBaselineButton } from './CaptureBaselineButton'
 import { BaselineSelector, type BaselineOption } from './BaselineSelector'
+import { BaselineTrendPanel } from './BaselineTrendPanel'
+import { BaselineTrendToggle } from './BaselineTrendToggle'
 import { getBaselineSnapshot } from '@/lib/actions/baselines'
 
 type ParentOption = Pick<SerializedTask, 'id' | 'title' | 'mnemonic'> & {
@@ -721,6 +723,10 @@ export function GanttBoardClient({
           projectId={activeProjectId}
           baselines={activeBaselines}
         />
+        <BaselineTrendToggle
+          projectId={activeProjectId}
+          hasActiveBaseline={activeBaselineIdForProject != null}
+        />
       </div>
 
       {hasCpmCycle && (
@@ -733,9 +739,10 @@ export function GanttBoardClient({
         </div>
       )}
 
+      <div className="flex gap-3">
       <div
         data-testid="gantt-board"
-        className="rounded-xl border border-border bg-subtle/80 shadow-sm"
+        className="flex-1 min-w-0 rounded-xl border border-border bg-subtle/80 shadow-sm"
       >
         {/* Header: etiquetas de nombre + escala de días */}
         <div className="flex border-b border-border">
@@ -954,6 +961,9 @@ export function GanttBoardClient({
             </div>
           </div>
         )}
+      </div>
+
+      <BaselineTrendPanel projectId={activeProjectId} tasks={visibleLocal} />
       </div>
 
       <TaskDrawer
