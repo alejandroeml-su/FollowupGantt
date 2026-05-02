@@ -69,6 +69,16 @@ enum NotificationType {
   IMPORT_COMPLETED
 }
 
+// Ola P2 · Equipo P2-3 — Recurrencia de tareas (subset iCalendar RRULE).
+// Frecuencia base que combinada con `interval`, `byweekday` y `bymonthday`
+// describe patrones tipo "cada 2 semanas, lun y mié" o "el día 15 de cada mes".
+enum RecurrenceFreq {
+  DAILY
+  WEEKLY
+  MONTHLY
+  YEARLY
+}
+
 // ---------------------------------------------------------
 // ENTIDADES PRINCIPALES
 // ---------------------------------------------------------
@@ -108,6 +118,9 @@ model User {
   // Ola P1 · Centro de notificaciones in-app (HU-N1.x).
   notifications          Notification[]
   notificationPreference NotificationPreference?
+
+  // Ola P2 · Templates creados por el usuario (Equipo P2-3).
+  taskTemplates TaskTemplate[] @relation("TaskTemplateAuthor")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -251,15 +264,20 @@ model Project {
   calendar   WorkCalendar? @relation(fields: [calendarId], references: [id])
 
   // Relaciones
-  phases      Phase[]
-  sprints     Sprint[]
-  columns     BoardColumn[]
-  tasks       Task[]
-  baselines   Baseline[]
-  assignments ProjectAssignment[]
-  mindMaps    MindMap[]
+  phases          Phase[]
+  sprints         Sprint[]
+  columns         BoardColumn[]
+  tasks           Task[]
+  baselines       Baseline[]
+  assignments     ProjectAssignment[]
+  mindMaps        MindMap[]
   // Custom Fields configurables por proyecto (Ola P1, Equipo 3).
   customFieldDefs CustomFieldDef[]
+
+  // Templates por proyecto (Ola P2, Equipo P2-3). Un template puede ser
+  // global (`projectId = null`) o per-project; los globales se reutilizan
+  // entre todos los proyectos y los per-project sólo aparecen en su lista.
+  taskTemplates TaskTemplate[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -390,9 +408,22 @@ model Task {
   // tarea garantiza limpieza al borrar el padre o la propia tarea.
   customFieldValues CustomFieldValue[]
 
+  // Ola P2 · Equipo P2-3 — Recurrencia.
+  //
+  // Si la tarea fue generada por una RecurrenceRule (cron `scheduleAll`)
+  // queda enlazada aquí; al borrar la regla la FK se setea a NULL para
+  // preservar el histórico de tareas materializadas.
+  recurrenceRuleId String?
+  recurrenceRule   RecurrenceRule? @relation("RecurringTaskInstances", fields: [recurrenceRuleId], references: [id], onDelete: SetNull)
+  // Fecha "lógica" de la ocurrencia (UTC midnight) usada como llave única
+  // junto con `recurrenceRuleId` para garantizar idempotencia del scheduler:
+  // si una invocación catch-up corre dos veces no se duplican tasks.
+  occurrenceDate   DateTime?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  @@unique([recurrenceRuleId, occurrenceDate])
   @@index([projectId, columnId, position])
   @@index([projectId, parentId, position])
   @@index([archivedAt])
@@ -712,4 +743,88 @@ model NotificationPreference {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+// ─────────────────────────────────────────────────────────────
+// Módulo Templates + Recurrencia (Ola P2 · Equipo P2-3)
+//
+// Permite (1) guardar plantillas reutilizables de tasks y (2) configurar
+// reglas de recurrencia inspiradas en iCalendar RRULE para generar tasks
+// periódicamente vía cron / Server Action `scheduleAll`.
+//
+// Decisiones documentadas:
+//   D-RT-1: `taskShape` se persiste como JSON snapshot (no FK al Task que
+//           sirvió de origen) para que renombrar/borrar la task fuente
+//           no rompa el template.
+//   D-RT-2: Un template puede ser global (`projectId = null`) o per-project;
+//           los globales sirven a toda la organización (ej. plantillas
+//           ITIL estándar).
+//   D-RT-3: `byweekday` y `bymonthday` se modelan como `Int[]` —
+//           Postgres soporta arrays nativos y Prisma los expone como
+//           `number[]`. Bitmask Lun=0..Dom=6 (ISO weekday - 1).
+//   D-RT-4: `lastGeneratedAt` se actualiza por el scheduler tras cada
+//           materialización exitosa; combinado con la `@@unique` en Task
+//           (`recurrenceRuleId, occurrenceDate`) garantiza idempotencia.
+// ─────────────────────────────────────────────────────────────
+
+model TaskTemplate {
+  id          String  @id @default(uuid())
+  name        String
+  description String?
+
+  projectId String?
+  project   Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+
+  // Snapshot inmutable del task: { title, description, type, priority,
+  // durationDays, tags[], referenceUrl, isMilestone, ... }. Validado por
+  // zod en el server action al crear/actualizar.
+  taskShape Json
+
+  createdById String
+  createdBy   User   @relation("TaskTemplateAuthor", fields: [createdById], references: [id], onDelete: Cascade)
+
+  // Cuando true, el template aparece en la lista de todos los proyectos
+  // del usuario. Independiente de `projectId`: un template global
+  // (`projectId = null`) puede aún no estar compartido si lo usa un solo
+  // gerente.
+  isShared Boolean @default(false)
+
+  recurrences RecurrenceRule[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([projectId])
+  @@index([createdById])
+}
+
+model RecurrenceRule {
+  id         String       @id @default(uuid())
+  templateId String
+  template   TaskTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+
+  frequency RecurrenceFreq
+  // Cada N freqs (ej. interval=2 + WEEKLY = "cada 2 semanas").
+  interval  Int            @default(1)
+
+  // ISO weekday - 1 (Lun=0..Dom=6). Vacío = todos los días de la semana.
+  byweekday  Int[] @default([])
+  // Día del mes 1..31. Vacío = el día derivado de `startDate`.
+  bymonthday Int[] @default([])
+
+  startDate DateTime
+  endDate   DateTime?
+  // Máximo de ocurrencias absolutas (count + endDate son excluyentes en
+  // semántica RRULE; aquí permitimos ambos pero `count` siempre gana).
+  count     Int?
+
+  generatedTasks  Task[]    @relation("RecurringTaskInstances")
+  lastGeneratedAt DateTime?
+  active          Boolean   @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([active, lastGeneratedAt])
+  @@index([templateId])
 }
