@@ -39,6 +39,7 @@ import { CaptureBaselineButton } from './CaptureBaselineButton'
 import { BaselineSelector, type BaselineOption } from './BaselineSelector'
 import { BaselineTrendPanel } from './BaselineTrendPanel'
 import { BaselineTrendToggle } from './BaselineTrendToggle'
+import { ExportExcelButton } from './ExportExcelButton'
 import { getBaselineSnapshot } from '@/lib/actions/baselines'
 
 type ParentOption = Pick<SerializedTask, 'id' | 'title' | 'mnemonic'> & {
@@ -726,6 +727,14 @@ export function GanttBoardClient({
         <BaselineTrendToggle
           projectId={activeProjectId}
           hasActiveBaseline={activeBaselineIdForProject != null}
+        />
+        <span
+          aria-hidden
+          className="ml-2 inline-block h-5 w-px bg-border"
+        />
+        <ExportExcelButton
+          projectId={activeProjectId}
+          taskCount={activeTaskCount}
         />
       </div>
 
