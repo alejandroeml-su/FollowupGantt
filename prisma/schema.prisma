@@ -616,7 +616,6 @@ model MindMapEdge {
 }
 
 // ─────────────────────────────────────────────────────────────
-<<<<<<< HEAD
 // Módulo Custom Fields (Ola P1 · Equipo 3)
 //
 // Permite que cada gerencia/proyecto defina campos personalizados sobre
