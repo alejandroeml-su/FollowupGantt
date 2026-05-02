@@ -40,6 +40,9 @@ import { BaselineSelector, type BaselineOption } from './BaselineSelector'
 import { BaselineTrendPanel } from './BaselineTrendPanel'
 import { BaselineTrendToggle } from './BaselineTrendToggle'
 import { ExportExcelButton } from './ExportExcelButton'
+import { ExportMspButton } from './ExportMspButton'
+import { DownloadTemplateButton } from './DownloadTemplateButton'
+import { ImportExcelButton } from './ImportExcelButton'
 import { getBaselineSnapshot } from '@/lib/actions/baselines'
 
 type ParentOption = Pick<SerializedTask, 'id' | 'title' | 'mnemonic'> & {
@@ -736,6 +739,12 @@ export function GanttBoardClient({
           projectId={activeProjectId}
           taskCount={activeTaskCount}
         />
+        <ExportMspButton
+          projectId={activeProjectId}
+          taskCount={activeTaskCount}
+        />
+        <ImportExcelButton projectId={activeProjectId} />
+        <DownloadTemplateButton />
       </div>
 
       {hasCpmCycle && (
