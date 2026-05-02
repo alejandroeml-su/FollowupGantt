@@ -12,6 +12,7 @@ import {
   parseBaselineSnapshot,
   type BaselineSnapshot,
 } from '@/lib/scheduling/baseline-snapshot'
+import { createNotification } from '@/lib/actions/notifications'
 import { requireProjectAccess } from '@/lib/auth/check-project-access'
 
 // ───────────────────────── Errores tipados ─────────────────────────
@@ -185,9 +186,11 @@ export async function captureBaseline(
   await requireProjectAccess(projectId)
 
   // 2. Validación de existencia + cap.
+  // Cargamos `name` y `managerId` para el side-effect de notificación
+  // post-captura (HU-N1.x · IMPORT_COMPLETED-style para baselines).
   const project = await prisma.project.findUnique({
     where: { id: projectId },
-    select: { id: true },
+    select: { id: true, name: true, managerId: true },
   })
   if (!project) actionError('NOT_FOUND', 'El proyecto no existe')
 
@@ -271,6 +274,31 @@ export async function captureBaseline(
   await invalidateBaselinesCache(projectId)
   revalidatePath('/gantt')
   revalidatePath(`/projects/${projectId}`)
+
+  // 7. Notificación in-app al PM (Ola P1). Side-effect tolerante: si la
+  // notificación falla NO revertimos la captura — la baseline ya está
+  // persistida y es la operación crítica.
+  if (project.managerId) {
+    try {
+      const labelSuffix = label ? ` · "${label}"` : ''
+      await createNotification({
+        userId: project.managerId,
+        type: 'BASELINE_CAPTURED',
+        title: `Línea base v.${created.version} capturada${labelSuffix}`,
+        body: `Proyecto: ${project.name} · ${dbTasks.length} tareas snapshoteadas`,
+        link: `/gantt?projectId=${encodeURIComponent(projectId)}`,
+        data: {
+          projectId,
+          projectName: project.name,
+          baselineId: created.id,
+          version: created.version,
+          taskCount: dbTasks.length,
+        },
+      })
+    } catch (err) {
+      console.error('[notifications] captureBaseline notify falló', err)
+    }
+  }
 
   return created
 }
