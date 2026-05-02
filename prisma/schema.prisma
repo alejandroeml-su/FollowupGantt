@@ -69,6 +69,32 @@ enum NotificationType {
   IMPORT_COMPLETED
 }
 
+// Ola P2 · Equipo P2-4 · Goals & OKRs.
+// Estado del Objective: ON_TRACK / AT_RISK / OFF_TRACK derivado de la
+// función `classifyGoalStatus` (heurística progress vs tiempo transcurrido).
+// COMPLETED / CANCELLED se setean manualmente desde la UI.
+enum GoalStatus {
+  ON_TRACK
+  AT_RISK
+  OFF_TRACK
+  COMPLETED
+  CANCELLED
+}
+
+// Tipo de métrica de un Key Result. Define cómo se calcula `currentValue`
+// y se renderiza el progreso:
+//   - PERCENT: 0-100, manual.
+//   - NUMERIC: cualquier número con `unit` (USD, users, …); progress =
+//     currentValue / targetValue.
+//   - BOOLEAN: true/false (1 = done, 0 = pending).
+//   - TASKS_COMPLETED: progress derivado de tasks vinculadas.
+enum KeyResultMetric {
+  PERCENT
+  NUMERIC
+  BOOLEAN
+  TASKS_COMPLETED
+}
+
 // ---------------------------------------------------------
 // ENTIDADES PRINCIPALES
 // ---------------------------------------------------------
@@ -113,6 +139,12 @@ model User {
   // Ola P1 · Centro de notificaciones in-app (HU-N1.x).
   notifications          Notification[]
   notificationPreference NotificationPreference?
+
+  // Ola P2 · Equipo P2-4 · Goals & OKRs.
+  // Objetivos donde este usuario figura como `owner`. La relación inversa
+  // de `parentId/children` no incluye al User: es propiedad estructural del
+  // Goal.
+  ownedGoals Goal[] @relation("GoalOwner")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -266,6 +298,11 @@ model Project {
   // Custom Fields configurables por proyecto (Ola P1, Equipo 3).
   customFieldDefs CustomFieldDef[]
 
+  // Ola P2 · Equipo P2-4 · Goals & OKRs.
+  // Objetivos asociados al proyecto. `onDelete: SetNull` en Goal preserva
+  // los OKRs históricos aunque se elimine el proyecto.
+  goals Goal[]
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
@@ -398,6 +435,11 @@ model Task {
   // las definiciones del proyecto; cascade desde la definición y desde la
   // tarea garantiza limpieza al borrar el padre o la propia tarea.
   customFieldValues CustomFieldValue[]
+
+  // Ola P2 · Equipo P2-4 · Goals & OKRs.
+  // KRs (con metric=TASKS_COMPLETED) que esta tarea contribuye a alcanzar.
+  // M:N a través de la tabla implícita "_KeyResultTasks".
+  keyResults KeyResult[] @relation("KeyResultTasks")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -774,4 +816,96 @@ model NotificationPreference {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+// ─────────────────────────────────────────────────────────────
+// Módulo Goals / OKRs (Ola P2 · Equipo P2-4)
+//
+// Representa Objectives + Key Results al estilo OKR clásico:
+//   - Goal = Objective: meta cualitativa de un ciclo (Q/H/Y), opcionalmente
+//     anclada a un proyecto. Soporta jerarquía (sub-goals) vía `parentId`.
+//   - KeyResult: métrica medible que contribuye a un Goal. Cuatro tipos
+//     (PERCENT/NUMERIC/BOOLEAN/TASKS_COMPLETED). Para TASKS_COMPLETED el
+//     `currentValue` es porcentaje (0-100) recalculado al completar tasks
+//     vinculadas (`linkedTasks`).
+// ─────────────────────────────────────────────────────────────
+
+model Goal {
+  id          String  @id @default(uuid())
+  title       String
+  description String?
+
+  // Owner principal del Objective. Restringimos a la User table (no SetNull):
+  // un OKR sin owner pierde sentido; si se elimina el usuario el caller debe
+  // reasignar antes (validado vía server action / trigger UI).
+  ownerId String
+  owner   User   @relation("GoalOwner", fields: [ownerId], references: [id])
+
+  // Proyecto opcional al que se ancla el Objective (Goals corporativos
+  // pueden no tener proyecto). `SetNull` preserva histórico al borrar el
+  // proyecto.
+  projectId String?
+  project   Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+
+  status GoalStatus @default(ON_TRACK)
+
+  // Etiqueta libre del ciclo OKR: "Q1-2026", "H1-2026", "Y2026". Se valida
+  // con regex en el server action (`isValidCycle`).
+  cycle String
+
+  // Ventana temporal del Objective. Permite calcular daysElapsed/totalDays
+  // para `classifyGoalStatus`.
+  startDate DateTime
+  endDate   DateTime
+
+  // Jerarquía Goal → sub-Goals (Company → Team → Personal). `SetNull` al
+  // borrar el padre evita perder los hijos: quedan huérfanos pero
+  // accesibles. La UI permite re-anclar.
+  parentId String?
+  parent   Goal?   @relation("GoalHierarchy", fields: [parentId], references: [id], onDelete: SetNull)
+  children Goal[]  @relation("GoalHierarchy")
+
+  // Resultados clave del Objective. Cascade: borrar el Goal borra todos
+  // sus KRs (no tiene sentido un KR huérfano).
+  keyResults KeyResult[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Patrones de query del dashboard:
+  //   - "todos los goals de Edwin en Q1-2026" → (ownerId, cycle).
+  //   - "todos los goals del proyecto X en H1-2026" → (projectId, cycle).
+  @@index([ownerId, cycle])
+  @@index([projectId, cycle])
+  @@index([parentId])
+}
+
+model KeyResult {
+  id String @id @default(uuid())
+
+  goalId String
+  goal   Goal   @relation(fields: [goalId], references: [id], onDelete: Cascade)
+
+  title       String
+  metric      KeyResultMetric
+  // Valor objetivo. Para PERCENT y TASKS_COMPLETED suele ser 100; para
+  // NUMERIC depende de unit; para BOOLEAN es 1.
+  targetValue Float
+  // Valor actual. Para TASKS_COMPLETED se recalcula automáticamente al
+  // completar tareas vinculadas.
+  currentValue Float @default(0)
+  // Unidad opcional human-readable (USD, %, users…). Solo se muestra en
+  // la UI; no afecta cálculo.
+  unit     String?
+  // Orden visual del KR dentro del Goal (fractional indexing).
+  position Float   @default(1)
+
+  // Tasks vinculadas — solo relevante cuando `metric=TASKS_COMPLETED`. M:N
+  // implícita ("_KeyResultTasks"). El recompute consulta status=DONE.
+  linkedTasks Task[] @relation("KeyResultTasks")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([goalId, position])
 }
