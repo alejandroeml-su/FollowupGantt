@@ -94,6 +94,18 @@ vi.mock('@/lib/scheduling/validate', () => ({
     validateProjectSchedule(...(args as [])),
 }))
 
+// Auth (Ola P1): server actions de import/export ahora invocan
+// `requireProjectAccess`. Mock no-op para unit tests.
+vi.mock('@/lib/auth/check-project-access', () => ({
+  requireProjectAccess: vi.fn(async () => ({
+    id: 'test-user',
+    email: 'test@local',
+    name: 'Test',
+    roles: ['SUPER_ADMIN'],
+  })),
+  canAccessProject: vi.fn(async () => true),
+}))
+
 beforeEach(() => {
   projectFindUnique.mockReset()
   userFindMany.mockReset()

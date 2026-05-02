@@ -80,7 +80,15 @@ import { X, ShieldAlert, ShieldCheck, UserCog } from 'lucide-react';
 
 // ─── Sidebar ─────────────────────────────────────────────────────
 
-export default function Sidebar() {
+/**
+ * Slot opcional para inyectar un footer de usuario server-rendered (ver
+ * `<UserMenu/>`). Si se pasa `userSlot`, reemplaza el bloque "Usuario"
+ * hardcoded con debug roles del MVP previo. Esto permite que el flujo de
+ * Auth real (Ola P1) muestre al usuario autenticado vía cookie/Session
+ * sin que el Sidebar (client component) tenga que importar lógica
+ * server-only.
+ */
+export default function Sidebar({ userSlot }: { userSlot?: React.ReactNode } = {}) {
   const pathname = usePathname();
   const mobileOpen = useUIStore((s) => s.mobileSidebarOpen);
   const setMobileOpen = useUIStore((s) => s.setMobileSidebarOpen);
@@ -326,25 +334,29 @@ export default function Sidebar() {
              <ThemeToggle />
           </div>
 
-          {/* Usuario */}
-          <div
-            className={clsx(
-              "flex items-center rounded-lg bg-accent/40 border border-border/50",
-              collapsed ? "lg:justify-center lg:p-1 lg:border-0 lg:bg-transparent gap-3 px-2 py-2" : "gap-3 px-2 py-2"
-            )}
-            title={collapsed ? `Edwin Martinez — ${debugRole}` : undefined}
-          >
-            <div className="h-8 w-8 rounded-full bg-primary flex items-center justify-center text-sm font-bold text-primary-foreground shadow-md flex-shrink-0">
-              {debugRole === 'AGENTE' ? 'AG' : debugRole === 'ADMIN' ? 'AD' : 'SA'}
+          {/* Usuario · Auth real (server slot) si está disponible */}
+          {userSlot ? (
+            userSlot
+          ) : (
+            <div
+              className={clsx(
+                "flex items-center rounded-lg bg-accent/40 border border-border/50",
+                collapsed ? "lg:justify-center lg:p-1 lg:border-0 lg:bg-transparent gap-3 px-2 py-2" : "gap-3 px-2 py-2"
+              )}
+              title={collapsed ? `Edwin Martinez — ${debugRole}` : undefined}
+            >
+              <div className="h-8 w-8 rounded-full bg-primary flex items-center justify-center text-sm font-bold text-primary-foreground shadow-md flex-shrink-0">
+                {debugRole === 'AGENTE' ? 'AG' : debugRole === 'ADMIN' ? 'AD' : 'SA'}
+              </div>
+              <div className={clsx("flex flex-col overflow-hidden", collapsed && "lg:hidden")}>
+                <span className="text-xs font-medium text-foreground truncate">Edwin Martinez</span>
+                <span className="text-[10px] text-muted-foreground flex items-center gap-1">
+                   {debugRole === 'SUPER_ADMIN' ? <ShieldCheck className="h-3 w-3 text-emerald-500" /> : <UserCog className="h-3 w-3 text-indigo-400" />}
+                   {debugRole}
+                </span>
+              </div>
             </div>
-            <div className={clsx("flex flex-col overflow-hidden", collapsed && "lg:hidden")}>
-              <span className="text-xs font-medium text-foreground truncate">Edwin Martinez</span>
-              <span className="text-[10px] text-muted-foreground flex items-center gap-1">
-                 {debugRole === 'SUPER_ADMIN' ? <ShieldCheck className="h-3 w-3 text-emerald-500" /> : <UserCog className="h-3 w-3 text-indigo-400" />}
-                 {debugRole}
-              </span>
-            </div>
-          </div>
+          )}
         </div>
       </div>
     </>
