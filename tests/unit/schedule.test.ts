@@ -20,6 +20,20 @@ vi.mock('@/lib/scheduling/validate', () => ({
   validateScheduledChange: vi.fn().mockResolvedValue(undefined),
 }))
 
+// Auth (Ola P1): la action `updateTaskDates` invoca
+// `requireProjectAccess`. En unit tests no hay request scope, así que
+// mockeamos como no-op que devuelve un user admin sintético. El módulo
+// auth tiene su propia suite (`auth-helpers.test.ts`).
+vi.mock('@/lib/auth/check-project-access', () => ({
+  requireProjectAccess: vi.fn(async () => ({
+    id: 'test-user',
+    email: 'test@local',
+    name: 'Test',
+    roles: ['SUPER_ADMIN'],
+  })),
+  canAccessProject: vi.fn(async () => true),
+}))
+
 import prisma from '@/lib/prisma'
 import { updateTaskDates, shiftTaskDates } from '@/lib/actions/schedule'
 
