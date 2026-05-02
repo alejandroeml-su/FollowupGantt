@@ -44,6 +44,18 @@ enum Priority {
   CRITICAL
 }
 
+// Ola P1 · Centro de notificaciones in-app.
+// Añadido cuando todavía no existe sesión real: el `userId` lo provee el
+// caller (Sidebar hardcodea SUPER_ADMIN; futuro hook de auth).
+enum NotificationType {
+  MENTION
+  TASK_ASSIGNED
+  COMMENT_REPLY
+  BASELINE_CAPTURED
+  DEPENDENCY_VIOLATION
+  IMPORT_COMPLETED
+}
+
 // ---------------------------------------------------------
 // ENTIDADES PRINCIPALES
 // ---------------------------------------------------------
@@ -84,6 +96,10 @@ model User {
   // y un historial de tarifas horarias (efectivas por rango de fechas).
   timeEntries TimeEntry[]
   hourlyRates UserHourlyRate[]
+
+  // Ola P1 · Centro de notificaciones in-app (HU-N1.x).
+  notifications          Notification[]
+  notificationPreference NotificationPreference?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -220,6 +236,11 @@ model Project {
   // Se pueden guardar calculados o dejarlos para consulta dinámica
   cpi Float? // Cost Performance Index
   spi Float? // Schedule Performance Index
+
+  // Calendario laboral aplicable al proyecto (Ola P1.5).
+  // Si NULL → CPM y workload usan días corridos (legacy).
+  calendarId String?
+  calendar   WorkCalendar? @relation(fields: [calendarId], references: [id])
 
   // Relaciones
   phases      Phase[]
@@ -475,6 +496,43 @@ model Baseline {
 }
 
 // ─────────────────────────────────────────────────────────────
+// Módulo Calendarios Laborales (Ola P1.5)
+// ─────────────────────────────────────────────────────────────
+
+model WorkCalendar {
+  id           String  @id @default(uuid())
+  name         String
+  isDefault    Boolean @default(false)
+  // Bitmask de días laborables (bit 0 = lun, bit 6 = dom).
+  // Default: lun-vie = 0b0011111 = 31 (sin sábado ni domingo).
+  workdays     Int     @default(31)
+  // Horas estándar de jornada laboral (8.00 por defecto).
+  workdayHours Decimal @default(8.00) @db.Decimal(4, 2)
+
+  holidays Holiday[]
+  projects Project[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Holiday {
+  id         String       @id @default(uuid())
+  calendarId String
+  calendar   WorkCalendar @relation(fields: [calendarId], references: [id], onDelete: Cascade)
+  // Fecha del festivo (almacenada como UTC midnight).
+  date       DateTime
+  name       String
+  // Si true ⇒ se repite cada año (se compara solo mes/día).
+  recurring  Boolean      @default(false)
+
+  createdAt DateTime @default(now())
+
+  @@unique([calendarId, date])
+  @@index([calendarId, date])
+}
+
+// ─────────────────────────────────────────────────────────────
 // Módulo Mapas Mentales (estilo MindMup 3)
 // ─────────────────────────────────────────────────────────────
 
@@ -547,6 +605,7 @@ model MindMapEdge {
 }
 
 // ─────────────────────────────────────────────────────────────
+<<<<<<< HEAD
 // Módulo Time Tracking (Ola P1 · Equipo 4)
 //
 // Permite que cada miembro registre tiempo trabajado en tareas, ya sea
@@ -598,4 +657,53 @@ model UserHourlyRate {
   createdAt  DateTime  @default(now())
 
   @@index([userId, validFrom])
+}
+
+// Módulo Centro de notificaciones (Ola P1 · HU-N1.x)
+// ─────────────────────────────────────────────────────────────
+
+// Notificación in-app dirigida a un usuario. Contraparte canal-app del
+// email de mención que ya despacha `sendMentionNotification`.
+//
+// Reglas:
+//   - `link` es relativo (ej. "/gantt?taskId=xxx"); el cliente lo abre con
+//     <Link href>.
+//   - `data` está reservado para metadatos extra opcionales (counts del
+//     import, version de la baseline, etc.). Mantener el shape pequeño:
+//     UI no debería depender de campos profundos.
+//   - Sin `updatedAt`: el único mutable es `readAt` y se actualiza con
+//     `markNotificationRead`/`markAllNotificationsRead`.
+//   - Índices: la consulta por defecto es `userId, createdAt desc` y el
+//     count de no-leídas filtra por `userId, readAt is null`.
+model Notification {
+  id     String           @id @default(uuid())
+  userId String
+  user   User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type   NotificationType
+  title  String
+  body   String?
+  link   String? // URL relativa para navegar (ej. "/gantt?taskId=xxx")
+  data   Json? // metadata extra (count, version, taskId…)
+  readAt DateTime?
+
+  createdAt DateTime @default(now())
+
+  @@index([userId, readAt])
+  @@index([userId, createdAt(sort: Desc)])
+}
+
+// Preferencias por usuario para canales de notificación. En P1 los toggles
+// in-app están siempre activos (no se exponen aquí); solo controlamos el
+// canal email. `emailDigest` queda reservado para Ola P2 (digest diario).
+model NotificationPreference {
+  id     String @id @default(uuid())
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  emailMentions    Boolean @default(true)
+  emailAssignments Boolean @default(true)
+  emailDigest      Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
