@@ -11,6 +11,7 @@ import { GlobalBreadcrumbs } from '@/components/interactions/GlobalBreadcrumbs'
 import { ViewSwitcher } from '@/components/interactions/ViewSwitcher'
 import { NewTaskButton } from '@/components/interactions/NewTaskButton'
 import { getCachedCpmForProject } from '@/lib/scheduling/cache'
+import { getBaselinesForProject } from '@/lib/actions/baselines'
 
 export const dynamic = 'force-dynamic'
 
@@ -173,6 +174,26 @@ export default async function GanttTimeline({
     if (row.projectId) baselineCountByProject[row.projectId] = row._count._all
   }
 
+  // HU-3.2 · listado descriptivo de líneas base solo para proyectos que ya
+  // tengan al menos una. Cada llamada está cacheada vía `unstable_cache`
+  // con tag `baselines:<projectId>`; tras `captureBaseline` se invalida y
+  // el siguiente render trae la lista actualizada.
+  const projectsWithBaselines = Object.entries(baselineCountByProject)
+    .filter(([, n]) => n > 0)
+    .map(([pid]) => pid)
+  const baselinesByProject: Record<
+    string,
+    Awaited<ReturnType<typeof getBaselinesForProject>>
+  > = {}
+  if (projectsWithBaselines.length > 0) {
+    const lists = await Promise.all(
+      projectsWithBaselines.map((pid) => getBaselinesForProject(pid)),
+    )
+    projectsWithBaselines.forEach((pid, i) => {
+      baselinesByProject[pid] = lists[i]
+    })
+  }
+
   // ───── HU-1.2: cargar dependencias y CPM de los proyectos visibles ─────
   const visibleTaskIds = dbTasks.map((t) => t.id)
   const visibleProjectIds = Array.from(
@@ -283,6 +304,7 @@ export default async function GanttTimeline({
           hasCpmCycle={hasCpmCycle}
           taskCountByProject={taskCountByProject}
           baselineCountByProject={baselineCountByProject}
+          baselinesByProject={baselinesByProject}
         />
       </div>
     </div>

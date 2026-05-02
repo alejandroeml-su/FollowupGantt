@@ -29,6 +29,7 @@ import {
   type DependencyEditorPayload,
 } from './DependencyEditor'
 import { CaptureBaselineButton } from './CaptureBaselineButton'
+import { BaselineSelector, type BaselineOption } from './BaselineSelector'
 
 type ParentOption = Pick<SerializedTask, 'id' | 'title' | 'mnemonic'> & {
   project?: { id: string; name: string } | null
@@ -77,6 +78,8 @@ type Props = {
   taskCountByProject?: Record<string, number>
   /** HU-3.1/3.2 — conteo de líneas base por proyecto (cap soft 20). */
   baselineCountByProject?: Record<string, number>
+  /** HU-3.2 — listado descriptivo de líneas base por proyecto, para el selector. */
+  baselinesByProject?: Record<string, BaselineOption[]>
 }
 
 const DAY_WIDTH = 40 // px por día — balance legibilidad / densidad
@@ -134,6 +137,7 @@ export function GanttBoardClient({
   hasCpmCycle,
   taskCountByProject,
   baselineCountByProject,
+  baselinesByProject,
 }: Props) {
   const start = useMemo(() => new Date(rangeStart), [rangeStart])
   const days = useMemo(
@@ -600,6 +604,10 @@ export function GanttBoardClient({
     activeProjectId && taskCountByProject
       ? taskCountByProject[activeProjectId] ?? 0
       : 0
+  const activeBaselines =
+    activeProjectId && baselinesByProject
+      ? baselinesByProject[activeProjectId] ?? []
+      : []
 
   return (
     <>
@@ -626,6 +634,10 @@ export function GanttBoardClient({
           projectName={activeProjectName}
           taskCount={activeTaskCount}
           baselineCount={activeBaselineCount}
+        />
+        <BaselineSelector
+          projectId={activeProjectId}
+          baselines={activeBaselines}
         />
       </div>
 

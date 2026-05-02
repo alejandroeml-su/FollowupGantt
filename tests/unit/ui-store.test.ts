@@ -9,6 +9,7 @@ beforeEach(() => {
     shortcutsOverlayOpen: false,
     columnPrefs: {},
     criticalOnly: false,
+    activeBaselineId: {},
   })
 })
 
@@ -118,5 +119,62 @@ describe('uiStore · criticalOnly (HU-2.3)', () => {
     // Asegura que selección/drawer NO se persiste (regresión defensiva).
     expect(parsed?.state?.selectedIds).toBeUndefined()
     expect(parsed?.state?.drawerTaskId).toBeUndefined()
+  })
+})
+
+describe('uiStore · activeBaselineId (HU-3.2)', () => {
+  it('estado inicial es objeto vacío', () => {
+    expect(useUIStore.getState().activeBaselineId).toEqual({})
+  })
+
+  it('setActiveBaseline guarda baseline por proyecto', () => {
+    useUIStore.getState().setActiveBaseline('proj-A', 'baseline-1')
+    expect(useUIStore.getState().activeBaselineId['proj-A']).toBe('baseline-1')
+  })
+
+  it('mantiene selecciones independientes por proyecto (cross-project key)', () => {
+    // R2 del backlog @PO: cambiar de proyecto NO debe leakear la baseline
+    // del anterior. La clave compuesta lo garantiza naturalmente.
+    useUIStore.getState().setActiveBaseline('proj-A', 'baseline-A1')
+    useUIStore.getState().setActiveBaseline('proj-B', 'baseline-B7')
+    const state = useUIStore.getState().activeBaselineId
+    expect(state['proj-A']).toBe('baseline-A1')
+    expect(state['proj-B']).toBe('baseline-B7')
+    // Sobreescribir un proyecto no toca al otro.
+    useUIStore.getState().setActiveBaseline('proj-A', 'baseline-A2')
+    expect(useUIStore.getState().activeBaselineId['proj-A']).toBe('baseline-A2')
+    expect(useUIStore.getState().activeBaselineId['proj-B']).toBe('baseline-B7')
+  })
+
+  it('setActiveBaseline(null) preserva la clave con valor null (estado "Ninguna")', () => {
+    useUIStore.getState().setActiveBaseline('proj-A', 'baseline-1')
+    useUIStore.getState().setActiveBaseline('proj-A', null)
+    const state = useUIStore.getState().activeBaselineId
+    expect('proj-A' in state).toBe(true)
+    expect(state['proj-A']).toBeNull()
+  })
+
+  it('clearActiveBaseline elimina la clave del proyecto', () => {
+    useUIStore.getState().setActiveBaseline('proj-A', 'baseline-1')
+    useUIStore.getState().setActiveBaseline('proj-B', 'baseline-2')
+    useUIStore.getState().clearActiveBaseline('proj-A')
+    const state = useUIStore.getState().activeBaselineId
+    expect('proj-A' in state).toBe(false)
+    expect(state['proj-B']).toBe('baseline-2')
+  })
+
+  it('clearActiveBaseline en proyecto sin clave es no-op', () => {
+    const before = useUIStore.getState().activeBaselineId
+    useUIStore.getState().clearActiveBaseline('proj-inexistente')
+    expect(useUIStore.getState().activeBaselineId).toBe(before)
+  })
+
+  it('persiste activeBaselineId en localStorage', () => {
+    useUIStore.getState().setActiveBaseline('proj-A', 'baseline-xyz')
+    const raw =
+      typeof localStorage !== 'undefined' ? localStorage.getItem('followup-ui') : null
+    expect(raw).toBeTruthy()
+    const parsed = raw ? JSON.parse(raw) : null
+    expect(parsed?.state?.activeBaselineId).toEqual({ 'proj-A': 'baseline-xyz' })
   })
 })
