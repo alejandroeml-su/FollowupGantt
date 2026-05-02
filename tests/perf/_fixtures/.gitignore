@@ -1,0 +1,6 @@
+# HU-4.6 · Los fixtures sintéticos pesan ~3-5 MB y se regeneran on demand.
+# No commitear binarios para no inflar el repo.
+*.xlsx
+*.xml
+!.gitkeep
+!.gitignore
