@@ -40,6 +40,7 @@ import { BaselineSelector, type BaselineOption } from './BaselineSelector'
 import { BaselineTrendPanel } from './BaselineTrendPanel'
 import { BaselineTrendToggle } from './BaselineTrendToggle'
 import { ExportExcelButton } from './ExportExcelButton'
+import { ExportMspButton } from './ExportMspButton'
 import { DownloadTemplateButton } from './DownloadTemplateButton'
 import { ImportExcelButton } from './ImportExcelButton'
 import { getBaselineSnapshot } from '@/lib/actions/baselines'
@@ -735,6 +736,10 @@ export function GanttBoardClient({
           className="ml-2 inline-block h-5 w-px bg-border"
         />
         <ExportExcelButton
+          projectId={activeProjectId}
+          taskCount={activeTaskCount}
+        />
+        <ExportMspButton
           projectId={activeProjectId}
           taskCount={activeTaskCount}
         />
