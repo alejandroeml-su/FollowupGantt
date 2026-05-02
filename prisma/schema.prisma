@@ -53,6 +53,15 @@ model User {
   name  String
   email String @unique
 
+  // ── Auth (P1 MVP) ─────────────────────────────────────────────
+  // Hash PBKDF2 + salt (formato `pbkdf2$<iter>$<saltB64>$<hashB64>`).
+  // Nullable porque puede provenir de SSO en futuras iteraciones.
+  password      String?
+  emailVerified DateTime?
+
+  accounts Account[]
+  sessions Session[]
+
   // Roles y Permisos
   roles UserRole[]
 
@@ -73,6 +82,43 @@ model User {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+// ── Auth: tablas estándar Auth.js / NextAuth (P1 MVP) ─────────────
+// Aunque hoy implementamos credentials con sesión propia (cookie firmada
+// + tabla Session), mantenemos el shape de Account compatible para
+// migrar a NextAuth + Prisma adapter sin romper datos cuando se agreguen
+// providers SSO (Google/Microsoft) en una iteración posterior.
+
+model Account {
+  id                String  @id @default(uuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+}
+
+model Session {
+  id           String   @id @default(uuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
 }
 
 model Role {

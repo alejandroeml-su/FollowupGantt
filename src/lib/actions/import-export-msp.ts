@@ -71,6 +71,7 @@ import {
 } from '@/lib/import-export/MAPPING'
 import { invalidateCpmCache } from '@/lib/scheduling/invalidate'
 import { validateProjectSchedule } from '@/lib/scheduling/validate'
+import { requireProjectAccess } from '@/lib/auth/check-project-access'
 
 // ───────────────────────── Errores tipados ─────────────────────────
 
@@ -145,6 +146,10 @@ export async function exportMspXml(
       errors: [{ code: 'INVALID_INPUT', detail: 'projectId requerido' }],
     }
   }
+
+  // Auth (Ola P1): solo miembros del proyecto o admins. Lanza error
+  // tipado [UNAUTHORIZED]/[FORBIDDEN] consistente con baselines/deps.
+  await requireProjectAccess(projectId)
 
   try {
     const project = await prisma.project.findUnique({
@@ -376,6 +381,9 @@ export async function importMspXml(
       ],
     }
   }
+
+  // Auth (Ola P1): defensa explícita antes de tocar BD.
+  await requireProjectAccess(input.projectId)
 
   // ─── Decode base64 + validar tamaño (D17) ───
   let buffer: Buffer
@@ -665,6 +673,11 @@ export async function buildMspImportPreview(
       errors: [{ code: 'INVALID_INPUT', detail: 'projectId requerido' }],
     }
   }
+
+  // Auth (Ola P1): preview también requiere acceso (lee tareas/usuarios
+  // del proyecto para resolver matches). Lanza error tipado.
+  await requireProjectAccess(projectId)
+
   if (buffer.byteLength > FILE_SIZE_LIMIT_BYTES) {
     return {
       ok: false,

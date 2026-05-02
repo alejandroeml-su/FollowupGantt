@@ -12,6 +12,7 @@ import {
   parseBaselineSnapshot,
   type BaselineSnapshot,
 } from '@/lib/scheduling/baseline-snapshot'
+import { requireProjectAccess } from '@/lib/auth/check-project-access'
 
 // ───────────────────────── Errores tipados ─────────────────────────
 
@@ -111,6 +112,9 @@ export async function getBaselinesForProject(projectId: string): Promise<
   }>
 > {
   if (!projectId) return []
+  // Auth (Ola P1): solo miembros del proyecto o admins pueden listar
+  // baselines. `requireProjectAccess` lanza [UNAUTHORIZED]/[FORBIDDEN].
+  await requireProjectAccess(projectId)
   return getBaselinesByProjectIdCached(projectId)
 }
 
@@ -128,6 +132,12 @@ export async function getBaselineSnapshot(
     select: { id: true, projectId: true, version: true, snapshotData: true },
   })
   if (!row) return null
+
+  // Auth (Ola P1): chequeo después de leer el row porque necesitamos el
+  // projectId para validar acceso. Si el usuario no tiene permiso,
+  // tratamos como NOT_FOUND para no filtrar la existencia del recurso.
+  await requireProjectAccess(row.projectId)
+
   // parseBaselineSnapshot lanza `[INVALID_SNAPSHOT]` si el JSON no respeta
   // el schema; se propaga al caller (server-side la rama está envuelta
   // por Next y se serializa al cliente como Error).
@@ -170,6 +180,9 @@ export async function captureBaseline(
   }
   const { projectId } = parsed.data
   const label = normalizeBaselineLabel(parsed.data.label ?? null)
+
+  // Auth (Ola P1): solo miembros o admins pueden capturar líneas base.
+  await requireProjectAccess(projectId)
 
   // 2. Validación de existencia + cap.
   const project = await prisma.project.findUnique({
