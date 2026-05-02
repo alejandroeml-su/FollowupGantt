@@ -46,6 +46,10 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': resolve(__dirname, './src'),
+      // `server-only` no está instalado y no se necesita en tests.
+      // Resolvemos a un stub para que los archivos que lo importan
+      // (módulo Auth Ola P1) compilen.
+      'server-only': resolve(__dirname, './tests/stubs/server-only.ts'),
     },
   },
 })
