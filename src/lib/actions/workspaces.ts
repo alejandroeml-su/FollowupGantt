@@ -73,7 +73,9 @@ function actionError(code: WorkspacesErrorCode, detail: string): never {
 
 // ───────────────────────── Constantes ──────────────────────────────
 
-export const ACTIVE_WORKSPACE_COOKIE = 'x-active-workspace'
+// NO exportar: archivos `'use server'` sólo pueden exportar Server Actions async.
+// El proxy.ts re-define esta constante por su cuenta.
+const ACTIVE_WORKSPACE_COOKIE = 'x-active-workspace'
 const INVITATION_TTL_DAYS = 7
 const INVITATION_TOKEN_BYTES = 24
 
