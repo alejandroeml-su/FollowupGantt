@@ -84,8 +84,15 @@ model User {
   password      String?
   emailVerified DateTime?
 
-  accounts Account[]
-  sessions Session[]
+  // ── Auth (P3) · 2FA TOTP opcional (RFC 6238) ─────────────────
+  // Secret base32 cifrado at-rest cuando se acuerde KMS; por ahora
+  // se guarda raw porque sólo super-admin lo activa y la BD ya está
+  // protegida con RLS + secret manager. NULL → 2FA deshabilitado.
+  twoFactorSecret String?
+
+  accounts            Account[]
+  sessions            Session[]
+  passwordResetTokens PasswordResetToken[]
 
   // Roles y Permisos
   roles UserRole[]
@@ -145,9 +152,36 @@ model Session {
   userId       String
   expires      DateTime
 
+  // ── Auth (P3) · Session management UI ────────────────────────
+  // Metadata para listar y revocar dispositivos activos. Capturada
+  // en el momento del login (oauth callback o credentials). Todos
+  // nullable para no romper sesiones legacy creadas en P1.
+  userAgent  String?
+  ipAddress  String?
+  lastSeenAt DateTime?
+  createdAt  DateTime  @default(now())
+
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
+}
+
+// ── Auth (P3) · Password reset flow ─────────────────────────────
+// Token hasheado (SHA-256 hex) con TTL 1h. Se hashea para que un
+// dump de BD no permita usar el token directamente — el correo
+// envía el token plano y aquí guardamos sólo el digest.
+model PasswordResetToken {
+  id        String    @id @default(uuid())
+  userId    String
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
 }
 
 model Role {
