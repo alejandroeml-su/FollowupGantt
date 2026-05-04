@@ -27,29 +27,12 @@
 import 'server-only'
 import prisma from '@/lib/prisma'
 import { signPayload, SIGNATURE_HEADER } from '@/lib/webhooks/signature'
+import { KNOWN_EVENTS, type WebhookEventType } from '@/lib/webhooks/events'
 
-export type WebhookEventType =
-  | 'task.created'
-  | 'task.updated'
-  | 'task.deleted'
-  | 'project.created'
-  | 'project.updated'
-  | 'project.deleted'
-  | 'dependency.created'
-  | 'dependency.deleted'
-  | 'baseline.captured'
-
-export const KNOWN_EVENTS: readonly WebhookEventType[] = [
-  'task.created',
-  'task.updated',
-  'task.deleted',
-  'project.created',
-  'project.updated',
-  'project.deleted',
-  'dependency.created',
-  'dependency.deleted',
-  'baseline.captured',
-]
+// Re-export para preservar contrato pre-existente. Los clients deben
+// importar directamente desde `@/lib/webhooks/events` para no arrastrar
+// `server-only` + prisma al bundle browser.
+export { KNOWN_EVENTS, type WebhookEventType }
 
 const DELIVERY_TIMEOUT_MS = 5_000
 
