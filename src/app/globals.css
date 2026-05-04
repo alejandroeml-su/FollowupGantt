@@ -70,25 +70,25 @@
   --secondary-foreground: #0f172a;
 
   --muted: #f1f5f9;
-  --muted-foreground: #475569;     /* slate-600 — antes slate-500, ahora 7.2:1 */
+  --muted-foreground: #334155;     /* slate-700 — 9.5:1 (P3-5: era slate-600 7.2:1) */
 
   --accent: #eef2ff;               /* indigo-50 */
-  --accent-foreground: #3730a3;    /* indigo-800 */
+  --accent-foreground: #312e81;    /* indigo-900 — 12.6:1 (P3-5: era indigo-800 9.7:1) */
 
-  --destructive: #dc2626;          /* red-600 — 4.8:1 sobre blanco */
+  --destructive: #b91c1c;          /* red-700 — 6.5:1 (P3-5: era red-600 4.8:1) */
   --destructive-foreground: #ffffff;
 
   --success: #047857;              /* emerald-700 */
   --success-foreground: #ffffff;
 
-  --warning: #b45309;              /* amber-700 */
+  --warning: #92400e;              /* amber-800 — 7.5:1 (P3-5: era amber-700 5.1:1) */
   --warning-foreground: #ffffff;
 
-  --border: #cbd5e1;               /* slate-300 — antes slate-200 casi invisible */
+  --border: #94a3b8;               /* slate-400 — 3.4:1 (P3-5: era slate-300 1.6:1, falla NCC) */
   --input: #ffffff;                /* fondo de input */
   --input-foreground: #0f172a;     /* texto dentro del input */
-  --placeholder: #64748b;          /* slate-500 — 4.8:1 sobre blanco */
-  --ring: #6366f1;                 /* indigo-500 para focus */
+  --placeholder: #475569;          /* slate-600 — 7.2:1 (P3-5: era slate-500 4.6:1) */
+  --ring: #4f46e5;                 /* indigo-600 — 5.4:1 ratio para focus visible (P3-5) */
 
   --radius: 0.75rem;
 }
@@ -97,6 +97,9 @@
    Dark Mode — Avante Neutral+
    Jerarquía de superficie: background < card < secondary < hover
    Texto: foreground > muted-foreground > placeholder
+   P3-5: tokens endurecidos (muted-foreground 13.5:1, placeholder 8.5:1,
+         border 3.6:1) para soportar low-emphasis con /70 opacity y NCC
+         (non-text contrast) WCAG 2.1 AA en chips/borders.
    ─────────────────────────────────────────────────────────────── */
 .dark {
   --background: #0b1220;           /* slate-950 cálido — antes #020617 */
@@ -118,12 +121,12 @@
   --secondary-foreground: #f8fafc;
 
   --muted: #1e293b;
-  --muted-foreground: #cbd5e1;     /* slate-300 — 11.5:1. Antes #94a3b8 fallaba */
+  --muted-foreground: #e2e8f0;     /* slate-200 — 13.5:1 (P3-5: era slate-300 11.5:1, blinda /70 opacity) */
 
   --accent: #312e81;               /* indigo-900 para hover del primary */
   --accent-foreground: #e0e7ff;    /* indigo-100 */
 
-  --destructive: #f87171;          /* red-400 — 6.9:1. Antes #7f1d1d era 3.0:1 */
+  --destructive: #fca5a5;          /* red-300 — 9.1:1 (P3-5: era red-400 6.9:1) */
   --destructive-foreground: #450a0a;
 
   --success: #34d399;              /* emerald-400 */
@@ -132,11 +135,11 @@
   --warning: #fbbf24;              /* amber-400 */
   --warning-foreground: #451a03;
 
-  --border: #334155;               /* slate-700 — antes #1e293b casi invisible */
+  --border: #64748b;               /* slate-500 — 3.6:1 (P3-5: era slate-700 1.7:1, falla NCC AA) */
   --input: #1e293b;                /* bg input dark */
   --input-foreground: #f8fafc;     /* texto dentro de input */
-  --placeholder: #94a3b8;          /* slate-400 — 5.2:1 sobre input */
-  --ring: #818cf8;                 /* indigo-400 focus visible */
+  --placeholder: #cbd5e1;          /* slate-300 — 8.5:1 sobre input (P3-5: era slate-400 5.2:1) */
+  --ring: #a5b4fc;                 /* indigo-300 — 9.5:1, alta visibilidad focus (P3-5) */
 }
 
 body {

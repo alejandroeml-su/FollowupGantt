@@ -7,6 +7,7 @@ import {
   type GanttCpmInfo,
   type GanttDependencyDescriptor,
 } from '@/components/interactions/GanttBoardClient'
+import { GanttListMobile } from '@/components/interactions/GanttListMobile'
 import { GlobalBreadcrumbs } from '@/components/interactions/GlobalBreadcrumbs'
 import { ViewSwitcher } from '@/components/interactions/ViewSwitcher'
 import { NewTaskButton } from '@/components/interactions/NewTaskButton'
@@ -289,7 +290,19 @@ export default async function GanttTimeline({
         </div>
       </header>
 
-      <div className="flex-1 overflow-auto p-6">
+      {/* Mobile: lista vertical (Gantt timeline inusable en <sm). */}
+      <div className="flex-1 overflow-auto md:hidden">
+        <GanttListMobile
+          tasks={tasks}
+          rangeLabel={win.label}
+          projects={projects}
+          users={users}
+          allTasks={tasks}
+        />
+      </div>
+
+      {/* Tablet+desktop: timeline interactivo. */}
+      <div className="hidden flex-1 overflow-auto p-6 md:block">
         <GanttBoardClient
           tasks={tasks}
           rangeStart={win.start.toISOString()}

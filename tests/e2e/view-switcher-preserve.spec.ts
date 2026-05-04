@@ -1,20 +1,37 @@
 import { test, expect } from '@playwright/test'
+import {
+  applyAuthCookie,
+  cleanupAuthSeed,
+  disconnectAuthClient,
+  seedAuthUser,
+} from './_helpers/seed-auth'
 
 /**
- * EPIC-001 · Sprint 5 · @Dev — des-skipeado.
- * Preservación de filtros entre vistas vía ViewSwitcher.
- * El switcher se oculta en viewports muy pequeños — usamos viewport amplio.
+ * EPIC-001 · Sprint 5 · @Dev — preservación de filtros entre vistas
+ * vía ViewSwitcher.
+ *
+ * Re-activado en P3-4: el bloqueante histórico era que `/list` y
+ * `/gantt` redirigían a `/login` sin sesión válida. Con `seedAuthUser`
+ * + `applyAuthCookie` se inyecta una sesión real y los specs pueden
+ * navegar a las rutas protegidas. El switcher se oculta en viewports
+ * pequeños — usamos viewport amplio.
  */
 
 test.use({ viewport: { width: 1440, height: 900 } })
 
-// Sprint 5 — los 3 specs de filter preservation requieren que `/list` y
-// `/gantt` rendericen sin error. Esto depende de que la BD del entorno tenga
-// aplicada la migración Sprint 4 (`Task.referenceUrl`). En CI con
-// `prisma db push` + seed se resuelve; en local sin migración los specs
-// fallan al cargar la página antes de poder asertar la URL. Se mantienen
-// `test.describe.skip` hasta que QA habilite el seed determinista.
-test.describe.skip('ViewSwitcher · filter preservation', () => {
+const E2E_USER_EMAIL = 'view-switcher@e2e.test'
+
+test.beforeEach(async ({ context }) => {
+  const seed = await seedAuthUser(E2E_USER_EMAIL, 'AGENTE')
+  await applyAuthCookie(context, seed.cookieValue)
+})
+
+test.afterAll(async () => {
+  await cleanupAuthSeed(E2E_USER_EMAIL).catch(() => {})
+  await disconnectAuthClient().catch(() => {})
+})
+
+test.describe('ViewSwitcher · filter preservation', () => {
   test('filtros sobreviven al navegar List → Kanban', async ({ page }) => {
     await page.goto('/list?status=TODO&assignee=u1')
     const kanbanTab = page.getByRole('tab', { name: /Kanban/i }).first()
@@ -40,8 +57,7 @@ test.describe.skip('ViewSwitcher · filter preservation', () => {
   })
 })
 
-// Igual que arriba: depende de que `/projects` renderice. Re-skipeado hasta seed.
-test.describe.skip('GlobalBreadcrumbs', () => {
+test.describe('GlobalBreadcrumbs', () => {
   test('marca la última ruta como aria-current="page"', async ({ page }) => {
     await page.goto('/projects')
     // El último crumb debe tener aria-current="page". Como puede haber varios
