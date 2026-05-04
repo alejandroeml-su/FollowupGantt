@@ -7,7 +7,7 @@ import {
   LayoutDashboard, Columns, CalendarDays, Target, FolderKanban, Building2,
   List, Users, Table, Network, FileText, ClipboardList,
   Zap, LayoutTemplate, Sparkles, ChevronDown, Eye, Settings, Briefcase,
-  Menu, PanelLeftClose, BarChart3, Rocket, Clock,
+  Menu, PanelLeftClose, BarChart3, Rocket, Clock, Compass,
   type LucideIcon
 } from 'lucide-react';
 import { clsx } from 'clsx';
@@ -66,6 +66,17 @@ const menuGroups: RouteGroup[] = [
     color: 'text-emerald-400',
     routes: [
       { name: 'Sprints', path: '/sprints', icon: Rocket },
+    ],
+  },
+  {
+    // Ola P2 · Equipo P2-4 — Goals & OKRs.
+    // Grupo "Estrategia" para alojar OKRs y futuros artefactos de
+    // alineamiento (planes anuales, KPIs corporativos…).
+    label: 'Estrategia',
+    icon: Compass,
+    color: 'text-emerald-400',
+    routes: [
+      { name: 'Objetivos', path: '/goals', icon: Target },
     ],
   },
   {

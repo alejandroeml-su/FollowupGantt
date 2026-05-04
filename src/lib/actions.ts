@@ -6,6 +6,7 @@ import { after } from 'next/server'
 import { sendMentionNotification } from '@/lib/email/mention-notification'
 import { invalidateCpmCache } from '@/lib/scheduling/invalidate'
 import { createNotificationsBatch } from '@/lib/actions/notifications'
+import { recomputeKeyResultsForTask } from '@/lib/actions/goals'
 import type {
   TaskType,
   ProjectStatus,
@@ -318,12 +319,24 @@ export async function updateTask(formData: FormData) {
   // de invalidar es trivial frente a la complejidad de discriminar.
   invalidateCpmCache(taskToUpdate.projectId)
 
+  // Ola P2 · Equipo P2-4 — Si el status cambió, recalcular KRs vinculados
+  // (sólo afecta KRs metric=TASKS_COMPLETED). Best-effort: errores aquí no
+  // deben bloquear la actualización de la tarea.
+  if (status && status !== oldTask.status) {
+    try {
+      await recomputeKeyResultsForTask(id)
+    } catch (err) {
+      console.error('[goals] recomputeKeyResultsForTask falló desde updateTask', err)
+    }
+  }
+
   revalidatePath('/list')
   revalidatePath('/kanban')
   revalidatePath('/gantt')
   revalidatePath('/table')
   revalidatePath('/workload')
   revalidatePath('/mindmaps')
+  revalidatePath('/goals')
 }
 
 export async function deleteTask(formData: FormData) {
@@ -389,8 +402,15 @@ export async function updateTaskStatus(id: string, status: string) {
     where: { id },
     data: { status: status as TaskStatus }
   })
+  // Ola P2 · Equipo P2-4 — Recompute KRs vinculados (idempotente, best-effort).
+  try {
+    await recomputeKeyResultsForTask(id)
+  } catch (err) {
+    console.error('[goals] recomputeKeyResultsForTask falló desde updateTaskStatus', err)
+  }
   revalidatePath('/list')
   revalidatePath('/kanban')
+  revalidatePath('/goals')
 }
 
 // =============================================
