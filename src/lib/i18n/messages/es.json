@@ -1,0 +1,234 @@
+{
+  "common": {
+    "appName": "Avante Orq PRO",
+    "loading": "Cargando...",
+    "saving": "Guardando...",
+    "search": "Buscar",
+    "filter": "Filtrar",
+    "filters": "Filtros",
+    "all": "Todos",
+    "none": "Ninguno",
+    "yes": "Sí",
+    "no": "No",
+    "actions": "Acciones",
+    "more": "Más",
+    "close": "Cerrar",
+    "back": "Volver",
+    "next": "Siguiente",
+    "previous": "Anterior",
+    "edit": "Editar",
+    "view": "Ver",
+    "details": "Detalles",
+    "settings": "Configuración",
+    "language": "Idioma",
+    "theme": "Tema",
+    "logout": "Cerrar sesión",
+    "login": "Iniciar sesión",
+    "user": "Usuario",
+    "name": "Nombre",
+    "email": "Correo",
+    "password": "Contraseña",
+    "description": "Descripción",
+    "status": "Estado",
+    "priority": "Prioridad",
+    "type": "Tipo",
+    "assignee": "Asignado",
+    "unassigned": "Sin asignar",
+    "from": "Desde",
+    "to": "Hasta",
+    "today": "Hoy",
+    "yesterday": "Ayer",
+    "tomorrow": "Mañana",
+    "required": "Requerido",
+    "optional": "Opcional",
+    "noResults": "Sin resultados",
+    "empty": "Vacío",
+    "expand": "Expandir",
+    "collapse": "Colapsar"
+  },
+  "buttons": {
+    "save": "Guardar",
+    "cancel": "Cancelar",
+    "delete": "Eliminar",
+    "create": "Crear",
+    "add": "Añadir",
+    "remove": "Quitar",
+    "import": "Importar",
+    "export": "Exportar",
+    "duplicate": "Duplicar",
+    "apply": "Aplicar",
+    "reset": "Restablecer",
+    "clear": "Limpiar",
+    "confirm": "Confirmar",
+    "submit": "Enviar",
+    "send": "Enviar",
+    "update": "Actualizar",
+    "rename": "Renombrar",
+    "archive": "Archivar",
+    "restore": "Restaurar",
+    "publish": "Publicar",
+    "unpublish": "Despublicar",
+    "open": "Abrir",
+    "selectAll": "Seleccionar todo",
+    "deselectAll": "Deseleccionar todo"
+  },
+  "sidebar": {
+    "title": "Orquestación Híbrida",
+    "themeLabel": "Tema",
+    "dashboard": "Dashboard",
+    "brain": "Avante Brain AI",
+    "groups": {
+      "views": "Vistas",
+      "management": "Gestión",
+      "agile": "Agile",
+      "strategy": "Estrategia",
+      "settings": "Configuración"
+    },
+    "items": {
+      "list": "Lista",
+      "kanban": "Kanban",
+      "gantt": "Gantt",
+      "table": "Tabla",
+      "mindmaps": "Mind Maps",
+      "docs": "Docs & Wiki",
+      "forms": "Formularios",
+      "automations": "Automatizaciones",
+      "kpiDashboards": "Dashboards KPI",
+      "projectKpis": "KPIs de Proyectos",
+      "timesheets": "Timesheet",
+      "sprints": "Sprints",
+      "goals": "Objetivos",
+      "rolesPermissions": "Roles & Permisos",
+      "teams": "Equipos",
+      "gerencias": "Gerencias",
+      "projects": "Proyectos",
+      "users": "Usuarios",
+      "calendars": "Calendarios laborales",
+      "workload": "Cargas de trabajo",
+      "audit": "Bitácora de auditoría",
+      "templates": "Plantillas"
+    },
+    "menuClose": "Cerrar menú",
+    "menuExpand": "Expandir menú",
+    "menuCollapse": "Colapsar menú"
+  },
+  "userMenu": {
+    "logout": "Cerrar sesión",
+    "language": "Idioma",
+    "languageSpanish": "Español",
+    "languageEnglish": "Inglés",
+    "switchLanguage": "Cambiar idioma"
+  },
+  "task": {
+    "form": {
+      "title": "Título",
+      "description": "Descripción",
+      "status": "Estado",
+      "priority": "Prioridad",
+      "type": "Tipo",
+      "assignee": "Asignado",
+      "startDate": "Fecha inicio",
+      "endDate": "Fecha fin",
+      "estimate": "Estimación",
+      "tags": "Etiquetas",
+      "project": "Proyecto",
+      "parent": "Tarea padre",
+      "dependencies": "Dependencias",
+      "notes": "Notas"
+    },
+    "status": {
+      "todo": "Por hacer",
+      "inProgress": "En progreso",
+      "review": "Revisión",
+      "done": "Completada"
+    },
+    "priority": {
+      "low": "Baja",
+      "medium": "Media",
+      "high": "Alta",
+      "critical": "Crítica"
+    },
+    "type": {
+      "agileStory": "Historia Agile",
+      "pmiTask": "Tarea PMI",
+      "itilTicket": "Ticket ITIL"
+    }
+  },
+  "filters": {
+    "title": "Filtros",
+    "gerencia": "Gerencia",
+    "area": "Área",
+    "project": "Proyecto",
+    "status": "Estado",
+    "type": "Tipo",
+    "priority": "Prioridad",
+    "assignee": "Asignado",
+    "unassigned": "Sin asignar",
+    "dateFrom": "Desde",
+    "dateTo": "Hasta",
+    "criticalOnly": "Solo ruta crítica",
+    "showingCritical": "Mostrando ruta crítica",
+    "criticalOnlyAriaPressed": "Mostrando solo la ruta crítica. Pulsa para mostrar todas las tareas.",
+    "criticalOnlyAriaUnpressed": "Mostrar solo las tareas en la ruta crítica.",
+    "clearWithCount": "Limpiar ({count})"
+  },
+  "pages": {
+    "dashboard": {
+      "title": "Dashboard",
+      "subtitle": "Resumen general de tu trabajo",
+      "activeProjects": "Proyectos activos",
+      "totalTasks": "Tareas totales",
+      "environment": "Entorno"
+    },
+    "gantt": {
+      "title": "Gantt",
+      "subtitle": "Cronograma de proyecto"
+    },
+    "sprints": {
+      "title": "Sprints",
+      "subtitle": "Ciclos ágiles y velocidad"
+    },
+    "goals": {
+      "title": "Objetivos",
+      "subtitle": "Metas y resultados clave (OKRs)"
+    },
+    "templates": {
+      "title": "Plantillas",
+      "subtitle": "Plantillas reutilizables"
+    },
+    "workload": {
+      "title": "Cargas de trabajo",
+      "subtitle": "Capacidad y asignación del equipo"
+    },
+    "audit": {
+      "title": "Bitácora de auditoría",
+      "subtitle": "Registro de eventos del sistema"
+    }
+  },
+  "toast": {
+    "saved": "Cambios guardados",
+    "created": "Creado correctamente",
+    "deleted": "Eliminado correctamente",
+    "updated": "Actualizado correctamente",
+    "imported": "Importación completada",
+    "exported": "Exportación completada",
+    "copied": "Copiado al portapapeles",
+    "errorGeneric": "Algo salió mal",
+    "errorNetwork": "Error de red",
+    "regionLabel": "Notificaciones",
+    "dismiss": "Cerrar"
+  },
+  "error": {
+    "unauthorized": "Sesión requerida. Inicia sesión para continuar.",
+    "forbidden": "No tienes permisos para realizar esta acción.",
+    "notFound": "El recurso solicitado no existe.",
+    "invalidInput": "Datos inválidos.",
+    "invalidCredentials": "Credenciales inválidas.",
+    "invalidSession": "Tu sesión expiró. Vuelve a iniciar sesión.",
+    "conflict": "Conflicto: el recurso ya existe o cambió mientras editabas.",
+    "rateLimited": "Demasiadas solicitudes. Intenta más tarde.",
+    "serverError": "Error del servidor. Inténtalo de nuevo.",
+    "networkError": "Sin conexión. Verifica tu red.",
+    "unknown": "Error desconocido."
+  }
+}

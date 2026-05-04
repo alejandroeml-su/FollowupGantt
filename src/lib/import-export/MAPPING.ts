@@ -193,55 +193,17 @@ export const MAX_TASKS_PER_IMPORT = 5000
 export const MAX_DEPS_PER_IMPORT = 10_000
 
 // ───────────────────────── Tipos auxiliares ─────────────────────────
+//
+// Los tipos viven en `types.ts` (archivo puro, sin runtime) para no
+// arrastrar el grafo de import/export al colectar page-data en
+// Turbopack (Next 16). Aquí los re-exportamos con los alias legacy
+// (`ImportError`, `ImportWarning`, …) para mantener el contrato con
+// los consumidores existentes.
 
-export type ImportErrorCode =
-  | 'INVALID_FILE'
-  | 'FILE_TOO_LARGE'
-  | 'EXCEL_PARSE'
-  | 'INVALID_ROW'
-  | 'DUPLICATE_MNEMONIC'
-  | 'CYCLE_DETECTED'
-  | 'ORPHAN_DEPENDENCY'
-  | 'IMPORT_FAILED'
-  | 'NOT_FOUND'
-  | 'INVALID_INPUT'
-
-export type ImportWarningCode =
-  | 'INVALID_PARENT_REF'
-  | 'RESOURCE_NO_MATCH'
-  | 'LAG_CLAMPED'
-  | 'EMPTY_SHEET'
-  | 'CONSTRAINT_IGNORED'
-  | 'CALENDAR_IGNORED'
-  | 'MULTIPLE_ASSIGNMENTS_IGNORED'
-  | 'INACTIVE_TASK_SKIPPED'
-  | 'MATERIAL_RESOURCE_IGNORED'
-  | 'NEGATIVE_FLOAT_POST_IMPORT'
-
-/**
- * Origen extendido del warning/error. Excel usa 'Tareas|Dependencias|Recursos';
- * MSP XML reporta secciones lógicas equivalentes para reutilizar el render del
- * preview dialog. `MSP` es un fallback para eventos a nivel proyecto (root tag,
- * version, etc.).
- */
-export type ImportSource =
-  | 'Tareas'
-  | 'Dependencias'
-  | 'Recursos'
-  | 'MSP'
-
-export interface ImportError {
-  code: ImportErrorCode
-  detail: string
-  /** Hoja Excel u origen MSP cuando aplica. */
-  sheet?: ImportSource
-  /** Fila Excel 1-based (incluye header) o UID MSP cuando aplica. */
-  row?: number
-}
-
-export interface ImportWarning {
-  code: ImportWarningCode
-  detail: string
-  sheet?: ImportSource
-  row?: number
-}
+export type {
+  ExcelImportError as ImportError,
+  ExcelImportErrorCode as ImportErrorCode,
+  ExcelImportWarning as ImportWarning,
+  ExcelImportWarningCode as ImportWarningCode,
+  ImportSource,
+} from './types'
