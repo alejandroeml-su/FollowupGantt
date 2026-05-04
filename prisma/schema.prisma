@@ -286,6 +286,17 @@ model Phase {
 }
 
 // Módulo Agile: Sprints y Columnas Kanban
+//
+// Ola P2 · Equipo P2-2 — Story Points + Velocity:
+//   - `capacity` = puntos de historia comprometidos por el equipo al
+//     planificar el sprint (input humano).
+//   - `startedAt` / `endedAt` = timestamps reales del lifecycle (distintos
+//     de `startDate`/`endDate`, que son la planificación). Se setean al
+//     invocar `startSprint` / `endSprint` respectivamente.
+//   - `velocityActual` = suma de `storyPoints` de tasks DONE en el sprint
+//     al momento de cerrarlo. Se persiste para que el VelocityChart no
+//     dependa de re-calcular sobre el grafo de tasks (que puede mutar
+//     después del cierre).
 model Sprint {
   id        String        @id @default(uuid())
   name      String
@@ -296,6 +307,12 @@ model Sprint {
 
   projectId String
   project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  // ── Agile metrics (Ola P2) ──────────────────────────────────────
+  capacity        Int?
+  startedAt       DateTime?
+  endedAt         DateTime?
+  velocityActual  Int?
 
   tasks Task[]
 
@@ -377,6 +394,14 @@ model Task {
 
   // Etiquetas libres para filtros/búsqueda
   tags String[] @default([])
+
+  // ── Agile · Story Points (Ola P2) ──────────────────────────────
+  // Estimación en escala Fibonacci (1, 2, 3, 5, 8, 13, 21). Nullable
+  // porque las tareas PMI/ITIL no se estiman en puntos. La validación
+  // del valor permitido vive en el server action (`assignTaskToSprint`
+  // y `setTaskStoryPoints`); aquí dejamos el tipo amplio para no atar
+  // futuros equipos que quieran extender la escala.
+  storyPoints Int?
 
   // Enlace externo de referencia (Confluence, Figma, ticket externo, etc.)
   referenceUrl String?
