@@ -22,6 +22,7 @@ import {
 import { TaskTimeTrackingSection } from '@/components/time-tracking/TaskTimeTrackingSection'
 import { TaskCustomFieldsSection } from '@/components/custom-fields/TaskCustomFieldsSection'
 import { TaskGoalsSection } from '@/components/goals/TaskGoalsSection'
+import { TaskDocsSection } from '@/components/docs/TaskDocsSection'
 
 type Props = {
   task: SerializedTask
@@ -90,6 +91,14 @@ export function TaskDrawerContent({ task, projects, users, allTasks = [] }: Prop
        */}
       <div className="border-t border-border bg-card/40 px-6 py-4">
         <TaskGoalsSection taskId={task.id} />
+      </div>
+      {/*
+       * Ola P2 · Equipo P2-5 — Sección de Docs vinculados. Lista los
+       * documentos asociados a la tarea con atajo para crear uno nuevo
+       * pre-vinculado. La edición completa vive en /docs.
+       */}
+      <div className="border-t border-border bg-card/40 px-6 py-4">
+        <TaskDocsSection taskId={task.id} />
       </div>
     </div>
   )

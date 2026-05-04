@@ -6,6 +6,7 @@ import {
   ArrowLeft, Plus, Calendar as CalendarIcon, Link as LinkIcon,
   GitCommit, ChevronRight, ChevronDown, CheckCircle2, ListTree, SlidersHorizontal, Settings, X
 } from 'lucide-react';
+import { ProjectDocsSection } from '@/components/docs/ProjectDocsSection';
 import { ExportProjectButton } from '@/components/backup/ExportProjectButton';
 import { ImportProjectDialog } from '@/components/backup/ImportProjectDialog';
 
@@ -165,17 +166,26 @@ export default function ProjectDetailManagement({ params }: { params: { id: stri
 
       <div className="flex-1 overflow-y-auto p-8">
         {activeTab === 'WBS' && (
-          <div className="bg-card border border-border rounded-xl overflow-hidden shadow-sm">
-            <div className="flex items-center bg-background/95 border-b border-border py-3 px-4 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-              <div className="flex-1">Estructura / Nombre</div>
-              <div className="w-32">Fecha Inicio</div>
-              <div className="w-32">Fecha Fin</div>
-              <div className="w-32">Progreso</div>
-              <div className="w-24 text-right">Acciones</div>
+          <div className="space-y-6">
+            <div className="bg-card border border-border rounded-xl overflow-hidden shadow-sm">
+              <div className="flex items-center bg-background/95 border-b border-border py-3 px-4 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                <div className="flex-1">Estructura / Nombre</div>
+                <div className="w-32">Fecha Inicio</div>
+                <div className="w-32">Fecha Fin</div>
+                <div className="w-32">Progreso</div>
+                <div className="w-24 text-right">Acciones</div>
+              </div>
+              <div className="divide-y divide-border/50">
+                {tasks.map(task => renderTaskRow(task, 0))}
+              </div>
             </div>
-            <div className="divide-y divide-border/50">
-              {tasks.map(task => renderTaskRow(task, 0))}
-            </div>
+
+            {/*
+              Ola P2 · Equipo P2-5 — Sección de docs vinculados al proyecto.
+              Permite navegar al editor de docs (/docs) para ver/editar y
+              crear nuevos docs ya pre-vinculados al projectId actual.
+            */}
+            <ProjectDocsSection projectId={params.id} />
           </div>
         )}
 
