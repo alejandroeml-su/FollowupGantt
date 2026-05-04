@@ -6,6 +6,7 @@ import { clsx } from 'clsx'
 import type { TaskFilters } from '@/lib/taskFilters'
 import { countActiveFilters, EMPTY_TASK_FILTERS, UNASSIGNED_VALUE } from '@/lib/taskFilters'
 import { useUIStore } from '@/lib/stores/ui'
+import { useTranslation } from '@/lib/i18n/use-translation'
 
 type Catalogs = {
   gerencias?: { id: string; name: string }[]
@@ -24,24 +25,27 @@ type Props = Catalogs & {
   showCriticalOnly?: boolean
 }
 
+// Ola P4 · P4-4 — Las labels viajan como i18n keys (`labelKey`); el
+// `value` permanece en mayúsculas porque es el contrato del backend
+// (Prisma enum). Se traducen al render con `t(labelKey)`.
 const STATUS_OPTIONS = [
-  { value: 'TODO', label: 'To Do' },
-  { value: 'IN_PROGRESS', label: 'In Progress' },
-  { value: 'REVIEW', label: 'Review' },
-  { value: 'DONE', label: 'Done' },
+  { value: 'TODO', labelKey: 'task.status.todo' },
+  { value: 'IN_PROGRESS', labelKey: 'task.status.inProgress' },
+  { value: 'REVIEW', labelKey: 'task.status.review' },
+  { value: 'DONE', labelKey: 'task.status.done' },
 ]
 
 const TYPE_OPTIONS = [
-  { value: 'AGILE_STORY', label: 'Agile Story' },
-  { value: 'PMI_TASK', label: 'PMI Task' },
-  { value: 'ITIL_TICKET', label: 'ITIL Ticket' },
+  { value: 'AGILE_STORY', labelKey: 'task.type.agileStory' },
+  { value: 'PMI_TASK', labelKey: 'task.type.pmiTask' },
+  { value: 'ITIL_TICKET', labelKey: 'task.type.itilTicket' },
 ]
 
 const PRIORITY_OPTIONS = [
-  { value: 'LOW', label: 'Baja' },
-  { value: 'MEDIUM', label: 'Media' },
-  { value: 'HIGH', label: 'Alta' },
-  { value: 'CRITICAL', label: 'Crítica' },
+  { value: 'LOW', labelKey: 'task.priority.low' },
+  { value: 'MEDIUM', labelKey: 'task.priority.medium' },
+  { value: 'HIGH', labelKey: 'task.priority.high' },
+  { value: 'CRITICAL', labelKey: 'task.priority.critical' },
 ]
 
 export function TaskFiltersBar({
@@ -55,6 +59,7 @@ export function TaskFiltersBar({
   className,
   showCriticalOnly = false,
 }: Props) {
+  const { t } = useTranslation()
   const visible = (key: keyof TaskFilters) => show?.[key] !== false
   const active = countActiveFilters(value)
 
@@ -108,7 +113,7 @@ export function TaskFiltersBar({
     >
       <div className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
         <Filter className="h-3.5 w-3.5" />
-        Filtros
+        {t('filters.title')}
       </div>
 
       {visible('gerenciaId') && gerencias.length > 0 && (
@@ -116,9 +121,9 @@ export function TaskFiltersBar({
           value={value.gerenciaId ?? ''}
           onChange={(e) => set('gerenciaId', e.target.value)}
           className={selectClass}
-          aria-label="Gerencia"
+          aria-label={t('filters.gerencia')}
         >
-          <option value="">Gerencia</option>
+          <option value="">{t('filters.gerencia')}</option>
           {gerencias.map((g) => (
             <option key={g.id} value={g.id}>{g.name}</option>
           ))}
@@ -130,9 +135,9 @@ export function TaskFiltersBar({
           value={value.areaId ?? ''}
           onChange={(e) => set('areaId', e.target.value)}
           className={selectClass}
-          aria-label="Área"
+          aria-label={t('filters.area')}
         >
-          <option value="">Área</option>
+          <option value="">{t('filters.area')}</option>
           {visibleAreas.map((a) => (
             <option key={a.id} value={a.id}>{a.name}</option>
           ))}
@@ -144,9 +149,9 @@ export function TaskFiltersBar({
           value={value.projectId ?? ''}
           onChange={(e) => set('projectId', e.target.value)}
           className={selectClass}
-          aria-label="Proyecto"
+          aria-label={t('filters.project')}
         >
-          <option value="">Proyecto</option>
+          <option value="">{t('filters.project')}</option>
           {visibleProjects.map((p) => (
             <option key={p.id} value={p.id}>{p.name}</option>
           ))}
@@ -158,11 +163,11 @@ export function TaskFiltersBar({
           value={value.status ?? ''}
           onChange={(e) => set('status', e.target.value)}
           className={selectClass}
-          aria-label="Estado"
+          aria-label={t('filters.status')}
         >
-          <option value="">Estado</option>
+          <option value="">{t('filters.status')}</option>
           {STATUS_OPTIONS.map((o) => (
-            <option key={o.value} value={o.value}>{o.label}</option>
+            <option key={o.value} value={o.value}>{t(o.labelKey)}</option>
           ))}
         </select>
       )}
@@ -172,11 +177,11 @@ export function TaskFiltersBar({
           value={value.type ?? ''}
           onChange={(e) => set('type', e.target.value)}
           className={selectClass}
-          aria-label="Tipo"
+          aria-label={t('filters.type')}
         >
-          <option value="">Tipo</option>
+          <option value="">{t('filters.type')}</option>
           {TYPE_OPTIONS.map((o) => (
-            <option key={o.value} value={o.value}>{o.label}</option>
+            <option key={o.value} value={o.value}>{t(o.labelKey)}</option>
           ))}
         </select>
       )}
@@ -186,11 +191,11 @@ export function TaskFiltersBar({
           value={value.priority ?? ''}
           onChange={(e) => set('priority', e.target.value)}
           className={selectClass}
-          aria-label="Prioridad"
+          aria-label={t('filters.priority')}
         >
-          <option value="">Prioridad</option>
+          <option value="">{t('filters.priority')}</option>
           {PRIORITY_OPTIONS.map((o) => (
-            <option key={o.value} value={o.value}>{o.label}</option>
+            <option key={o.value} value={o.value}>{t(o.labelKey)}</option>
           ))}
         </select>
       )}
@@ -200,10 +205,10 @@ export function TaskFiltersBar({
           value={value.assigneeId ?? ''}
           onChange={(e) => set('assigneeId', e.target.value)}
           className={selectClass}
-          aria-label="Asignado"
+          aria-label={t('filters.assignee')}
         >
-          <option value="">Asignado</option>
-          <option value={UNASSIGNED_VALUE}>Sin asignar</option>
+          <option value="">{t('filters.assignee')}</option>
+          <option value={UNASSIGNED_VALUE}>{t('filters.unassigned')}</option>
           {users.map((u) => (
             <option key={u.id} value={u.id}>{u.name}</option>
           ))}
@@ -214,26 +219,26 @@ export function TaskFiltersBar({
         <div className="flex items-center gap-1.5 pl-2 ml-1 border-l border-border/60">
           {visible('dateFrom') && (
             <label className="flex items-center gap-1 text-xs text-muted-foreground">
-              Desde
+              {t('filters.dateFrom')}
               <input
                 type="date"
                 value={value.dateFrom ?? ''}
                 onChange={(e) => set('dateFrom', e.target.value)}
                 className={selectClass}
-                aria-label="Fecha desde"
+                aria-label={t('filters.dateFrom')}
                 max={value.dateTo || undefined}
               />
             </label>
           )}
           {visible('dateTo') && (
             <label className="flex items-center gap-1 text-xs text-muted-foreground">
-              Hasta
+              {t('filters.dateTo')}
               <input
                 type="date"
                 value={value.dateTo ?? ''}
                 onChange={(e) => set('dateTo', e.target.value)}
                 className={selectClass}
-                aria-label="Fecha hasta"
+                aria-label={t('filters.dateTo')}
                 min={value.dateFrom || undefined}
               />
             </label>
@@ -247,8 +252,8 @@ export function TaskFiltersBar({
           aria-pressed={criticalOnly}
           aria-label={
             criticalOnly
-              ? 'Mostrando solo la ruta crítica. Pulsa para mostrar todas las tareas.'
-              : 'Mostrar solo las tareas en la ruta crítica.'
+              ? t('filters.criticalOnlyAriaPressed')
+              : t('filters.criticalOnlyAriaUnpressed')
           }
           onClick={() => toggleCriticalOnly()}
           className={clsx(
@@ -260,7 +265,7 @@ export function TaskFiltersBar({
           )}
         >
           <Zap className="h-3.5 w-3.5" />
-          {criticalOnly ? 'Mostrando ruta crítica' : 'Solo ruta crítica'}
+          {criticalOnly ? t('filters.showingCritical') : t('filters.criticalOnly')}
         </button>
       )}
 
@@ -274,7 +279,7 @@ export function TaskFiltersBar({
           )}
         >
           <X className="h-3 w-3" />
-          Limpiar ({active})
+          {t('filters.clearWithCount', { count: active })}
         </button>
       )}
     </div>

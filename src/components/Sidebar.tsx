@@ -14,13 +14,20 @@ import { clsx } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 
 // ─── Route types ─────────────────────────────────────────────────
+//
+// Ola P4 · P4-4 — `name`/`label` ahora son keys de i18n
+// (`sidebar.items.*`, `sidebar.groups.*`). Cada NavLink llama `t(name)`
+// al renderizar. Ruta y key viajan desacopladas para que el Sidebar
+// pueda traducirse sin hardcodear strings.
 interface RouteItem {
+  /** Clave i18n bajo `sidebar.items.*` o `sidebar.*` para items top. */
   name: string;
   path: string;
   icon: LucideIcon;
 }
 
 interface RouteGroup {
+  /** Clave i18n bajo `sidebar.groups.*`. */
   label: string;
   icon: LucideIcon;
   color: string;       // accent color class for the group icon
@@ -30,67 +37,67 @@ interface RouteGroup {
 // ─── Navigation structure ────────────────────────────────────────
 
 const topRoutes: RouteItem[] = [
-  { name: 'Dashboard', path: '/', icon: LayoutDashboard },
-  { name: 'Avante Brain AI', path: '/brain', icon: Sparkles },
+  { name: 'sidebar.dashboard', path: '/', icon: LayoutDashboard },
+  { name: 'sidebar.brain', path: '/brain', icon: Sparkles },
 ];
 
 const menuGroups: RouteGroup[] = [
   {
-    label: 'Vistas',
+    label: 'sidebar.groups.views',
     icon: Eye,
     color: 'text-cyan-400',
     routes: [
-      { name: 'Lista', path: '/list', icon: List },
-      { name: 'Kanban', path: '/kanban', icon: Columns },
-      { name: 'Gantt', path: '/gantt', icon: CalendarDays },
-      { name: 'Tabla', path: '/table', icon: Table },
-      { name: 'Mind Maps', path: '/mindmaps', icon: Network },
+      { name: 'sidebar.items.list', path: '/list', icon: List },
+      { name: 'sidebar.items.kanban', path: '/kanban', icon: Columns },
+      { name: 'sidebar.items.gantt', path: '/gantt', icon: CalendarDays },
+      { name: 'sidebar.items.table', path: '/table', icon: Table },
+      { name: 'sidebar.items.mindmaps', path: '/mindmaps', icon: Network },
     ],
   },
   {
-    label: 'Gestión',
+    label: 'sidebar.groups.management',
     icon: Briefcase,
     color: 'text-amber-400',
     routes: [
-      { name: 'Docs & Wiki', path: '/docs', icon: FileText },
-      { name: 'Formularios', path: '/forms', icon: ClipboardList },
-      { name: 'Automatizaciones', path: '/automations', icon: Zap },
-      { name: 'Dashboards KPI', path: '/dashboards', icon: LayoutTemplate },
-      { name: 'KPIs de Proyectos', path: '/project-kpis', icon: BarChart3 },
-      { name: 'Timesheet', path: '/timesheets', icon: Clock },
+      { name: 'sidebar.items.docs', path: '/docs', icon: FileText },
+      { name: 'sidebar.items.forms', path: '/forms', icon: ClipboardList },
+      { name: 'sidebar.items.automations', path: '/automations', icon: Zap },
+      { name: 'sidebar.items.kpiDashboards', path: '/dashboards', icon: LayoutTemplate },
+      { name: 'sidebar.items.projectKpis', path: '/project-kpis', icon: BarChart3 },
+      { name: 'sidebar.items.timesheets', path: '/timesheets', icon: Clock },
     ],
   },
   {
-    label: 'Agile',
+    label: 'sidebar.groups.agile',
     icon: Rocket,
     color: 'text-emerald-400',
     routes: [
-      { name: 'Sprints', path: '/sprints', icon: Rocket },
+      { name: 'sidebar.items.sprints', path: '/sprints', icon: Rocket },
     ],
   },
   {
     // Ola P2 · Equipo P2-4 — Goals & OKRs.
     // Grupo "Estrategia" para alojar OKRs y futuros artefactos de
     // alineamiento (planes anuales, KPIs corporativos…).
-    label: 'Estrategia',
+    label: 'sidebar.groups.strategy',
     icon: Compass,
     color: 'text-emerald-400',
     routes: [
-      { name: 'Objetivos', path: '/goals', icon: Target },
+      { name: 'sidebar.items.goals', path: '/goals', icon: Target },
     ],
   },
   {
-    label: 'Configuración',
+    label: 'sidebar.groups.settings',
     icon: Settings,
     color: 'text-violet-400',
     routes: [
-      { name: 'Roles & Permisos', path: '/settings/roles', icon: Settings },
-      { name: 'Equipos', path: '/settings/teams', icon: Users },
-      { name: 'Gerencias', path: '/gerencias', icon: Building2 },
-      { name: 'Proyectos', path: '/projects', icon: FolderKanban },
-      { name: 'Usuarios', path: '/settings/users', icon: Users },
-      { name: 'Calendarios laborales', path: '/settings/calendars', icon: CalendarDays },
-      { name: 'Cargas de trabajo', path: '/workload', icon: ClipboardList },
+      { name: 'sidebar.items.rolesPermissions', path: '/settings/roles', icon: Settings },
+      { name: 'sidebar.items.teams', path: '/settings/teams', icon: Users },
+      { name: 'sidebar.items.gerencias', path: '/gerencias', icon: Building2 },
+      { name: 'sidebar.items.projects', path: '/projects', icon: FolderKanban },
+      { name: 'sidebar.items.users', path: '/settings/users', icon: Users },
+      { name: 'sidebar.items.calendars', path: '/settings/calendars', icon: CalendarDays },
+      { name: 'sidebar.items.workload', path: '/workload', icon: ClipboardList },
     ],
   },
 ];
@@ -98,6 +105,7 @@ const menuGroups: RouteGroup[] = [
 import { useUIStore } from '@/lib/stores/ui';
 import { ThemeToggle } from './ThemeToggle';
 import { NotificationsBell } from './notifications/NotificationsBell';
+import { useTranslation } from '@/lib/i18n/use-translation';
 import { X, ShieldAlert, ShieldCheck, UserCog } from 'lucide-react';
 
 // ─── Sidebar ─────────────────────────────────────────────────────
@@ -112,6 +120,7 @@ import { X, ShieldAlert, ShieldCheck, UserCog } from 'lucide-react';
  */
 export default function Sidebar({ userSlot }: { userSlot?: React.ReactNode } = {}) {
   const pathname = usePathname();
+  const { t } = useTranslation();
   const mobileOpen = useUIStore((s) => s.mobileSidebarOpen);
   const setMobileOpen = useUIStore((s) => s.setMobileSidebarOpen);
   const collapsed = useUIStore((s) => s.sidebarCollapsed);
@@ -190,7 +199,7 @@ export default function Sidebar({ userSlot }: { userSlot?: React.ReactNode } = {
           <button
             className="p-1.5 rounded-lg hover:bg-accent lg:hidden"
             onClick={() => setMobileOpen(false)}
-            aria-label="Cerrar menú"
+            aria-label={t('sidebar.menuClose')}
           >
             <X className="h-5 w-5 text-muted-foreground" />
           </button>
@@ -199,8 +208,8 @@ export default function Sidebar({ userSlot }: { userSlot?: React.ReactNode } = {
           <button
             className="hidden lg:flex items-center justify-center p-1.5 rounded-lg hover:bg-accent text-muted-foreground transition-colors"
             onClick={() => toggleCollapsed()}
-            aria-label={collapsed ? 'Expandir menú' : 'Colapsar menú'}
-            title={collapsed ? 'Expandir menú' : 'Colapsar menú'}
+            aria-label={collapsed ? t('sidebar.menuExpand') : t('sidebar.menuCollapse')}
+            title={collapsed ? t('sidebar.menuExpand') : t('sidebar.menuCollapse')}
           >
             {collapsed ? <Menu className="h-5 w-5" /> : <PanelLeftClose className="h-5 w-5" />}
           </button>
@@ -216,7 +225,7 @@ export default function Sidebar({ userSlot }: { userSlot?: React.ReactNode } = {
             "text-[10px] font-semibold text-muted-foreground uppercase tracking-[0.15em] mb-3 px-2",
             collapsed && "lg:hidden"
           )}>
-            Orquestación Híbrida
+            {t('sidebar.title')}
           </div>
 
           <nav className="flex-1 space-y-0.5">
@@ -275,7 +284,7 @@ export default function Sidebar({ userSlot }: { userSlot?: React.ReactNode } = {
                   >
                     <span className="flex items-center gap-2.5">
                       <GroupIcon className={clsx('h-4 w-4 flex-shrink-0', group.color)} />
-                      {group.label}
+                      {t(group.label)}
                     </span>
                     <ChevronDown
                       className={clsx(
@@ -351,7 +360,7 @@ export default function Sidebar({ userSlot }: { userSlot?: React.ReactNode } = {
                "text-xs font-semibold text-muted-foreground uppercase tracking-widest",
                collapsed && "lg:hidden"
              )}>
-               Tema
+               {t('sidebar.themeLabel')}
              </span>
              <div className="flex items-center gap-1">
                <NotificationsBell collapsed={collapsed} />
@@ -404,15 +413,17 @@ function NavLink({
   collapsed?: boolean;
   onClick?: () => void;
 }) {
+  const { t } = useTranslation();
   const isActive = pathname === route.path;
   const Icon = route.icon;
+  const label = t(route.name);
 
   return (
     <Link
       href={route.path}
       onClick={onClick}
-      title={collapsed ? route.name : undefined}
-      aria-label={collapsed ? route.name : undefined}
+      title={collapsed ? label : undefined}
+      aria-label={collapsed ? label : undefined}
       className={twMerge(
         clsx(
           'group flex items-center rounded-lg transition-all duration-200',
@@ -441,7 +452,7 @@ function NavLink({
         )}
         aria-hidden="true"
       />
-      <span className={clsx(collapsed && 'lg:hidden')}>{route.name}</span>
+      <span className={clsx(collapsed && 'lg:hidden')}>{label}</span>
     </Link>
   );
 }
