@@ -109,8 +109,18 @@ import { X, ShieldAlert, ShieldCheck, UserCog } from 'lucide-react';
  * Auth real (Ola P1) muestre al usuario autenticado vía cookie/Session
  * sin que el Sidebar (client component) tenga que importar lógica
  * server-only.
+ *
+ * Ola P4 · Equipo P4-1 — `workspaceSwitcherSlot` permite inyectar el
+ * `<WorkspaceSwitcher/>` con los datos resueltos en server. Si no se
+ * pasa, el header del sidebar conserva su layout original.
  */
-export default function Sidebar({ userSlot }: { userSlot?: React.ReactNode } = {}) {
+export default function Sidebar({
+  userSlot,
+  workspaceSwitcherSlot,
+}: {
+  userSlot?: React.ReactNode
+  workspaceSwitcherSlot?: React.ReactNode
+} = {}) {
   const pathname = usePathname();
   const mobileOpen = useUIStore((s) => s.mobileSidebarOpen);
   const setMobileOpen = useUIStore((s) => s.setMobileSidebarOpen);
@@ -211,6 +221,13 @@ export default function Sidebar({ userSlot }: { userSlot?: React.ReactNode } = {
           "flex flex-1 flex-col overflow-y-auto pt-5 custom-scrollbar",
           collapsed ? "lg:px-2 px-3" : "px-3"
         )}>
+          {/* Workspace switcher (Ola P4 · slot server-rendered) */}
+          {workspaceSwitcherSlot && (
+            <div className="mb-4">
+              {workspaceSwitcherSlot}
+            </div>
+          )}
+
           {/* Section label */}
           <div className={clsx(
             "text-[10px] font-semibold text-muted-foreground uppercase tracking-[0.15em] mb-3 px-2",

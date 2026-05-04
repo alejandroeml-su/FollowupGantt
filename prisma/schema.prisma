@@ -109,6 +109,29 @@ enum GoalStatus {
 //     currentValue / targetValue.
 //   - BOOLEAN: true/false (1 = done, 0 = pending).
 //   - TASKS_COMPLETED: progress derivado de tasks vinculadas.
+// Ola P4 · Equipo P4-1 — Multi-tenancy / Workspaces.
+// Plan comercial del Workspace: condiciona límites (proyectos, miembros)
+// que pueden añadirse en P4.x. En el MVP de tenancy guardamos sólo el
+// enum; los límites por plan se aplicarán en server actions cuando se
+// monetice el producto.
+enum WorkspacePlan {
+  FREE
+  PRO
+  ENTERPRISE
+}
+
+// Rol del miembro DENTRO del workspace (independiente del Role global
+// SUPER_ADMIN/ADMIN/AGENTE). Un usuario puede ser OWNER en su workspace
+// personal y MEMBER en el workspace corporativo.
+//   - OWNER  : único e inamovible — sólo se puede transferir.
+//   - ADMIN  : invita y elimina miembros, edita configuración del WS.
+//   - MEMBER : acceso al contenido del workspace, sin gestión de miembros.
+enum WorkspaceRole {
+  OWNER
+  ADMIN
+  MEMBER
+}
+
 enum KeyResultMetric {
   PERCENT
   NUMERIC
@@ -172,6 +195,14 @@ model User {
   // de `parentId/children` no incluye al User: es propiedad estructural del
   // Goal.
   ownedGoals Goal[] @relation("GoalOwner")
+
+  // Ola P4 · Equipo P4-1 — Multi-tenancy / Workspaces.
+  // Un usuario puede ser dueño de varios workspaces (ej. personal + del
+  // cliente A) y miembro de muchos. Las invitaciones que el usuario envía
+  // se guardan en `WorkspaceInvitation.invitedById` para auditoría.
+  ownedWorkspaces      Workspace[]            @relation("WorkspaceOwner")
+  workspaceMemberships WorkspaceMember[]
+  sentInvitations      WorkspaceInvitation[]  @relation("InvitationInviter")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -297,6 +328,13 @@ model Project {
   description String?
   status      ProjectStatus @default(PLANNING)
 
+  // Ola P4 · Equipo P4-1 — Multi-tenancy / Workspaces.
+  // Opcional inicial: las server actions usan `getDefaultWorkspaceForUser`
+  // para inferir el WS por defecto si no viene del cliente. En migración
+  // futura se promoverá a NOT NULL una vez backfilled todos los proyectos.
+  workspaceId String?
+  workspace   Workspace? @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
+
   // Área / Gerencia
   areaId String?
   area   Area?   @relation(fields: [areaId], references: [id])
@@ -337,6 +375,8 @@ model Project {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@index([workspaceId])
 }
 
 // Fases del Proyecto (Waterfall / PMI)
@@ -1101,4 +1141,89 @@ model KeyResult {
   updatedAt DateTime @updatedAt
 
   @@index([goalId, position])
+}
+
+// ─────────────────────────────────────────────────────────────
+// Ola P4 · Equipo P4-1 — Multi-tenancy / Workspaces.
+//
+// Modelo:
+//   - Workspace             : organización lógica que agrupa Projects,
+//                             Goals, Templates, etc. Soporta plan comercial
+//                             (FREE/PRO/ENTERPRISE) y posee un OWNER.
+//   - WorkspaceMember       : tabla pivote M:N User ↔ Workspace con `role`
+//                             (OWNER/ADMIN/MEMBER). PK compuesta para
+//                             garantizar membresía única.
+//   - WorkspaceInvitation   : invitación por email con token aleatorio y
+//                             expiración. Una vez aceptada se elimina y se
+//                             crea el WorkspaceMember correspondiente.
+//
+// Estrategia de migración (P4 inicial):
+//   - `Project.workspaceId` opcional ahora; helper
+//     `getDefaultWorkspaceForUser(userId)` crea/devuelve un WS por defecto
+//     para usuarios legacy.
+//   - Las server actions filtran por `workspaceId` activo de la sesión vía
+//     cookie `x-active-workspace`.
+// ─────────────────────────────────────────────────────────────
+
+model Workspace {
+  id   String @id @default(uuid())
+  name String
+
+  // Slug URL-safe único globalmente. La validación (lowercase, sin espacios)
+  // vive en el server action `createWorkspace`. Se persiste en lower-case.
+  slug String @unique
+
+  plan WorkspacePlan @default(FREE)
+
+  // Owner único del workspace. Restrict para evitar borrar al dueño sin
+  // transferir antes la propiedad (handler explícito en server action).
+  ownerId String
+  owner   User   @relation("WorkspaceOwner", fields: [ownerId], references: [id])
+
+  members     WorkspaceMember[]
+  invitations WorkspaceInvitation[]
+  projects    Project[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([ownerId])
+}
+
+model WorkspaceMember {
+  workspaceId String
+  userId      String
+  role        WorkspaceRole @default(MEMBER)
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@id([workspaceId, userId])
+  @@index([userId])
+}
+
+model WorkspaceInvitation {
+  id          String        @id @default(uuid())
+  workspaceId String
+  workspace   Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  email     String
+  // Token aleatorio (base64url, 32 bytes) que el invitee abre desde
+  // `/invite/[token]`. Único globalmente para evitar colisiones cross-WS.
+  token     String        @unique
+  role      WorkspaceRole @default(MEMBER)
+  expiresAt DateTime
+
+  // Quien envió la invitación (auditoría). SetNull para conservar registro
+  // si el inviter es eliminado.
+  invitedById String?
+  invitedBy   User?   @relation("InvitationInviter", fields: [invitedById], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+
+  @@index([workspaceId])
+  @@index([email])
 }

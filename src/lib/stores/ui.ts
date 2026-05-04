@@ -54,6 +54,14 @@ type UIState = {
    * superficie para que cambiar de tablero no pierda la vista anterior.
    */
   activeViewByPath: Record<SavedViewSurface, string | null>
+  /**
+   * Ola P4 · Equipo P4-1 — id del workspace activo. Hidratado desde la
+   * cookie `x-active-workspace` (httpOnly=false) para que el switcher
+   * pueda mostrar el slug sin un round-trip al server. La autoridad real
+   * vive en `requireWorkspaceAccess` (server-only). `null` = usar el
+   * workspace por defecto del usuario (resuelto en server).
+   */
+  activeWorkspaceId: string | null
 
   toggleSelection: (id: string, additive?: boolean) => void
   selectRange: (ids: string[]) => void
@@ -73,6 +81,7 @@ type UIState = {
   toggleBaselineTrend: (open?: boolean) => void
   setActiveView: (surface: SavedViewSurface, viewId: string | null) => void
   clearActiveView: (surface: SavedViewSurface) => void
+  setActiveWorkspaceId: (workspaceId: string | null) => void
 }
 
 export const useUIStore = create<UIState>()(
@@ -96,6 +105,7 @@ export const useUIStore = create<UIState>()(
         calendar: null,
         table: null,
       },
+      activeWorkspaceId: null,
 
       toggleSelection: (id, additive = false) =>
         set((s) => {
@@ -164,6 +174,8 @@ export const useUIStore = create<UIState>()(
             [surface]: null,
           },
         })),
+      setActiveWorkspaceId: (workspaceId) =>
+        set({ activeWorkspaceId: workspaceId }),
     }),
     {
       name: 'followup-ui',
@@ -177,6 +189,7 @@ export const useUIStore = create<UIState>()(
           activeBaselineId: s.activeBaselineId,
           baselineTrendOpen: s.baselineTrendOpen,
           activeViewByPath: s.activeViewByPath,
+          activeWorkspaceId: s.activeWorkspaceId,
         }) as Partial<UIState>,
     },
   ),

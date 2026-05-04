@@ -23,6 +23,7 @@ import { AppInteractionShell } from "@/components/interactions/AppInteractionShe
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { MobileHeader } from "@/components/MobileHeader";
 import UserMenu from "@/components/auth/UserMenu";
+import WorkspaceSwitcherSlot from "@/components/workspace/WorkspaceSwitcherSlot";
 
 /**
  * Auth (Ola P1): la página `/login` no debe renderizar el Sidebar ni el
@@ -57,7 +58,10 @@ export default async function RootLayout({
             <>
               <div className="flex h-full w-full flex-col lg:flex-row overflow-hidden">
                 <MobileHeader />
-                <Sidebar userSlot={<UserMenu />} />
+                <Sidebar
+                  userSlot={<UserMenu />}
+                  workspaceSwitcherSlot={<WorkspaceSwitcherSlot />}
+                />
                 <main className="flex-1 flex flex-col overflow-hidden relative">
                   {children}
                 </main>
