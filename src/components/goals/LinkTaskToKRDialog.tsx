@@ -48,13 +48,15 @@ export function LinkTaskToKRDialog({
   const inputRef = useRef<HTMLInputElement | null>(null)
 
   useEffect(() => {
-    if (open) {
+    if (!open) return
+    // Reset y focus diferidos a callback para cumplir react-hooks/set-state-in-effect
+    // (no llamar setState sincrónicamente dentro del cuerpo del efecto).
+    const id = setTimeout(() => {
       setQuery('')
       setError(null)
-      // Microtask delay para evitar reflow al abrir el portal.
-      const id = setTimeout(() => inputRef.current?.focus(), 0)
-      return () => clearTimeout(id)
-    }
+      inputRef.current?.focus()
+    }, 0)
+    return () => clearTimeout(id)
   }, [open])
 
   const linkedSet = useMemo(() => new Set(alreadyLinkedIds), [alreadyLinkedIds])
