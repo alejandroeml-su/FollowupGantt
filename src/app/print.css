@@ -1,0 +1,231 @@
+/*
+ * Ola P5 · Equipo P5-3 · Print Stylesheet
+ *
+ * Estilos `@media print` para los reportes ejecutivos. Importado
+ * únicamente desde las páginas de `/reports/**` para no afectar el resto
+ * de la app. Diseñado para A4 con márgenes 2cm; Chrome/Edge respetan la
+ * regla `@page` cuando el usuario imprime con "Print" o `window.print()`.
+ *
+ * Convenciones:
+ *   - `.print-only`  → visible solo al imprimir (oculto en pantalla).
+ *   - `.no-print`    → oculto al imprimir (sidebar/header globales se
+ *     marcan con `data-print-hide` o se aprovechan reglas de body).
+ *   - `.report-page` → contenedor base con padding y break-inside avoid.
+ *   - `.report-section` → introduce `page-break-before: always` después
+ *     de la primera sección.
+ */
+
+@page {
+  size: A4 portrait;
+  margin: 2cm;
+}
+
+/* Estilos generales aplicables siempre, no solo al imprimir, para que el
+   usuario vea en pantalla cómo se imprimirá. */
+.report-page {
+  background: #ffffff;
+  color: #111111;
+  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  font-size: 12pt;
+  line-height: 1.45;
+  max-width: 210mm;
+  margin: 0 auto;
+  padding: 1.5rem 2rem;
+}
+
+.report-page h1 {
+  font-size: 22pt;
+  font-weight: 700;
+  margin: 0 0 0.25rem 0;
+}
+
+.report-page h2 {
+  font-size: 14pt;
+  font-weight: 600;
+  margin: 1.5rem 0 0.5rem 0;
+  border-bottom: 1px solid #d1d5db;
+  padding-bottom: 0.25rem;
+}
+
+.report-page h3 {
+  font-size: 12pt;
+  font-weight: 600;
+  margin: 1rem 0 0.5rem 0;
+}
+
+.report-page table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 10pt;
+}
+
+.report-page table th,
+.report-page table td {
+  border: 1px solid #d1d5db;
+  padding: 0.4rem 0.6rem;
+  text-align: left;
+  vertical-align: top;
+}
+
+.report-page table thead {
+  background: #f3f4f6;
+}
+
+.report-section {
+  margin-bottom: 1.25rem;
+}
+
+.report-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1.25rem;
+  border-bottom: 2px solid #111827;
+  padding-bottom: 0.75rem;
+}
+
+.report-header .logo {
+  font-size: 18pt;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+
+.report-header .meta {
+  text-align: right;
+  font-size: 10pt;
+  color: #4b5563;
+}
+
+.report-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.75rem;
+  margin: 0.75rem 0;
+}
+
+.report-kpi {
+  border: 1px solid #d1d5db;
+  border-radius: 4px;
+  padding: 0.5rem 0.75rem;
+}
+
+.report-kpi .label {
+  font-size: 9pt;
+  color: #6b7280;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.report-kpi .value {
+  font-size: 14pt;
+  font-weight: 700;
+  color: #111827;
+}
+
+.health-pill {
+  display: inline-block;
+  padding: 0.1rem 0.5rem;
+  border-radius: 999px;
+  font-size: 9pt;
+  font-weight: 600;
+}
+
+.health-pill.green { background: #d1fae5; color: #065f46; }
+.health-pill.yellow { background: #fef3c7; color: #92400e; }
+.health-pill.red { background: #fee2e2; color: #991b1b; }
+.health-pill.gray { background: #e5e7eb; color: #374151; }
+
+.report-empty {
+  font-style: italic;
+  color: #6b7280;
+}
+
+.report-toolbar {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.report-toolbar button {
+  border: 1px solid #d1d5db;
+  background: #f9fafb;
+  padding: 0.4rem 0.9rem;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 11pt;
+}
+
+.report-toolbar button:hover {
+  background: #f3f4f6;
+}
+
+@media print {
+  /* Oculta cualquier elemento marcado como no-print (sidebar, headers,
+     toolbars con botón "Imprimir", etc.). Usamos !important porque
+     algunos componentes globales aplican display via Tailwind utility. */
+  .no-print,
+  [data-print-hide="true"] {
+    display: none !important;
+  }
+
+  /* Oculta el chrome global de la app: Sidebar / MobileHeader / userSlot.
+     Marcadores definidos en el layout root cuando se renderiza una ruta
+     de reportes. */
+  body > div > nav,
+  body > div > aside,
+  body > div > header {
+    display: none !important;
+  }
+
+  html, body {
+    background: #ffffff !important;
+    color: #000000 !important;
+    overflow: visible !important;
+    height: auto !important;
+  }
+
+  main {
+    overflow: visible !important;
+    height: auto !important;
+  }
+
+  .report-page {
+    margin: 0;
+    padding: 0;
+    max-width: none;
+    box-shadow: none;
+  }
+
+  /* page-break entre secciones para que las tablas no queden cortadas a
+     la mitad cuando ocupan más de una página. */
+  .report-section {
+    page-break-inside: avoid;
+    break-inside: avoid;
+  }
+
+  .report-section.page-break-before {
+    page-break-before: always;
+    break-before: page;
+  }
+
+  .report-page table {
+    page-break-inside: auto;
+  }
+
+  .report-page table tr {
+    page-break-inside: avoid;
+    break-inside: avoid;
+  }
+
+  .report-page table thead {
+    display: table-header-group;
+  }
+
+  /* Ningún color de fondo se imprime por defecto en Chrome. Forzamos
+     "exact colors" para que las pildoras de salud y headers se vean. */
+  * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+}

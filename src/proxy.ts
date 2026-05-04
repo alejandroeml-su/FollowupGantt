@@ -22,8 +22,17 @@ import { SESSION_COOKIE_NAME } from '@/lib/auth/session'
  *   /workload, /mindmaps, /calendar, /forms, /docs, /automations,
  *   /brain, /gerencias, /project-kpis
  *
- * Rutas públicas (excluidas del check): /login, /api/auth/*
+ * Rutas públicas (excluidas del check): /login, /api/auth/*, /invite/*
+ *
+ * Ola P4 · Equipo P4-1 — Multi-tenancy:
+ *   - Lee la cookie `x-active-workspace` (httpOnly=false) y la propaga
+ *     como header `x-active-workspace` al request, para que server
+ *     components y actions puedan leerla con `headers()` sin un round-
+ *     trip extra a `cookies()`. La autoridad real del filtro vive en
+ *     `requireWorkspaceAccess` (server-only) — el header es sólo hint.
  */
+
+const ACTIVE_WORKSPACE_COOKIE = 'x-active-workspace'
 
 const PROTECTED_PREFIXES = [
   '/gantt',
@@ -64,15 +73,28 @@ export function proxy(req: NextRequest) {
   const requestHeaders = new Headers(req.headers)
   requestHeaders.set('x-pathname', path)
 
+  // Ola P4 — Inyectamos `x-active-workspace` desde la cookie homónima
+  // para que server components/actions puedan leerla con `headers()`.
+  // Sólo si no llega ya como header (ej. tests con headers explícitos).
+  if (!requestHeaders.has(ACTIVE_WORKSPACE_COOKIE)) {
+    const activeWs = req.cookies.get(ACTIVE_WORKSPACE_COOKIE)?.value
+    if (activeWs) {
+      requestHeaders.set(ACTIVE_WORKSPACE_COOKIE, activeWs)
+    }
+  }
+
   const passThrough = () =>
     NextResponse.next({ request: { headers: requestHeaders } })
 
   // Ignorar rutas internas / públicas explícitamente.
+  // /invite/<token> es público porque la página se encarga de redirigir
+  // a /login si no hay sesión (preserva el `next` con encodeURIComponent).
   if (
     path.startsWith('/_next') ||
     path.startsWith('/api/auth') ||
     path === '/login' ||
-    path === '/favicon.ico'
+    path === '/favicon.ico' ||
+    path.startsWith('/invite/')
   ) {
     return passThrough()
   }

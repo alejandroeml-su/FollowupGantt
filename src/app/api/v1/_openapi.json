@@ -1,0 +1,500 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "FollowupGantt API",
+    "description": "API REST pública v1 para FollowupGantt. Auth Bearer-token (Authorization: Bearer fg_...). Webhooks outbound firmados con HMAC SHA-256 en el header X-FollowupGantt-Signature.",
+    "version": "1.0.0",
+    "contact": {
+      "name": "Unidad de Transformación Digital — Complejo Avante"
+    }
+  },
+  "servers": [
+    {
+      "url": "/api/v1",
+      "description": "Production"
+    }
+  ],
+  "security": [
+    {
+      "bearerAuth": []
+    }
+  ],
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "fg_*"
+      }
+    },
+    "schemas": {
+      "Error": {
+        "type": "object",
+        "required": ["error"],
+        "properties": {
+          "error": {
+            "type": "object",
+            "required": ["code", "message"],
+            "properties": {
+              "code": { "type": "string", "example": "INVALID_INPUT" },
+              "message": { "type": "string" }
+            }
+          }
+        }
+      },
+      "Project": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string", "format": "uuid" },
+          "name": { "type": "string" },
+          "description": { "type": "string", "nullable": true },
+          "status": {
+            "type": "string",
+            "enum": ["PLANNING", "ACTIVE", "ON_HOLD", "COMPLETED"]
+          },
+          "areaId": { "type": "string", "nullable": true },
+          "managerId": { "type": "string", "nullable": true },
+          "calendarId": { "type": "string", "nullable": true },
+          "cpi": { "type": "number", "nullable": true },
+          "spi": { "type": "number", "nullable": true },
+          "createdAt": { "type": "string", "format": "date-time" },
+          "updatedAt": { "type": "string", "format": "date-time" }
+        }
+      },
+      "Task": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string", "format": "uuid" },
+          "mnemonic": { "type": "string", "nullable": true },
+          "title": { "type": "string" },
+          "description": { "type": "string", "nullable": true },
+          "type": {
+            "type": "string",
+            "enum": ["AGILE_STORY", "PMI_TASK", "ITIL_TICKET"]
+          },
+          "status": {
+            "type": "string",
+            "enum": ["TODO", "IN_PROGRESS", "REVIEW", "DONE"]
+          },
+          "priority": {
+            "type": "string",
+            "enum": ["LOW", "MEDIUM", "HIGH", "CRITICAL"]
+          },
+          "parentId": { "type": "string", "nullable": true },
+          "projectId": { "type": "string" },
+          "phaseId": { "type": "string", "nullable": true },
+          "sprintId": { "type": "string", "nullable": true },
+          "columnId": { "type": "string", "nullable": true },
+          "assigneeId": { "type": "string", "nullable": true },
+          "startDate": { "type": "string", "format": "date-time", "nullable": true },
+          "endDate": { "type": "string", "format": "date-time", "nullable": true },
+          "progress": { "type": "integer", "minimum": 0, "maximum": 100 },
+          "isMilestone": { "type": "boolean" },
+          "storyPoints": { "type": "integer", "nullable": true },
+          "tags": { "type": "array", "items": { "type": "string" } },
+          "createdAt": { "type": "string", "format": "date-time" },
+          "updatedAt": { "type": "string", "format": "date-time" }
+        }
+      },
+      "Dependency": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string", "format": "uuid" },
+          "predecessorId": { "type": "string" },
+          "successorId": { "type": "string" },
+          "type": {
+            "type": "string",
+            "enum": ["FINISH_TO_START", "START_TO_START", "FINISH_TO_FINISH", "START_TO_FINISH"]
+          },
+          "lagDays": { "type": "integer" }
+        }
+      },
+      "Baseline": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string", "format": "uuid" },
+          "version": { "type": "integer" },
+          "label": { "type": "string", "nullable": true },
+          "capturedAt": { "type": "string", "format": "date-time" },
+          "taskCount": { "type": "integer" }
+        }
+      }
+    },
+    "responses": {
+      "BadRequest": {
+        "description": "Body inválido o faltan campos requeridos",
+        "content": {
+          "application/json": { "schema": { "$ref": "#/components/schemas/Error" } }
+        }
+      },
+      "Unauthorized": {
+        "description": "Token ausente, inválido, expirado o revocado",
+        "content": {
+          "application/json": { "schema": { "$ref": "#/components/schemas/Error" } }
+        }
+      },
+      "Forbidden": {
+        "description": "Token sin scope requerido",
+        "content": {
+          "application/json": { "schema": { "$ref": "#/components/schemas/Error" } }
+        }
+      },
+      "NotFound": {
+        "description": "Recurso no encontrado",
+        "content": {
+          "application/json": { "schema": { "$ref": "#/components/schemas/Error" } }
+        }
+      },
+      "Conflict": {
+        "description": "Conflicto de estado (duplicado, cap alcanzado)",
+        "content": {
+          "application/json": { "schema": { "$ref": "#/components/schemas/Error" } }
+        }
+      },
+      "Unprocessable": {
+        "description": "Validación semántica falló (ciclo CPM, lag fuera de rango, proyecto vacío)",
+        "content": {
+          "application/json": { "schema": { "$ref": "#/components/schemas/Error" } }
+        }
+      }
+    }
+  },
+  "paths": {
+    "/projects": {
+      "get": {
+        "summary": "Lista proyectos",
+        "tags": ["Projects"],
+        "security": [{ "bearerAuth": ["projects:read"] }],
+        "responses": {
+          "200": {
+            "description": "Lista de proyectos",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": { "type": "array", "items": { "$ref": "#/components/schemas/Project" } }
+                  }
+                }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "$ref": "#/components/responses/Forbidden" }
+        }
+      },
+      "post": {
+        "summary": "Crea un proyecto",
+        "tags": ["Projects"],
+        "security": [{ "bearerAuth": ["projects:write"] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["name"],
+                "properties": {
+                  "name": { "type": "string" },
+                  "description": { "type": "string", "nullable": true },
+                  "status": { "type": "string", "enum": ["PLANNING", "ACTIVE", "ON_HOLD", "COMPLETED"] },
+                  "areaId": { "type": "string", "nullable": true },
+                  "managerId": { "type": "string", "nullable": true }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": { "description": "Proyecto creado", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Project" } } } },
+          "400": { "$ref": "#/components/responses/BadRequest" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "$ref": "#/components/responses/Forbidden" }
+        }
+      }
+    },
+    "/projects/{id}": {
+      "parameters": [
+        { "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }
+      ],
+      "get": {
+        "summary": "Obtiene un proyecto",
+        "tags": ["Projects"],
+        "security": [{ "bearerAuth": ["projects:read"] }],
+        "responses": {
+          "200": { "description": "Proyecto", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Project" } } } },
+          "404": { "$ref": "#/components/responses/NotFound" }
+        }
+      },
+      "put": {
+        "summary": "Actualiza un proyecto",
+        "tags": ["Projects"],
+        "security": [{ "bearerAuth": ["projects:write"] }],
+        "responses": {
+          "200": { "description": "Proyecto actualizado", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Project" } } } },
+          "400": { "$ref": "#/components/responses/BadRequest" },
+          "404": { "$ref": "#/components/responses/NotFound" }
+        }
+      },
+      "delete": {
+        "summary": "Elimina un proyecto",
+        "tags": ["Projects"],
+        "security": [{ "bearerAuth": ["projects:write"] }],
+        "responses": {
+          "200": { "description": "Eliminado" },
+          "404": { "$ref": "#/components/responses/NotFound" }
+        }
+      }
+    },
+    "/projects/{id}/tasks": {
+      "parameters": [
+        { "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }
+      ],
+      "get": {
+        "summary": "Lista tareas del proyecto",
+        "tags": ["Tasks"],
+        "security": [{ "bearerAuth": ["tasks:read"] }],
+        "parameters": [
+          { "name": "status", "in": "query", "schema": { "type": "string" } },
+          { "name": "assigneeId", "in": "query", "schema": { "type": "string" } },
+          { "name": "archived", "in": "query", "schema": { "type": "boolean" } }
+        ],
+        "responses": {
+          "200": {
+            "description": "Lista de tareas",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": { "type": "array", "items": { "$ref": "#/components/schemas/Task" } }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Crea una tarea en el proyecto",
+        "tags": ["Tasks"],
+        "security": [{ "bearerAuth": ["tasks:write"] }],
+        "responses": {
+          "201": { "description": "Tarea creada", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Task" } } } },
+          "400": { "$ref": "#/components/responses/BadRequest" },
+          "404": { "$ref": "#/components/responses/NotFound" }
+        }
+      }
+    },
+    "/projects/{id}/baselines": {
+      "parameters": [
+        { "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }
+      ],
+      "get": {
+        "summary": "Lista baselines del proyecto",
+        "tags": ["Baselines"],
+        "security": [{ "bearerAuth": ["baselines:read"] }],
+        "responses": {
+          "200": {
+            "description": "Lista de baselines",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": { "type": "array", "items": { "$ref": "#/components/schemas/Baseline" } }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/tasks/{id}": {
+      "parameters": [
+        { "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }
+      ],
+      "get": {
+        "summary": "Obtiene una tarea",
+        "tags": ["Tasks"],
+        "security": [{ "bearerAuth": ["tasks:read"] }],
+        "responses": {
+          "200": { "description": "Tarea", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Task" } } } },
+          "404": { "$ref": "#/components/responses/NotFound" }
+        }
+      },
+      "put": {
+        "summary": "Actualiza una tarea",
+        "tags": ["Tasks"],
+        "security": [{ "bearerAuth": ["tasks:write"] }],
+        "responses": {
+          "200": { "description": "Tarea actualizada", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Task" } } } },
+          "400": { "$ref": "#/components/responses/BadRequest" },
+          "404": { "$ref": "#/components/responses/NotFound" }
+        }
+      },
+      "delete": {
+        "summary": "Elimina una tarea",
+        "tags": ["Tasks"],
+        "security": [{ "bearerAuth": ["tasks:write"] }],
+        "responses": {
+          "200": { "description": "Eliminada" },
+          "404": { "$ref": "#/components/responses/NotFound" }
+        }
+      }
+    },
+    "/tasks/{id}/dependencies": {
+      "parameters": [
+        { "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }
+      ],
+      "get": {
+        "summary": "Lista dependencias de la tarea (entrantes y salientes)",
+        "tags": ["Dependencies"],
+        "security": [{ "bearerAuth": ["dependencies:read"] }],
+        "responses": {
+          "200": {
+            "description": "Lista de dependencias",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": { "type": "array", "items": { "$ref": "#/components/schemas/Dependency" } }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Crea una dependencia entre dos tareas (la de la URL es predecesor)",
+        "tags": ["Dependencies"],
+        "security": [{ "bearerAuth": ["dependencies:write"] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["successorId"],
+                "properties": {
+                  "successorId": { "type": "string" },
+                  "type": { "type": "string", "enum": ["FS", "SS", "FF", "SF"] },
+                  "lagDays": { "type": "integer", "minimum": -30, "maximum": 365 }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": { "description": "Dependencia creada", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Dependency" } } } },
+          "400": { "$ref": "#/components/responses/BadRequest" },
+          "404": { "$ref": "#/components/responses/NotFound" },
+          "409": { "$ref": "#/components/responses/Conflict" },
+          "422": { "$ref": "#/components/responses/Unprocessable" }
+        }
+      }
+    },
+    "/dependencies/{id}": {
+      "parameters": [
+        { "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }
+      ],
+      "get": {
+        "summary": "Obtiene una dependencia",
+        "tags": ["Dependencies"],
+        "security": [{ "bearerAuth": ["dependencies:read"] }],
+        "responses": {
+          "200": { "description": "Dependencia", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Dependency" } } } },
+          "404": { "$ref": "#/components/responses/NotFound" }
+        }
+      },
+      "put": {
+        "summary": "Actualiza tipo y/o lag de una dependencia",
+        "tags": ["Dependencies"],
+        "security": [{ "bearerAuth": ["dependencies:write"] }],
+        "responses": {
+          "200": { "description": "Dependencia actualizada", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Dependency" } } } },
+          "400": { "$ref": "#/components/responses/BadRequest" },
+          "404": { "$ref": "#/components/responses/NotFound" },
+          "422": { "$ref": "#/components/responses/Unprocessable" }
+        }
+      },
+      "delete": {
+        "summary": "Elimina una dependencia",
+        "tags": ["Dependencies"],
+        "security": [{ "bearerAuth": ["dependencies:write"] }],
+        "responses": {
+          "200": { "description": "Eliminada" },
+          "404": { "$ref": "#/components/responses/NotFound" }
+        }
+      }
+    },
+    "/baselines": {
+      "get": {
+        "summary": "Lista baselines (filtrar con ?projectId)",
+        "tags": ["Baselines"],
+        "security": [{ "bearerAuth": ["baselines:read"] }],
+        "parameters": [
+          { "name": "projectId", "in": "query", "required": true, "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "200": {
+            "description": "Lista de baselines",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": { "type": "array", "items": { "$ref": "#/components/schemas/Baseline" } }
+                  }
+                }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/BadRequest" }
+        }
+      }
+    },
+    "/baselines/capture": {
+      "post": {
+        "summary": "Captura una nueva línea base de un proyecto",
+        "tags": ["Baselines"],
+        "security": [{ "bearerAuth": ["baselines:admin"] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["projectId"],
+                "properties": {
+                  "projectId": { "type": "string" },
+                  "label": { "type": "string", "maxLength": 80, "nullable": true }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": { "description": "Baseline capturada", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Baseline" } } } },
+          "400": { "$ref": "#/components/responses/BadRequest" },
+          "404": { "$ref": "#/components/responses/NotFound" },
+          "409": { "$ref": "#/components/responses/Conflict" },
+          "422": { "$ref": "#/components/responses/Unprocessable" }
+        }
+      }
+    },
+    "/openapi.json": {
+      "get": {
+        "summary": "Devuelve esta misma especificación OpenAPI 3.0",
+        "tags": ["Meta"],
+        "security": [],
+        "responses": {
+          "200": { "description": "OpenAPI document" }
+        }
+      }
+    }
+  }
+}

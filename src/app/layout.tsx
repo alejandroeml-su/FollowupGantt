@@ -50,6 +50,7 @@ import { MobileBottomNav } from "@/components/mobile/MobileBottomNav";
 import { MobileSidebarDrawer } from "@/components/mobile/MobileSidebarDrawer";
 import { ServiceWorkerRegistrar } from "@/components/mobile/ServiceWorkerRegistrar";
 import UserMenu from "@/components/auth/UserMenu";
+import WorkspaceSwitcherSlot from "@/components/workspace/WorkspaceSwitcherSlot";
 
 /**
  * Auth (Ola P1): la página `/login` no debe renderizar el Sidebar ni el
@@ -86,7 +87,10 @@ export default async function RootLayout({
                 <MobileHeader />
                 {/* Sidebar full en lg+, oculto en mobile (drawer lo reemplaza) */}
                 <div className="hidden lg:flex">
-                  <Sidebar userSlot={<UserMenu />} />
+                  <Sidebar
+                    userSlot={<UserMenu />}
+                    workspaceSwitcherSlot={<WorkspaceSwitcherSlot />}
+                  />
                 </div>
                 {/* Drawer lateral mobile (slide-in desde la izquierda) */}
                 <MobileSidebarDrawer userSlot={<UserMenu />} />
