@@ -3,6 +3,7 @@ import Link from 'next/link';
 import prisma from "@/lib/prisma";
 import { createProject, deleteProject } from "@/lib/actions";
 import AreaFormClient from "@/components/AreaFormClient";
+import { WBSGeneratorTrigger } from "@/components/projects/WBSGeneratorDialog";
 
 export const dynamic = "force-dynamic";
 
@@ -43,6 +44,7 @@ export default async function ProjectsMaintenance() {
             CRUD completo: Crear/Editar/Eliminar Proyectos por Gerencia y Área (Supabase + Prisma)
           </p>
         </div>
+        <WBSGeneratorTrigger />
       </header>
 
       <div className="max-w-7xl mx-auto w-full space-y-10">
