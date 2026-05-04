@@ -1,10 +1,17 @@
 'use server'
 
 import { z } from 'zod'
+import { headers } from 'next/headers'
 import { redirect } from 'next/navigation'
 import prisma from '@/lib/prisma'
 import { verifyPassword, hashPassword } from '@/lib/auth/password'
 import { createSession, destroySession } from '@/lib/auth/session'
+import {
+  buildKey,
+  recordAttempt,
+  reset as resetRateLimit,
+  assertNotLimited,
+} from '@/lib/auth/rate-limiter'
 
 /**
  * Server actions de autenticación (Ola P1 · MVP).
@@ -56,6 +63,27 @@ export async function loginAction(
 
   const { email, password } = parsed.data
 
+  // Rate limiting (P3): max 5 intentos / 15 min por (email, ip).
+  const h = await headers()
+  const ip =
+    (h.get('x-forwarded-for') ?? h.get('x-real-ip') ?? '')
+      .split(',')[0]
+      ?.trim() || 'unknown'
+  const rateKey = buildKey(email, ip)
+
+  try {
+    assertNotLimited(rateKey)
+  } catch (err) {
+    const msg = (err as Error).message
+    if (msg.includes('[RATE_LIMITED]')) {
+      return {
+        ok: false,
+        error: 'Demasiados intentos. Intenta más tarde.',
+      }
+    }
+    throw err
+  }
+
   const user = await prisma.user.findUnique({
     where: { email },
     select: { id: true, password: true },
@@ -63,6 +91,7 @@ export async function loginAction(
 
   // Mensaje genérico para evitar enum de emails registrados.
   if (!user || !user.password) {
+    recordAttempt(rateKey)
     return {
       ok: false,
       error: 'Credenciales inválidas',
@@ -71,12 +100,14 @@ export async function loginAction(
 
   const ok = await verifyPassword(password, user.password)
   if (!ok) {
+    recordAttempt(rateKey)
     return {
       ok: false,
       error: 'Credenciales inválidas',
     }
   }
 
+  resetRateLimit(rateKey)
   await createSession(user.id)
   redirect('/')
 }
