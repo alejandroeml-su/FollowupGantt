@@ -335,6 +335,12 @@ model Project {
   // los OKRs históricos aunque se elimine el proyecto.
   goals Goal[]
 
+  // Ola P4 · Equipo P4-5 · Integraciones externas.
+  // Integraciones (Slack/Teams/GitHub) ancladas a este proyecto. `projectId`
+  // es opcional en `Integration`: las integraciones globales del workspace
+  // viven con `projectId = null` y aplican a todos los proyectos.
+  integrations Integration[]
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
@@ -509,6 +515,11 @@ model Task {
   // KRs (con metric=TASKS_COMPLETED) que esta tarea contribuye a alcanzar.
   // M:N a través de la tabla implícita "_KeyResultTasks".
   keyResults KeyResult[] @relation("KeyResultTasks")
+
+  // Ola P4 · Equipo P4-5 · Integraciones · GitHub.
+  // Vínculos de la tarea a issues/PRs externos en GitHub. Una tarea puede
+  // tener múltiples links (ej. issue de bug + PR que lo resuelve).
+  githubLinks TaskGitHubLink[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1101,4 +1112,87 @@ model KeyResult {
   updatedAt DateTime @updatedAt
 
   @@index([goalId, position])
+}
+
+// ─────────────────────────────────────────────────────────────
+// Módulo Integraciones externas (Ola P4 · Equipo P4-5)
+//
+// Soporta tres tipos de integración:
+//   - SLACK : webhook outbound a un canal Slack (Block Kit).
+//   - TEAMS : webhook outbound a un canal MS Teams (Adaptive Card v1.4).
+//   - GITHUB: vincula tareas a issues/PRs (no webhooks inbound en P4).
+//
+// `config` es JSON libre validado en server action según el `type` (zod
+// dispatch). Para SLACK/TEAMS contiene `{ webhookUrl: string, channel? }`;
+// para GITHUB contiene `{ defaultRepo?: string, token? }` (token opcional
+// para futuras llamadas autenticadas — en P4 sólo guardamos referencia).
+//
+// `projectId` opcional: integraciones globales del workspace viven con
+// `projectId = null` y se disparan para todos los proyectos. Cuando hay
+// integración específica del proyecto, ésta se prefiere sobre la global.
+// ─────────────────────────────────────────────────────────────
+
+enum IntegrationType {
+  SLACK
+  TEAMS
+  GITHUB
+}
+
+model Integration {
+  id   String          @id @default(uuid())
+  type IntegrationType
+
+  // Etiqueta visible en la UI (ej. "Slack #devops", "Repo principal").
+  // Permite distinguir varias integraciones del mismo tipo.
+  name String
+
+  // Configuración por tipo. Validada en `validateIntegrationConfig` del
+  // server action. Mantener pequeño y sin secretos largos (tokens van
+  // cifrados en una iteración futura — P4 los guarda en claro asumiendo
+  // que el webhook URL ya es el secreto).
+  config Json
+
+  // Toggle global. Cuando `false` los dispatchers son no-op silencioso.
+  enabled Boolean @default(true)
+
+  // Anclaje opcional a proyecto. NULL = integración global del workspace.
+  projectId String?
+  project   Project? @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([type, enabled])
+  @@index([projectId])
+}
+
+// Vínculo de una `Task` a un issue/PR concreto de GitHub. No hay webhooks
+// inbound en P4 — esta tabla solo guarda la referencia para poder abrir el
+// issue desde el TaskDrawer. `repoFullName` es "owner/repo" (validado con
+// regex en server action). `issueNumber` es entero positivo; aplica tanto a
+// issues como a PRs (GitHub comparte el namespace numérico).
+model TaskGitHubLink {
+  id String @id @default(uuid())
+
+  taskId String
+  task   Task   @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  // "owner/repo" (ej. "alejandroeml-su/FollowupGantt").
+  repoFullName String
+
+  // Número del issue/PR (positivo). GitHub usa el mismo namespace para
+  // ambos, pero etiquetamos con `kind` para que la UI muestre el icono
+  // correcto sin tener que llamar a la API.
+  issueNumber Int
+
+  // "ISSUE" | "PR". String libre (no enum) para no requerir migración si
+  // GitHub introduce nuevos tipos. Validado vs un set conocido en zod.
+  kind String @default("ISSUE")
+
+  createdAt DateTime @default(now())
+
+  // Una tarea no puede vincular dos veces el mismo issue del mismo repo.
+  @@unique([taskId, repoFullName, issueNumber])
+  @@index([taskId])
+  @@index([repoFullName, issueNumber])
 }
