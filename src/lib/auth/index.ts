@@ -12,6 +12,12 @@ export {
   canAccessProject,
 } from './check-project-access'
 export {
+  requireWorkspaceAccess,
+  canAccessWorkspace,
+  requireWorkspaceManager,
+  getDefaultWorkspaceForUser,
+} from './check-workspace-access'
+export {
   hasAdminRole,
   isSuperAdmin,
   ROLE_NAMES,
