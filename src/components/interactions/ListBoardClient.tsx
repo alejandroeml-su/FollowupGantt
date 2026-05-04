@@ -45,6 +45,9 @@ import { TaskDrawer } from './TaskDrawer'
 import { TaskDrawerContent } from './TaskDrawerContent'
 import { TaskFiltersBar } from './TaskFiltersBar'
 import { EMPTY_TASK_FILTERS, filterTasksWithSubtasks, type TaskFilters } from '@/lib/taskFilters'
+import { SavedViewsDropdown, type SavedViewSummary } from '@/components/views/SavedViewsDropdown'
+import { GroupBySelector } from '@/components/views/GroupBySelector'
+import { groupTasks, type GroupKey } from '@/lib/views/group-tasks'
 
 type Props = {
   tasks: (SerializedTask & { subtasks?: SerializedTask[] })[]
@@ -52,6 +55,8 @@ type Props = {
   users: { id: string; name: string }[]
   gerencias?: { id: string; name: string }[]
   areas?: { id: string; name: string; gerenciaId?: string | null }[]
+  /** Ola P2 · Equipo P2-1 — vistas guardadas disponibles para LIST. */
+  savedViews?: SavedViewSummary[]
 }
 
 const STATUS_ICON: Record<string, React.ReactNode> = {
@@ -79,6 +84,7 @@ export function ListBoardClient({
   users,
   gerencias = [],
   areas = [],
+  savedViews = [],
 }: Props) {
   const [items, setItems] = useState(tasks)
   const [activeId, setActiveId] = useState<string | null>(null)
@@ -87,7 +93,14 @@ export function ListBoardClient({
     () => new Set(tasks.filter((t) => t.subtasks?.length).map((t) => t.id)),
   )
   const [filters, setFilters] = useState<TaskFilters>(EMPTY_TASK_FILTERS)
+  // Ola P2 — agrupación dinámica. `null` = sin agrupar.
+  const [groupBy, setGroupBy] = useState<GroupKey | null>(null)
   const visibleItems = useMemo(() => filterTasksWithSubtasks(items, filters), [items, filters])
+  const groups = useMemo(
+    () => groupTasks(visibleItems, groupBy, { users }),
+    [visibleItems, groupBy, users],
+  )
+  const showGroups = groupBy !== null
 
   const selectedIds = useUIStore((s) => s.selectedIds)
   const toggleSelection = useUIStore((s) => s.toggleSelection)
@@ -177,6 +190,27 @@ export function ListBoardClient({
         projects={projects}
         users={users}
       />
+      <div
+        data-testid="saved-views-toolbar"
+        className="flex flex-wrap items-center gap-3 border-b border-border bg-muted/10 px-6 py-2"
+      >
+        <SavedViewsDropdown
+          surface="LIST"
+          views={savedViews}
+          currentFilters={filters as Record<string, unknown>}
+          currentGrouping={groupBy}
+          onApplyView={(v) => {
+            if (!v) {
+              setFilters(EMPTY_TASK_FILTERS)
+              setGroupBy(null)
+              return
+            }
+            setFilters((v.filters as TaskFilters) ?? EMPTY_TASK_FILTERS)
+            setGroupBy((v.grouping as GroupKey | null) ?? null)
+          }}
+        />
+        <GroupBySelector value={groupBy} onChange={setGroupBy} />
+      </div>
       <div className="divide-y divide-border/50">
         <div className="flex items-center bg-secondary/20 px-4 py-2">
           <ChevronDown className="mr-2 h-4 w-4 text-muted-foreground" />
@@ -185,6 +219,9 @@ export function ListBoardClient({
           </span>
           <span className="ml-2 text-xs text-muted-foreground">
             {visibleItems.length} de {items.length} tareas
+            {showGroups && (
+              <span className="ml-1">· {groups.length} grupos</span>
+            )}
           </span>
           <span className="ml-auto text-[10px] text-muted-foreground">
             Shift + / atajos · / buscar · T nueva tarea
@@ -209,43 +246,76 @@ export function ListBoardClient({
             items={visibleItems.map((i) => i.id)}
             strategy={verticalListSortingStrategy}
           >
-            {visibleItems.map((task) => (
-              <SortableListRow
-                key={task.id}
-                task={task}
-                level={0}
-                focused={focusedId === task.id}
-                selected={selectedIds.has(task.id)}
-                expanded={expanded.has(task.id)}
-                onFocus={() => setFocusedId(task.id)}
-                onToggleExpand={() =>
-                  setExpanded((prev) => {
-                    const n = new Set(prev)
-                    if (n.has(task.id)) n.delete(task.id)
-                    else n.add(task.id)
-                    return n
-                  })
-                }
-                onToggleSelect={(additive) =>
-                  toggleSelection(task.id, additive)
-                }
-              >
-                {expanded.has(task.id) &&
-                  (task.subtasks ?? []).map((sub) => (
-                    <StaticListRow
-                      key={sub.id}
-                      task={sub}
-                      level={1}
-                      focused={focusedId === sub.id}
-                      selected={selectedIds.has(sub.id)}
-                      onFocus={() => setFocusedId(sub.id)}
-                      onToggleSelect={(additive) =>
-                        toggleSelection(sub.id, additive)
-                      }
-                    />
-                  ))}
-              </SortableListRow>
-            ))}
+            {showGroups
+              ? groups.map((g) => (
+                  <div key={g.key || '__none__'} data-testid={`task-group-${g.key || 'none'}`}>
+                    <div className="flex items-center bg-secondary/10 px-4 py-1.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                      <span>{g.label}</span>
+                      <span className="ml-2 rounded bg-secondary/40 px-1.5 py-0.5 text-[10px] text-foreground">
+                        {g.count}
+                      </span>
+                    </div>
+                    {g.tasks.map((task) => (
+                      <SortableListRow
+                        key={task.id}
+                        task={task}
+                        level={0}
+                        focused={focusedId === task.id}
+                        selected={selectedIds.has(task.id)}
+                        expanded={expanded.has(task.id)}
+                        onFocus={() => setFocusedId(task.id)}
+                        onToggleExpand={() =>
+                          setExpanded((prev) => {
+                            const n = new Set(prev)
+                            if (n.has(task.id)) n.delete(task.id)
+                            else n.add(task.id)
+                            return n
+                          })
+                        }
+                        onToggleSelect={(additive) =>
+                          toggleSelection(task.id, additive)
+                        }
+                      />
+                    ))}
+                  </div>
+                ))
+              : visibleItems.map((task) => (
+                  <SortableListRow
+                    key={task.id}
+                    task={task}
+                    level={0}
+                    focused={focusedId === task.id}
+                    selected={selectedIds.has(task.id)}
+                    expanded={expanded.has(task.id)}
+                    onFocus={() => setFocusedId(task.id)}
+                    onToggleExpand={() =>
+                      setExpanded((prev) => {
+                        const n = new Set(prev)
+                        if (n.has(task.id)) n.delete(task.id)
+                        else n.add(task.id)
+                        return n
+                      })
+                    }
+                    onToggleSelect={(additive) =>
+                      toggleSelection(task.id, additive)
+                    }
+                  >
+                    {expanded.has(task.id) &&
+                      (task.subtasks ?? []).map((sub) => (
+                        <StaticListRow
+                          key={sub.id}
+                          task={sub}
+                          level={1}
+                          focused={focusedId === sub.id}
+                          selected={selectedIds.has(sub.id)}
+                          onFocus={() => setFocusedId(sub.id)}
+                          onToggleSelect={(additive) =>
+                            toggleSelection(sub.id, additive)
+                          }
+                        />
+                      ))}
+                  </SortableListRow>
+                ))}
           </SortableContext>
 
           <DragOverlay>
