@@ -102,6 +102,19 @@ enum GoalStatus {
   CANCELLED
 }
 
+// Ola P5 · Equipo P5-1 · Whiteboards estilo Miro.
+// Tipos de elementos soportados por el canvas. STICKY = nota adhesiva con
+// color y texto; SHAPE = rectángulo/círculo (data.shape define la variante);
+// CONNECTOR = línea con anchors; TEXT = caja de texto sin fondo; IMAGE =
+// reservado para iteraciones futuras (drag&drop de imágenes).
+enum WhiteboardElementType {
+  STICKY
+  SHAPE
+  CONNECTOR
+  TEXT
+  IMAGE
+}
+
 // Tipo de métrica de un Key Result. Define cómo se calcula `currentValue`
 // y se renderiza el progreso:
 //   - PERCENT: 0-100, manual.
@@ -216,6 +229,11 @@ model User {
   // de `parentId/children` no incluye al User: es propiedad estructural del
   // Goal.
   ownedGoals Goal[] @relation("GoalOwner")
+
+  // Ola P5 · Equipo P5-1 · Whiteboards.
+  // Pizarras creadas por el usuario. `SetNull` en Whiteboard preserva el
+  // tablero aunque se elimine el creador.
+  createdWhiteboards Whiteboard[] @relation("WhiteboardCreator")
 
   // Ola P4 · Equipo P4-1 — Multi-tenancy / Workspaces.
   // Un usuario puede ser dueño de varios workspaces (ej. personal + del
@@ -444,6 +462,11 @@ model Project {
   publicForms     PublicForm[]
   automationRules AutomationRule[]
 
+  // Ola P5 · Equipo P5-1 · Whiteboards.
+  // Pizarras vinculadas al proyecto (opcional). `SetNull` en Whiteboard
+  // preserva la pizarra aunque se elimine el proyecto.
+  whiteboards Whiteboard[]
+
   // Ola P2 · Equipo P2-5 · Docs / Wikis.
   // Documentos vinculados al proyecto. `SetNull` en Doc.projectId conserva
   // el doc histórico aunque se elimine el proyecto (queda "huérfano" pero
@@ -597,6 +620,17 @@ model Task {
 
   // Enlace externo de referencia (Confluence, Figma, ticket externo, etc.)
   referenceUrl String?
+
+  // Ola P5 · Hard deadlines + Resource Leveling.
+  // `hardDeadline`: fecha límite forzosa; si la EF de la tarea (calculada
+  // por CPM) la supera ⇒ violación que se reporta en /leveling. Distinto
+  // de `endDate`: endDate es la fecha planificada (puede moverse), mientras
+  // que hardDeadline es un compromiso que NO debe romperse.
+  // `dailyEffortHours`: estimación de horas/día por defecto que consume
+  // esta tarea para el cálculo de carga del recurso (assignee). Si NULL,
+  // el algoritmo de leveling asume `WorkCalendar.workdayHours` o 8h.
+  hardDeadline     DateTime?
+  dailyEffortHours Float?
 
   // Seguimiento y comentarios
   comments      Comment[]
@@ -1366,6 +1400,81 @@ model AutomationExecution {
 
   @@index([ruleId, executedAt(sort: Desc)])
   @@index([status, executedAt(sort: Desc)])
+}
+
+// ─────────────────────────────────────────────────────────────
+// Módulo Whiteboards (Ola P5 · Equipo P5-1)
+//
+// Pizarras colaborativas estilo Miro: canvas con sticky notes, formas,
+// conectores y texto. Cada elemento se posiciona libremente en un plano
+// 2D infinito (zoom + pan); el editor cliente persiste posiciones con
+// autosave debounced.
+//
+// Decisiones autónomas (P5-1):
+//   D-WB-1: `data` se almacena como JSON único por elemento — el shape
+//           depende del `type` (sticky: {color,text}; shape:
+//           {variant:'rectangle'|'circle',fill,stroke}; connector:
+//           {fromId,toId,points[]}). Esto evita N tablas para 5 tipos
+//           y permite añadir variantes sin migración.
+//   D-WB-2: `zIndex` materializado (no orderBy createdAt) para soportar
+//           "traer al frente / enviar al fondo" estable y deterministico.
+//   D-WB-3: `projectId` opcional — pizarras pueden ser personales (sin
+//           proyecto). Cuando hay projectId, server actions exigen
+//           `requireProjectAccess`.
+//   D-WB-4: `isArchived` en lugar de delete físico para soporte de
+//           "papelera" futura. Las queries por defecto filtran archivadas.
+//   D-WB-5: No modelamos `workspaceId` — el schema actual no expone Workspace.
+//           Cuando llegue, se añade como FK SetNull en una migración futura.
+// ─────────────────────────────────────────────────────────────
+
+model Whiteboard {
+  id          String   @id @default(uuid())
+  title       String
+  description String?
+
+  projectId String?
+  project   Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+
+  createdById String?
+  createdBy   User?   @relation("WhiteboardCreator", fields: [createdById], references: [id], onDelete: SetNull)
+
+  isArchived Boolean @default(false)
+
+  elements WhiteboardElement[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([projectId, isArchived])
+  @@index([createdById])
+}
+
+model WhiteboardElement {
+  id           String                @id @default(uuid())
+  whiteboardId String
+  whiteboard   Whiteboard            @relation(fields: [whiteboardId], references: [id], onDelete: Cascade)
+  type         WhiteboardElementType
+
+  // Coordenadas y dimensiones en el plano infinito (Float para soportar
+  // zoom + snap a sub-pixel).
+  x        Float @default(0)
+  y        Float @default(0)
+  width    Float @default(160)
+  height   Float @default(120)
+  rotation Float @default(0)
+
+  // Payload tipado por `type` (ver D-WB-1). Validado en el server action
+  // (`validateElementData`).
+  data Json
+
+  // Stack order — mayor z-index dibuja encima. El editor reasigna en lote
+  // al "traer al frente / enviar al fondo".
+  zIndex Int @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([whiteboardId, zIndex])
 }
 
 // ─────────────────────────────────────────────────────────────
