@@ -7,7 +7,7 @@ import {
   LayoutDashboard, Columns, CalendarDays, Target, FolderKanban, Building2,
   List, Users, Table, Network, FileText, ClipboardList,
   Zap, LayoutTemplate, Sparkles, ChevronDown, Eye, Settings, Briefcase,
-  Menu, PanelLeftClose, BarChart3, Rocket, Clock, Compass, ScrollText,
+  Menu, PanelLeftClose, BarChart3, Rocket, Clock, Compass, Key, Cable, ScrollText,
   type LucideIcon
 } from 'lucide-react';
 import { clsx } from 'clsx';
@@ -99,9 +99,10 @@ const menuGroups: RouteGroup[] = [
       { name: 'sidebar.items.calendars', path: '/settings/calendars', icon: CalendarDays },
       { name: 'sidebar.items.workload', path: '/workload', icon: ClipboardList },
       // Ola P3 · Equipo P3-2 · Audit Log centralizado (compliance ITIL/SOC2).
-      // Solo visible para ADMIN/SUPER_ADMIN: el filtro `filteredMenuGroups`
-      // ya esconde la entrada para AGENTE.
       { name: 'sidebar.items.audit', path: '/audit-log', icon: ScrollText },
+      // Ola P4 · Equipo P4-2 · API REST + Webhooks.
+      { name: 'sidebar.items.apiTokens', path: '/settings/api', icon: Key },
+      { name: 'sidebar.items.webhooks', path: '/settings/webhooks', icon: Cable },
     ],
   },
 ];
@@ -121,8 +122,18 @@ import { X, ShieldAlert, ShieldCheck, UserCog } from 'lucide-react';
  * Auth real (Ola P1) muestre al usuario autenticado vía cookie/Session
  * sin que el Sidebar (client component) tenga que importar lógica
  * server-only.
+ *
+ * Ola P4 · Equipo P4-1 — `workspaceSwitcherSlot` permite inyectar el
+ * `<WorkspaceSwitcher/>` con los datos resueltos en server. Si no se
+ * pasa, el header del sidebar conserva su layout original.
  */
-export default function Sidebar({ userSlot }: { userSlot?: React.ReactNode } = {}) {
+export default function Sidebar({
+  userSlot,
+  workspaceSwitcherSlot,
+}: {
+  userSlot?: React.ReactNode
+  workspaceSwitcherSlot?: React.ReactNode
+} = {}) {
   const pathname = usePathname();
   const { t } = useTranslation();
   const mobileOpen = useUIStore((s) => s.mobileSidebarOpen);
@@ -224,6 +235,13 @@ export default function Sidebar({ userSlot }: { userSlot?: React.ReactNode } = {
           "flex flex-1 flex-col overflow-y-auto pt-5 custom-scrollbar",
           collapsed ? "lg:px-2 px-3" : "px-3"
         )}>
+          {/* Workspace switcher (Ola P4 · slot server-rendered) */}
+          {workspaceSwitcherSlot && (
+            <div className="mb-4">
+              {workspaceSwitcherSlot}
+            </div>
+          )}
+
           {/* Section label */}
           <div className={clsx(
             "text-[10px] font-semibold text-muted-foreground uppercase tracking-[0.15em] mb-3 px-2",

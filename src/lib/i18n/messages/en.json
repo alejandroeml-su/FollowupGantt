@@ -106,6 +106,8 @@
       "calendars": "Working calendars",
       "workload": "Workload",
       "audit": "Audit log",
+      "apiTokens": "API tokens",
+      "webhooks": "Webhooks",
       "templates": "Templates"
     },
     "menuClose": "Close menu",

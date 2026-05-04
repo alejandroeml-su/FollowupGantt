@@ -106,6 +106,8 @@
       "calendars": "Calendarios laborales",
       "workload": "Cargas de trabajo",
       "audit": "Bitácora de auditoría",
+      "apiTokens": "Tokens API",
+      "webhooks": "Webhooks",
       "templates": "Plantillas"
     },
     "menuClose": "Cerrar menú",
