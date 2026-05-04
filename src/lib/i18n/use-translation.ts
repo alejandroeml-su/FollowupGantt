@@ -17,7 +17,7 @@
  * la API de `t()` no cambia.
  */
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useState } from 'react'
 import {
   DEFAULT_LOCALE,
   type Locale,
@@ -52,13 +52,11 @@ export type UseTranslation = {
 }
 
 export function useTranslation(): UseTranslation {
-  // Estado inicial = DEFAULT_LOCALE para mantener consistencia SSR/CSR.
-  // En montaje cliente sincronizamos con la cookie.
-  const [locale, setLocaleState] = useState<Locale>(DEFAULT_LOCALE)
-
-  useEffect(() => {
-    setLocaleState(readCookieLocale())
-  }, [])
+  // Lazy initial state: SSR usa DEFAULT_LOCALE, CSR lee cookie en el primer render.
+  // Reemplaza el patrón `useEffect → setState` que viola react-hooks/set-state-in-effect.
+  const [locale, setLocaleState] = useState<Locale>(() =>
+    typeof window === 'undefined' ? DEFAULT_LOCALE : readCookieLocale(),
+  )
 
   const setLocale = useCallback((next: Locale) => {
     if (!isLocale(next)) return
