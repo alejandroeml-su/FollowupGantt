@@ -187,6 +187,19 @@ export async function createTask(formData: FormData) {
   const tags = parseTagsFromFormData(formData)
   const referenceUrl = parseReferenceUrlFromFormData(formData)
 
+  // Story Points (Ola P2) — opcional, escala Fibonacci. Validamos aquí para
+  // que el form HTML clásico (sin server action dedicada) tampoco persista
+  // valores fuera de escala. La UI ya restringe el select.
+  const storyPointsRaw = formData.get('storyPoints')
+  let storyPoints: number | null = null
+  if (typeof storyPointsRaw === 'string' && storyPointsRaw.trim()) {
+    const n = Number(storyPointsRaw)
+    const allowed = [1, 2, 3, 5, 8, 13, 21]
+    if (Number.isInteger(n) && allowed.includes(n)) {
+      storyPoints = n
+    }
+  }
+
   if (!title || !projectId) throw new Error('Título y proyecto son requeridos')
 
   // Generar mnemónico automático: PRIM-1, INFRA-1...
@@ -210,6 +223,7 @@ export async function createTask(formData: FormData) {
       endDate: endDateStr ? new Date(endDateStr) : null,
       ...(tags.length > 0 ? { tags } : {}),
       ...(referenceUrl ? { referenceUrl } : {}),
+      ...(storyPoints !== null ? { storyPoints } : {}),
     }
   })
   invalidateCpmCache(projectId)

@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { Plus, ChevronUp } from 'lucide-react';
 import { createTask } from '@/lib/actions';
+import StoryPointsField from '@/components/sprints/StoryPointsField';
 
 interface TaskFormProps {
   projects: { id: string; name: string }[];
@@ -107,12 +108,15 @@ export default function TaskForm({ projects, users }: TaskFormProps) {
 
           <div>
             <label className="block text-xs font-medium text-muted-foreground mb-1">Fecha Final</label>
-            <input 
-              name="endDate" 
+            <input
+              name="endDate"
               type="date"
               className="w-full rounded-md border border-border bg-background py-2 px-3 text-sm text-white focus:border-indigo-500 focus:outline-none"
             />
           </div>
+
+          {/* Story Points (Fibonacci) */}
+          <StoryPointsField />
 
           {/* Descripción */}
           <div className="md:col-span-2">
