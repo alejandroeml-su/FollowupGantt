@@ -168,6 +168,7 @@ const menuGroups: RouteGroup[] = [
 import { useUIStore } from '@/lib/stores/ui';
 import { ThemeToggle } from './ThemeToggle';
 import { NotificationsBell } from './notifications/NotificationsBell';
+import { NotificationsRealtimeBadge } from './notifications/NotificationsRealtimeBadge';
 import { useTranslation } from '@/lib/i18n/use-translation';
 import { X, ShieldAlert, ShieldCheck, UserCog } from 'lucide-react';
 
@@ -244,9 +245,17 @@ function isActivePath(itemPath: string, currentPath: string): boolean {
 export default function Sidebar({
   userSlot,
   workspaceSwitcherSlot,
+  currentUserId = null,
 }: {
   userSlot?: React.ReactNode
   workspaceSwitcherSlot?: React.ReactNode
+  /**
+   * Wave P6 · Equipo B2 — userId del usuario autenticado para alimentar
+   * `<NotificationsRealtimeBadge>` (subscribe a `Notification` por
+   * `userId=eq.X` en Supabase Realtime). Si es `null`, el badge degrada
+   * al `<NotificationsBell>` previo (polling 30s, sin live count).
+   */
+  currentUserId?: string | null
 } = {}) {
   const pathname = usePathname();
   const { t } = useTranslation();
@@ -492,7 +501,22 @@ export default function Sidebar({
                {t('sidebar.themeLabel')}
              </span>
              <div className="flex items-center gap-1">
-               <NotificationsBell collapsed={collapsed} />
+               {/*
+                 Wave P6 · Equipo B2 — Cuando hay sesión autenticada
+                 (`currentUserId` presente), montamos el badge realtime que
+                 escucha `Notification` por Supabase Realtime y refleja
+                 unreadCount sin polling. Sin sesión degradamos al
+                 NotificationsBell previo (polling cada 30s) para no romper
+                 la UI cuando el slot de auth no resuelve user.
+               */}
+               {currentUserId ? (
+                 <NotificationsRealtimeBadge
+                   userId={currentUserId}
+                   collapsed={collapsed}
+                 />
+               ) : (
+                 <NotificationsBell collapsed={collapsed} />
+               )}
                <ThemeToggle />
              </div>
           </div>
