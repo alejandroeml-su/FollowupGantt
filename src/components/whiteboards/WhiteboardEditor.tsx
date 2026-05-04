@@ -18,6 +18,9 @@ import { SoftLockProvider } from '@/components/realtime-locks/SoftLockProvider'
 import { EditingByBanner } from '@/components/realtime-locks/EditingByBanner'
 import { ConflictDialog } from '@/components/realtime-locks/ConflictDialog'
 import { useWhiteboardEditLock } from '@/components/realtime-locks/useWhiteboardEditLock'
+import { usePresence } from '@/lib/realtime/use-presence'
+import PresenceAvatars from '@/components/realtime/PresenceAvatars'
+import type { CurrentUserPresence } from '@/lib/auth/get-current-user-presence'
 
 type Props = {
   whiteboard: {
@@ -34,10 +37,11 @@ type Props = {
   }
   initialElements: WhiteboardElement[]
   /**
-   * Identidad del usuario activo. Wave P6 · B3: opcional. Sin currentUser
-   * el editor renderiza igual pero sin presence ni conflict detection.
+   * Wave P6 — Identidad del usuario activo (combina B1 presence + B3 lock).
+   * Llega drilled desde el RSC `app/whiteboards/[id]/page.tsx`. Si null,
+   * presence + edit lock + conflict detection se desactivan graceful.
    */
-  currentUser?: { id: string; name: string } | null
+  currentUser?: CurrentUserPresence | null
 }
 
 const AUTOSAVE_DEBOUNCE_MS = 500
@@ -48,6 +52,18 @@ export function WhiteboardEditor({
   currentUser,
 }: Props) {
   const [elements, setElements] = useState<WhiteboardElement[]>(initialElements)
+  // Wave P6 · Equipo B1 — Presence wiring. Si no hay sesión, pasamos
+  // identity null y `usePresence` queda en no-op (lista vacía).
+  const presence = usePresence(
+    currentUser ? `whiteboard:${whiteboard.id}` : null,
+    currentUser
+      ? {
+          userId: currentUser.userId,
+          name: currentUser.name,
+          avatarUrl: currentUser.avatarUrl,
+        }
+      : null,
+  )
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [activeTool, setActiveTool] = useState<ToolId | null>(null)
   const [snapEnabled, setSnapEnabled] = useState(true)
@@ -261,14 +277,31 @@ export function WhiteboardEditor({
         <SaveIndicator state={savingState} />
       </header>
 
-      {/* Wave P6 · B3 — banner de presencia. Sólo se muestra si hay otros
-          peers editando (el componente devuelve null en otro caso). */}
+      {/* Wave P6 · B3 — banner de presencia (lock). null si nadie más edita. */}
       <div className="px-4 pt-2">
         <EditingByBanner
           editingUsers={lock.editingUsers}
           isLockedByOther={lock.isLockedByOther}
           onForceOverride={lock.forceOverride}
         />
+      </div>
+      <div className="flex items-center justify-center gap-4 border-b border-border bg-subtle/30 px-4 py-2">
+        <WhiteboardToolbar
+          activeTool={activeTool}
+          onSelectTool={setActiveTool}
+          snapEnabled={snapEnabled}
+          onToggleSnap={setSnapEnabled}
+          onExportPng={handleExportPng}
+        />
+        {/* Wave P6 · B1 — Presencia en vivo (avatares solapados). */}
+        {presence.users.length > 0 ? (
+          <div
+            className="flex items-center"
+            data-testid="whiteboard-toolbar-presence"
+          >
+            <PresenceAvatars users={presence.users} max={5} />
+          </div>
+        ) : null}
       </div>
 
       {/* SoftLockProvider en modo `unwrap` — sólo proporciona contexto, no

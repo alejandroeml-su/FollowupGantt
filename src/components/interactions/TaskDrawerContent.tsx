@@ -33,6 +33,9 @@ import { SoftLockProvider } from '@/components/realtime-locks/SoftLockProvider'
 import { EditingByBanner } from '@/components/realtime-locks/EditingByBanner'
 import { ConflictDialog } from '@/components/realtime-locks/ConflictDialog'
 import { useTaskEditLock } from '@/components/realtime-locks/useTaskEditLock'
+import { usePresence } from '@/lib/realtime/use-presence'
+import PresenceIndicator from '@/components/realtime/PresenceIndicator'
+import type { CurrentUserPresence } from '@/lib/auth/get-current-user-presence'
 import { TaskCommentsRealtime } from '@/components/comments/TaskCommentsRealtime'
 
 type Props = {
@@ -41,13 +44,15 @@ type Props = {
   users: { id: string; name: string }[]
   allTasks?: SerializedTask[]
   /**
-   * Identidad del usuario activo. Wave P6 · B3: opcional para no romper
-   * callers existentes. Si es `null`/ausente, el drawer renderiza igual
-   * pero sin presence ni conflict detection (degradación silenciosa).
-   * Mientras no exista una sesión real, la convención del proyecto es
-   * pasar `users[0]` (mismo patrón que `TaskTimeTrackingSection`).
+   * Wave P6 — Identidad del usuario activo. Combina B1 (presence) + B3
+   * (edit locks). Opcional para no romper callers existentes (Kanban,
+   * Gantt, Calendar, List, Table, GanttListMobile). Sin él se renderiza
+   * el drawer pero sin presence/locks/conflict detection (degradación).
+   *
+   * Tipo `CurrentUserPresence` (de A1/B1) tiene `{ userId, name, avatarUrl? }`.
+   * El hook `useTaskEditLock` consume `{ id, name }`, así que mapeamos.
    */
-  currentUser?: { id: string; name: string } | null
+  currentUser?: CurrentUserPresence | null
 }
 
 /**
@@ -77,16 +82,40 @@ export function TaskDrawerContent({
   currentUser,
 }: Props) {
   // Resolver currentUser con la misma convención que el resto del módulo
-  // (sin sesión real, fallback a `users[0]`). Si no hay ningún user
-  // disponible, degradamos a no-op pasando `null`.
-  const resolvedCurrentUser = useMemo(
-    () => currentUser ?? users[0] ?? null,
+  // (sin sesión real, fallback a `users[0]` mapeado al shape Presence).
+  // El hook `useTaskEditLock` espera `{id, name}`; B1/A1 entregan
+  // `{userId, name, avatarUrl?}`. Adaptamos en cada uso.
+  const resolvedPresenceUser = useMemo<CurrentUserPresence | null>(
+    () =>
+      currentUser ??
+      (users[0] ? { userId: users[0].id, name: users[0].name } : null),
     [currentUser, users],
+  )
+
+  const resolvedLockUser = useMemo(
+    () =>
+      resolvedPresenceUser
+        ? { id: resolvedPresenceUser.userId, name: resolvedPresenceUser.name }
+        : null,
+    [resolvedPresenceUser],
+  )
+
+  // Wave P6 · B1 — Mini indicador de presence en el header del drawer.
+  // Si `resolvedPresenceUser` es null, channel=null → no-op silencioso.
+  const presence = usePresence(
+    resolvedPresenceUser ? `task:${task.id}` : null,
+    resolvedPresenceUser
+      ? {
+          userId: resolvedPresenceUser.userId,
+          name: resolvedPresenceUser.name,
+          avatarUrl: resolvedPresenceUser.avatarUrl,
+        }
+      : null,
   )
 
   const lock = useTaskEditLock({
     taskId: task.id,
-    currentUser: resolvedCurrentUser,
+    currentUser: resolvedLockUser,
     currentVersion: task.updatedAt ?? null,
   })
 
@@ -142,6 +171,15 @@ export function TaskDrawerContent({
       {/* Banner de presencia. Si no hay otros peers editando, no renderiza
           nada (componente devuelve null). Lo ponemos fuera del SoftLock
           para que el botón "Forzar edición" siga clickeable. */}
+      {/* Wave P6 · B1 — Mini indicador de presence (otros usuarios viendo). */}
+      {presence.users.length > 0 ? (
+        <div
+          className="flex items-center justify-end px-6 pt-3"
+          data-testid="task-drawer-presence"
+        >
+          <PresenceIndicator count={presence.users.length} label="viendo" />
+        </div>
+      ) : null}
       <div className="px-4 pt-3" data-testid="task-drawer-edit-presence">
         <EditingByBanner
           editingUsers={lock.editingUsers}
