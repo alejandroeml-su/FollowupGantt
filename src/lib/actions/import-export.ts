@@ -33,18 +33,18 @@ import {
   type ExportResourcesRow,
   type ExportTasksRow,
 } from '@/lib/import-export/excel-writer'
-import {
-  parseExcelBuffer,
-  type ExcelTaskRow,
-  type ExcelDepRow,
-  type ExcelResourceRow,
-} from '@/lib/import-export/excel-parser'
+import { parseExcelBuffer } from '@/lib/import-export/excel-parser'
+import type {
+  ExcelDepRow,
+  ExcelImportError as ImportError,
+  ExcelImportWarning as ImportWarning,
+  ExcelResourceRow,
+  ExcelTaskRow,
+} from '@/lib/import-export/types'
 import {
   DEP_TYPE_2L_TO_PRISMA,
   FILE_SIZE_LIMIT_BYTES,
   FILE_SIZE_LIMIT_MB,
-  type ImportError,
-  type ImportWarning,
 } from '@/lib/import-export/MAPPING'
 import { invalidateCpmCache } from '@/lib/scheduling/invalidate'
 import { createNotification } from '@/lib/actions/notifications'

@@ -43,47 +43,20 @@ import { revalidatePath, revalidateTag, unstable_cache } from 'next/cache'
 import { Prisma, type SavedView, type ViewSurface } from '@prisma/client'
 import prisma from '@/lib/prisma'
 import { requireUser } from '@/lib/auth'
+import {
+  VIEW_SURFACES,
+  isValidGrouping,
+  type SavedViewErrorCode,
+  type ViewSurfaceLiteral,
+} from '@/lib/views/saved-view-types'
 
-// ─────────────────────────── Errores tipados ───────────────────────────
-
-export type SavedViewErrorCode =
-  | 'INVALID_INPUT'
-  | 'INVALID_SURFACE'
-  | 'INVALID_GROUPING'
-  | 'VIEW_NOT_FOUND'
-  | 'VIEW_NAME_DUPLICATE'
-  | 'UNAUTHORIZED'
-  | 'FORBIDDEN'
+// Re-export types only (un archivo `'use server'` puede re-exportar tipos pero
+// no valores/funciones sincrónicas — los consumidores que necesiten constantes
+// o `isValidGrouping` deben importar desde `@/lib/views/saved-view-types`).
+export type { SavedViewErrorCode, ViewSurfaceLiteral }
 
 function actionError(code: SavedViewErrorCode, detail: string): never {
   throw new Error(`[${code}] ${detail}`)
-}
-
-// ─────────────────────────── Constantes ────────────────────────────────
-
-export const VIEW_SURFACES = ['LIST', 'KANBAN', 'GANTT', 'CALENDAR', 'TABLE'] as const
-export type ViewSurfaceLiteral = (typeof VIEW_SURFACES)[number]
-
-/**
- * Lista cerrada de claves de grouping aceptadas (D-SV-3). El sufijo
- * `custom_field:<id>` se valida con regex aparte para no enumerar todos los
- * customFieldIds posibles.
- */
-export const GROUPING_KEYS = [
-  'assignee',
-  'sprint',
-  'phase',
-  'status',
-  'priority',
-  'tags',
-] as const
-
-const CUSTOM_FIELD_GROUPING_RE = /^custom_field:[a-zA-Z0-9_-]{1,64}$/
-
-export function isValidGrouping(value: string | null | undefined): boolean {
-  if (value === null || value === undefined || value === '') return true
-  if ((GROUPING_KEYS as readonly string[]).includes(value)) return true
-  return CUSTOM_FIELD_GROUPING_RE.test(value)
 }
 
 // ─────────────────────────── Schemas ──────────────────────────────────

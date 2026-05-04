@@ -22,6 +22,7 @@ import {
   type WorkCalendarLike,
 } from '@/lib/scheduling/work-calendar'
 import { WorkloadHeatmap } from '@/components/workload/WorkloadHeatmap'
+import { getServerT } from '@/lib/i18n/server'
 
 export const dynamic = 'force-dynamic'
 
@@ -70,6 +71,7 @@ async function loadDefaultCalendar(): Promise<DefaultCalendar> {
 }
 
 export default async function WorkloadPage() {
+  const tt = await getServerT()
   const calendar = await loadDefaultCalendar()
 
   const usersDb = await prisma.user.findMany({
@@ -139,7 +141,7 @@ export default async function WorkloadPage() {
       <header className="flex h-16 shrink-0 items-center justify-between border-b border-border px-8 bg-subtle/50">
         <div>
           <h1 className="text-xl font-semibold text-white">
-            Cargas de trabajo
+            {tt('pages.workload.title')}
           </h1>
           <p className="mt-1 text-xs text-muted-foreground">
             Heatmap de utilización por recurso (próximas {DEFAULT_HEATMAP_WEEKS}{' '}
