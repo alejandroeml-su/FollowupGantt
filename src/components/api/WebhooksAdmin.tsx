@@ -17,7 +17,7 @@ import {
   deleteWebhook,
   type WebhookListItem,
 } from '@/lib/actions/webhooks'
-import { KNOWN_EVENTS } from '@/lib/webhooks/dispatcher'
+import { KNOWN_EVENTS } from '@/lib/webhooks/events'
 
 interface Props {
   initialWebhooks: WebhookListItem[]

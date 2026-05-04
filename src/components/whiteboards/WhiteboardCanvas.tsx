@@ -8,6 +8,8 @@ import {
   type WhiteboardElement,
 } from '@/lib/whiteboards/types'
 import { snapPoint, stepZoom, screenToWorld, worldToScreen } from '@/lib/whiteboards/geometry'
+import { LiveCursorsLayer } from '@/components/realtime-cursors/LiveCursorsLayer'
+import type { CurrentUserIdentity } from '@/lib/realtime-cursors/use-live-cursors'
 
 type Props = {
   elements: WhiteboardElement[]
@@ -19,6 +21,10 @@ type Props = {
   snapEnabled: boolean
   /** Si está en true, el background usa cursor "grab" para indicar pan con space. */
   panMode?: boolean
+  /** Wave P6 — id de la pizarra para suscribirse al canal realtime de cursores. */
+  whiteboardId?: string
+  /** Wave P6 — usuario actual para emitir su cursor en el canal. */
+  currentUser?: CurrentUserIdentity | null
 }
 
 /**
@@ -40,6 +46,8 @@ export function WhiteboardCanvas({
   onCanvasClick,
   snapEnabled,
   panMode = false,
+  whiteboardId,
+  currentUser,
 }: Props) {
   const [viewport, setViewport] = useState<ViewportState>(DEFAULT_VIEWPORT)
   const containerRef = useRef<HTMLDivElement | null>(null)
@@ -213,6 +221,12 @@ export function WhiteboardCanvas({
           ))}
       </div>
       <ZoomIndicator viewport={viewport} onReset={() => setViewport(DEFAULT_VIEWPORT)} />
+      {whiteboardId && (
+        <LiveCursorsLayer
+          channelName={`whiteboard:${whiteboardId}`}
+          currentUser={currentUser ?? null}
+        />
+      )}
     </div>
   )
 }

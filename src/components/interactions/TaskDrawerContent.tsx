@@ -28,6 +28,7 @@ import { TaskInsightsSection } from '@/components/tasks/TaskInsightsSection'
 import { usePresence } from '@/lib/realtime/use-presence'
 import PresenceIndicator from '@/components/realtime/PresenceIndicator'
 import type { CurrentUserPresence } from '@/lib/auth/get-current-user-presence'
+import { TaskCommentsRealtime } from '@/components/comments/TaskCommentsRealtime'
 
 type Props = {
   task: SerializedTask
@@ -156,6 +157,22 @@ export function TaskDrawerContent({
         <TaskInsightsSection
           taskId={task.id}
           projectId={task.projectId ?? null}
+        />
+      </div>
+      {/*
+       * Wave P6 · Equipo A3 — Comentarios en vivo (Supabase Realtime).
+       *  - INSERTs sobre `Comment` propagados via `postgres_changes`.
+       *  - "X está escribiendo…" via `broadcast`.
+       *  - Si Realtime no está configurado, degrada a fetch normal.
+       * El composer dentro de TaskForm (tab "Comentarios") sigue
+       * existiendo para edición avanzada (interno/externo); este bloque
+       * adicional renderiza la conversación en tiempo real al pie del
+       * drawer.
+       */}
+      <div className="border-t border-border bg-card/40 px-6 py-4">
+        <TaskCommentsRealtime
+          taskId={task.id}
+          currentUser={users[0] ?? null}
         />
       </div>
     </div>
