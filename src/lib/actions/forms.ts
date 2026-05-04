@@ -405,7 +405,6 @@ export async function submitForm(input: SubmitFormInput): Promise<SubmitFormResu
   }
 }
 
-// ─────────────────────────── Constantes públicas ───────────────────────────
-
-export const FORM_RATE_LIMIT_WINDOW_MS = RATE_LIMIT_WINDOW_MS
-export const FORM_HONEYPOT_FIELD = HONEYPOT_FIELD_NAME
+// NO re-exportar constantes desde aquí: archivos `'use server'` solo pueden
+// exportar Server Actions async. Los consumers (e.g. PublicFormView) importan
+// directamente desde `@/lib/forms/rate-limit`.
