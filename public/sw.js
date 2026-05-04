@@ -138,3 +138,73 @@ self.addEventListener('fetch', (event) => {
     )
   }
 })
+
+// ─── Wave P6 · Equipo A4 — Web Push API ─────────────────────────────
+// Handler `push`: muestra notificación nativa del SO con icono y data
+// para que `notificationclick` abra la URL relevante. El payload llega
+// cifrado desde `webpush.sendNotification(sub, JSON.stringify(payload))`
+// en `src/lib/web-push/server.ts`. Si el `data` viene vacío (push sin
+// payload), mostramos un fallback genérico.
+self.addEventListener('push', (event) => {
+  let data = {}
+  try {
+    data = event.data ? event.data.json() : {}
+  } catch {
+    // Payload no era JSON: caemos a texto plano.
+    try {
+      const text = event.data ? event.data.text() : ''
+      if (text) data = { title: 'FollowupGantt', body: text }
+    } catch {
+      data = {}
+    }
+  }
+
+  const title = data.title || 'FollowupGantt'
+  const options = {
+    body: data.body || '',
+    icon: '/icon-192.svg',
+    badge: '/icon-192.svg',
+    data: { url: data.url || '/', ...(data.data || {}) },
+    tag: data.tag || undefined,
+    renotify: !!data.renotify,
+  }
+
+  event.waitUntil(self.registration.showNotification(title, options))
+})
+
+// Click handler: enfoca un cliente abierto en la misma URL si existe;
+// si no, abre uno nuevo. Cierra siempre la notificación.
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close()
+  const targetUrl = (event.notification.data && event.notification.data.url) || '/'
+
+  event.waitUntil(
+    (async () => {
+      const all = await self.clients.matchAll({
+        type: 'window',
+        includeUncontrolled: true,
+      })
+      for (const client of all) {
+        // Reenfocamos si ya hay una ventana del mismo origen.
+        if (client.url && 'focus' in client) {
+          try {
+            await client.focus()
+            if ('navigate' in client && targetUrl) {
+              try {
+                await client.navigate(targetUrl)
+              } catch {
+                // navigate puede fallar entre orígenes; ignoramos.
+              }
+            }
+            return
+          } catch {
+            // continúa con la siguiente
+          }
+        }
+      }
+      if (self.clients.openWindow) {
+        await self.clients.openWindow(targetUrl)
+      }
+    })(),
+  )
+})
