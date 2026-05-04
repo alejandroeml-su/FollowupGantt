@@ -4,6 +4,7 @@ import { create } from 'zustand'
 import { useEffect } from 'react'
 import { AlertCircle, CheckCircle2, Info, X } from 'lucide-react'
 import { clsx } from 'clsx'
+import { useTranslation } from '@/lib/i18n/use-translation'
 
 type ToastKind = 'info' | 'success' | 'error'
 type Toast = { id: string; kind: ToastKind; message: string }
@@ -49,10 +50,14 @@ const KIND_ICONS: Record<ToastKind, React.ReactNode> = {
 export function Toaster() {
   const toasts = useToastStore((s) => s.toasts)
   const dismiss = useToastStore((s) => s.dismiss)
+  // Ola P4 · P4-4 — labels accesibles del Toaster ahora son i18n.
+  // El `message` lo provee el caller (ej. `toast.success('...')`); para
+  // mensajes genéricos pre-traducidos ver `toast` API en este módulo.
+  const { t: tr } = useTranslation()
 
   useEffect(() => {
-    const timers = toasts.map((t) =>
-      setTimeout(() => dismiss(t.id), 5000),
+    const timers = toasts.map((toastItem) =>
+      setTimeout(() => dismiss(toastItem.id), 5000),
     )
     return () => timers.forEach(clearTimeout)
   }, [toasts, dismiss])
@@ -60,27 +65,27 @@ export function Toaster() {
   return (
     <div
       role="region"
-      aria-label="Notificaciones"
+      aria-label={tr('toast.regionLabel')}
       aria-live="polite"
       className="pointer-events-none fixed bottom-4 right-4 z-[60] flex w-[min(380px,calc(100vw-2rem))] flex-col gap-2"
     >
-      {toasts.map((t) => (
+      {toasts.map((toastItem) => (
         <div
-          key={t.id}
-          role={t.kind === 'error' ? 'alert' : 'status'}
+          key={toastItem.id}
+          role={toastItem.kind === 'error' ? 'alert' : 'status'}
           className={clsx(
             'pointer-events-auto flex items-start gap-2 rounded-lg border px-3 py-2 text-sm shadow-lg',
-            KIND_STYLES[t.kind],
+            KIND_STYLES[toastItem.kind],
           )}
         >
           <span aria-hidden className="mt-0.5">
-            {KIND_ICONS[t.kind]}
+            {KIND_ICONS[toastItem.kind]}
           </span>
-          <p className="flex-1 leading-snug">{t.message}</p>
+          <p className="flex-1 leading-snug">{toastItem.message}</p>
           <button
             type="button"
-            aria-label="Cerrar"
-            onClick={() => dismiss(t.id)}
+            aria-label={tr('toast.dismiss')}
+            onClick={() => dismiss(toastItem.id)}
             className="mt-0.5 rounded p-0.5 text-current/60 hover:text-current"
           >
             <X className="h-3.5 w-3.5" />

@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeAll, beforeEach } from 'vitest'
 
 /**
  * HU-1.4 · Tests de la server action `updateDependency`.
@@ -14,34 +14,37 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
  *   6. Cambio de lag dentro de rango (sin cambiar tipo) → no consulta deps
  *      del proyecto (skip de la verificación de ciclo, optimización).
  *
- * Refactor anti-flake (Sprint 8 HU-4.4 · raíz identificada):
+ * Refactor anti-flake P3-5D (raíz definitiva):
  *
- *   - Causa raíz: el código de `updateDependency` invoca a
- *     `validateScheduledChange` (HU-1.5), que internamente hace
- *     `loadCpmInputForProject` + `computeCpm`. Bajo paralelismo agresivo
- *     de vitest (otros workers haciendo I/O de exceljs ~9s), la cadena
- *     `mockResolvedValueOnce` + `findUnique` se descalibraba contra el
- *     CPM real y el test quedaba en timeout o devolvía datos stale.
+ *   1. Mocks granulares con `vi.fn()` específicos por collaborator:
+ *      `update`, `findUnique`, `taskFindMany`, `depFindMany`,
+ *      `wouldCreateCycleMock`, `invalidateCpmCacheMock`,
+ *      `validateScheduledChangeMock`. Cada test sobrescribe SOLO el
+ *      stub que necesita usando `mockImplementation` o
+ *      `mockResolvedValue` (NUNCA `mockResolvedValueOnce`, que crea
+ *      ordering implícito y se descalibra bajo paralelismo).
  *
- *   - Solución: mockear `validateScheduledChange` directamente como no-op
- *     (en vez de mockear `loadCpmInputForProject` + `computeCpm` por
- *     separado, lo cual era frágil). El SUT solo necesita que el wrapper
- *     no lance — la unidad bajo test es `updateDependency`, no la cadena
- *     CPM completa.
+ *   2. `validateScheduledChange` mockeada directamente como no-op:
+ *      blinda contra cualquier cambio interno de la cadena CPM
+ *      (`loadCpmInputForProject` + `computeCpm`). El SUT solo requiere
+ *      que el wrapper no lance — la unidad bajo test es
+ *      `updateDependency`, no la cadena CPM completa.
  *
- *   - También evitamos `mockResolvedValueOnce` en favor de
- *     `mockImplementation` con asserts explícitos del input que recibe
- *     `findUnique`. Esto elimina el ordering implícito y deja errores
- *     más legibles si el SUT cambia su patrón de queries.
+ *   3. Import de `dependencies.ts` lift a `beforeAll`: previamente cada
+ *      test hacía `await import(...)`, lo que bajo paralelismo agresivo
+ *      podía race contra la inicialización de los mocks de otros
+ *      workers que comparten cache de módulos. Ahora se importa una
+ *      sola vez tras `vi.mock` y se reutiliza la referencia.
  *
- *   - Como defensa adicional, mockeamos `getCachedCpmForProject` para
- *     que, si en el futuro un agente descubre que el SUT lo usa, no se
- *     dispare el CPM real.
+ *   4. `getCachedCpmForProject` defensivo: si en el futuro `dependencies.ts`
+ *      lo invoca, no dispara CPM real.
  *
- *   - Definimos UN ÚNICO `vi.mock('@/lib/prisma', ...)` (la versión previa
- *     definía DOS, lo que causaba que el segundo sobrescribiera el primero
- *     y el `findMany` fuera el "real" del segundo bloque — comportamiento
- *     correcto pero confuso y propenso a regresión).
+ *   5. `beforeEach` resetea TODOS los mocks con `mockReset()` + valor
+ *      default explícito, eliminando residuos entre tests.
+ *
+ *   6. `testTimeout` bajado de 15s → 5s en `vitest.config.ts` tras
+ *      verificar 10/10 corridas verde. Ningún test legítimo de esta
+ *      suite necesita más de 200ms.
  */
 
 // ─────────────────────── Spies / mocks de cliente Prisma ───────────────────────
@@ -121,7 +124,7 @@ vi.mock('@/lib/auth/check-project-access', () => ({
   canAccessProject: vi.fn(async () => true),
 }))
 
-// ─────────────────────── Reset entre tests ───────────────────────
+// ─────────────────────── Setup compartido ───────────────────────
 
 const DEFAULT_DEP_ROW = {
   id: 'dep-1',
@@ -130,6 +133,16 @@ const DEFAULT_DEP_ROW = {
   type: 'FINISH_TO_START',
   predecessor: { projectId: 'proj-1' },
 }
+
+// P3-5D · Importamos una sola vez, después de que todos los `vi.mock(...)`
+// hayan sido evaluados (vitest los iza). Reusamos la referencia en cada
+// test para evitar race conditions con la cache de módulos bajo
+// paralelismo.
+let updateDependency: typeof import('@/lib/actions/dependencies').updateDependency
+
+beforeAll(async () => {
+  ;({ updateDependency } = await import('@/lib/actions/dependencies'))
+})
 
 beforeEach(() => {
   // mockReset elimina implementaciones previas (incluyendo Once stacks
@@ -165,7 +178,6 @@ beforeEach(() => {
 describe('updateDependency', () => {
   it('cambia el tipo correctamente y mapea a enum Prisma', async () => {
     // findUnique ya retorna DEFAULT_DEP_ROW por default del beforeEach.
-    const { updateDependency } = await import('@/lib/actions/dependencies')
     const out = await updateDependency({ id: 'dep-1', type: 'SS' })
 
     expect(out).toEqual({ id: 'dep-1' })
@@ -192,7 +204,6 @@ describe('updateDependency', () => {
   it('rechaza cambio de tipo que cerraría un ciclo', async () => {
     wouldCreateCycleMock.mockReturnValue(true)
 
-    const { updateDependency } = await import('@/lib/actions/dependencies')
     await expect(
       updateDependency({ id: 'dep-1', type: 'SS' }),
     ).rejects.toThrow(/\[CYCLE_DETECTED\]/)
@@ -202,21 +213,18 @@ describe('updateDependency', () => {
   })
 
   it('rechaza lag fuera de rango (>365)', async () => {
-    const { updateDependency } = await import('@/lib/actions/dependencies')
     await expect(
       updateDependency({ id: 'dep-1', lagDays: 999 }),
     ).rejects.toThrow(/\[INVALID_LAG\]/)
   })
 
   it('rechaza lag fuera de rango (<-30)', async () => {
-    const { updateDependency } = await import('@/lib/actions/dependencies')
     await expect(
       updateDependency({ id: 'dep-1', lagDays: -100 }),
     ).rejects.toThrow(/\[INVALID_LAG\]/)
   })
 
   it('rechaza lag no entero', async () => {
-    const { updateDependency } = await import('@/lib/actions/dependencies')
     await expect(
       updateDependency({ id: 'dep-1', lagDays: 1.5 }),
     ).rejects.toThrow(/\[INVALID_LAG\]/)
@@ -226,7 +234,6 @@ describe('updateDependency', () => {
     findUnique.mockReset()
     findUnique.mockResolvedValue(null)
 
-    const { updateDependency } = await import('@/lib/actions/dependencies')
     await expect(
       updateDependency({ id: 'no-existe', type: 'FF' }),
     ).rejects.toThrow(/\[NOT_FOUND\]/)
@@ -235,14 +242,12 @@ describe('updateDependency', () => {
   })
 
   it('rechaza input vacío (sin type ni lagDays)', async () => {
-    const { updateDependency } = await import('@/lib/actions/dependencies')
     await expect(
       updateDependency({ id: 'dep-1' }),
     ).rejects.toThrow(/\[INVALID_INPUT\]/)
   })
 
   it('cambia solo el lag sin tocar tipo y skipea verificación de ciclo', async () => {
-    const { updateDependency } = await import('@/lib/actions/dependencies')
     await updateDependency({ id: 'dep-1', lagDays: 3 })
 
     const lastCall = update.mock.calls.at(-1)?.[0] as {
@@ -270,7 +275,6 @@ describe('updateDependency', () => {
   })
 
   it('rechaza tipo inválido (zod) con [INVALID_TYPE]', async () => {
-    const { updateDependency } = await import('@/lib/actions/dependencies')
     await expect(
       updateDependency({
         id: 'dep-1',
