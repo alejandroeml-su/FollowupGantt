@@ -173,6 +173,11 @@ model User {
   // Goal.
   ownedGoals Goal[] @relation("GoalOwner")
 
+  // Ola P4 · Equipo P4-2 · API REST pública + Webhooks.
+  // Tokens y webhooks pertenecen al usuario que los creó; cascadean al borrar.
+  apiTokens ApiToken[]
+  webhooks  Webhook[]
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
@@ -1101,4 +1106,84 @@ model KeyResult {
   updatedAt DateTime @updatedAt
 
   @@index([goalId, position])
+}
+
+// ─────────────────────────────────────────────────────────────
+// Módulo API REST pública v1 + Webhooks (Ola P4 · Equipo P4-2)
+//
+// Permite que clientes externos (CI, scripts, integraciones) interactúen
+// con FollowupGantt vía HTTP estándar usando tokens portables. La
+// autenticación es Bearer-token sobre header Authorization; los scopes
+// (JSON array) gobiernan qué endpoints puede invocar cada token.
+//
+// Decisiones documentadas:
+//   D-API-1: El token se persiste HASHEADO (SHA-256) en `tokenHash`. El
+//            valor en claro solo se muestra una vez al crearlo. El prefix
+//            (`fg_xxxxxx…`) se guarda en `prefix` para mostrar listados.
+//   D-API-2: `scopes Json` = array de strings tipo `projects:read`,
+//            `tasks:write`, `webhooks:admin`. Ver `src/lib/api/scopes.ts`.
+//   D-API-3: `expiresAt` opcional — null = no expira. La expiración se
+//            verifica en cada request (no se usa cron de purga).
+//   D-API-4: Webhook.events es array de strings (`task.created`,
+//            `baseline.captured`, etc.). El dispatcher filtra hooks
+//            activos cuyo `events` contenga el eventType disparado.
+//   D-API-5: Firma HMAC SHA-256 sobre el body JSON, header
+//            `X-FollowupGantt-Signature: sha256=<hex>`. Receptor verifica
+//            con su `secret`.
+// ─────────────────────────────────────────────────────────────
+
+model ApiToken {
+  id          String    @id @default(uuid())
+  // Etiqueta human-readable elegida por el usuario (ej. "CI Vercel", "Script Edwin").
+  name        String
+  // Hash SHA-256 (hex) del token completo. NUNCA almacenamos el token claro.
+  tokenHash   String    @unique
+  // Primeros 12 chars del token (incluye prefijo `fg_`) para mostrar en lista
+  // sin exponer el resto. Visual hint para que el usuario reconozca cuál revocar.
+  prefix      String
+  // Array de scopes JSON: ["projects:read","tasks:write",…]. Validado contra
+  // `KNOWN_SCOPES` en `src/lib/api/scopes.ts`.
+  scopes      Json
+  // Owner del token. Cascade: si se elimina el usuario, sus tokens se purgan.
+  userId      String
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  // Opcional: null = no expira. Si está en el pasado el auth helper devuelve 401.
+  expiresAt   DateTime?
+  // Timestamp del último uso (set on auth-success). Útil para auditoría +
+  // detectar tokens dormidos. Best-effort: el update es fire-and-forget.
+  lastUsedAt  DateTime?
+  revokedAt   DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@index([revokedAt])
+}
+
+model Webhook {
+  id        String  @id @default(uuid())
+  // URL del receptor (https only se valida en server action). Hasta 2048 chars.
+  url       String
+  // Secret hex (≥32 chars). Lo usa el dispatcher como key del HMAC.
+  secret    String
+  // Array de eventTypes suscritos: ["task.created","baseline.captured",…].
+  events    Json
+  // Permite pausar el webhook sin borrarlo (preserva secret + url).
+  active    Boolean @default(true)
+  // Owner: cascade al borrar el usuario. (No project-scoped: los webhooks son
+  // globales por usuario; futura iteración puede agregar projectId nullable.)
+  userId    String
+  user      User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  // Estadísticas básicas para troubleshooting; el dispatcher las actualiza
+  // best-effort tras cada delivery.
+  lastDeliveryAt     DateTime?
+  lastDeliveryStatus Int?
+  failureCount       Int       @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@index([active])
 }

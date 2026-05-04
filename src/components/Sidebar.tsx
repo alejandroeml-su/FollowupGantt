@@ -7,7 +7,7 @@ import {
   LayoutDashboard, Columns, CalendarDays, Target, FolderKanban, Building2,
   List, Users, Table, Network, FileText, ClipboardList,
   Zap, LayoutTemplate, Sparkles, ChevronDown, Eye, Settings, Briefcase,
-  Menu, PanelLeftClose, BarChart3, Rocket, Clock, Compass,
+  Menu, PanelLeftClose, BarChart3, Rocket, Clock, Compass, Key, Cable,
   type LucideIcon
 } from 'lucide-react';
 import { clsx } from 'clsx';
@@ -91,6 +91,8 @@ const menuGroups: RouteGroup[] = [
       { name: 'Usuarios', path: '/settings/users', icon: Users },
       { name: 'Calendarios laborales', path: '/settings/calendars', icon: CalendarDays },
       { name: 'Cargas de trabajo', path: '/workload', icon: ClipboardList },
+      { name: 'Tokens API', path: '/settings/api', icon: Key },
+      { name: 'Webhooks', path: '/settings/webhooks', icon: Cable },
     ],
   },
 ];
