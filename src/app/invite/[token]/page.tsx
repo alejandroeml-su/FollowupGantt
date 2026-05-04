@@ -63,7 +63,9 @@ export default async function AcceptInvitationPage({
     )
   }
 
-  if (invitation.expiresAt.getTime() < Date.now()) {
+  // eslint-disable-next-line react-hooks/purity -- Server Component; cada request necesita comprobar expiración con la hora actual.
+  const nowMs = Date.now()
+  if (invitation.expiresAt.getTime() < nowMs) {
     return (
       <main className="flex min-h-screen items-center justify-center bg-background px-4">
         <div className="w-full max-w-sm rounded-2xl border border-border bg-card p-8 text-center space-y-3 shadow-lg">
