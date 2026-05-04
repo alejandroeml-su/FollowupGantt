@@ -173,6 +173,13 @@ model User {
   // Goal.
   ownedGoals Goal[] @relation("GoalOwner")
 
+  // Ola P2 · Equipo P2-5 — Docs / Wikis. Un usuario puede ser autor original
+  // de un doc, último editor (último que pasó por `updateDoc`) y autor de
+  // versiones intermedias del histórico.
+  authoredDocs   Doc[]        @relation("DocAuthor")
+  lastEditedDocs Doc[]        @relation("DocLastEditor")
+  docVersions    DocVersion[]
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
@@ -335,6 +342,12 @@ model Project {
   // los OKRs históricos aunque se elimine el proyecto.
   goals Goal[]
 
+  // Ola P2 · Equipo P2-5 · Docs / Wikis.
+  // Documentos vinculados al proyecto. `SetNull` en Doc.projectId conserva
+  // el doc histórico aunque se elimine el proyecto (queda "huérfano" pero
+  // accesible).
+  docs Doc[]
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
@@ -378,10 +391,10 @@ model Sprint {
   project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
   // ── Agile metrics (Ola P2) ──────────────────────────────────────
-  capacity        Int?
-  startedAt       DateTime?
-  endedAt         DateTime?
-  velocityActual  Int?
+  capacity       Int?
+  startedAt      DateTime?
+  endedAt        DateTime?
+  velocityActual Int?
 
   tasks Task[]
 
@@ -509,6 +522,11 @@ model Task {
   // KRs (con metric=TASKS_COMPLETED) que esta tarea contribuye a alcanzar.
   // M:N a través de la tabla implícita "_KeyResultTasks".
   keyResults KeyResult[] @relation("KeyResultTasks")
+
+  // Ola P2 · Equipo P2-5 · Docs / Wikis.
+  // Documentos vinculados a esta tarea. `SetNull` en Doc.taskId preserva
+  // el doc al eliminar la tarea — mismo criterio que Project.docs.
+  docs Doc[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1079,19 +1097,19 @@ model KeyResult {
   goalId String
   goal   Goal   @relation(fields: [goalId], references: [id], onDelete: Cascade)
 
-  title       String
-  metric      KeyResultMetric
+  title        String
+  metric       KeyResultMetric
   // Valor objetivo. Para PERCENT y TASKS_COMPLETED suele ser 100; para
   // NUMERIC depende de unit; para BOOLEAN es 1.
-  targetValue Float
+  targetValue  Float
   // Valor actual. Para TASKS_COMPLETED se recalcula automáticamente al
   // completar tareas vinculadas.
-  currentValue Float @default(0)
+  currentValue Float           @default(0)
   // Unidad opcional human-readable (USD, %, users…). Solo se muestra en
   // la UI; no afecta cálculo.
-  unit     String?
+  unit         String?
   // Orden visual del KR dentro del Goal (fractional indexing).
-  position Float   @default(1)
+  position     Float           @default(1)
 
   // Tasks vinculadas — solo relevante cuando `metric=TASKS_COMPLETED`. M:N
   // implícita ("_KeyResultTasks"). El recompute consulta status=DONE.
@@ -1101,4 +1119,92 @@ model KeyResult {
   updatedAt DateTime @updatedAt
 
   @@index([goalId, position])
+}
+
+// ─────────────────────────────────────────────────────────────
+// Módulo Docs / Wikis (Ola P2 · Equipo P2-5)
+//
+// Editor de documentos markdown con tree jerárquico (Doc.parentId), opcional-
+// mente vinculados a un Project o Task. Cada save crea una `DocVersion` para
+// permitir restaurar versiones anteriores ("time machine" de doc).
+//
+// Decisiones documentadas:
+//   D-DOC-1: `content` es markdown crudo en TEXT (sin parsing en BD). El
+//            render a HTML corre del lado cliente con regex propia
+//            (`renderMarkdown`) — evita instalar `marked`/`remark`.
+//   D-DOC-2: Soft-delete via `isArchived` en lugar de cascada destructiva.
+//            Permite "papelera" y restore. Hard-delete no se expone en MVP.
+//   D-DOC-3: `parentId` SetNull en lugar de Cascade — al borrar el doc
+//            padre los hijos quedan en raíz, no se pierden. Decisión
+//            paralela a Goal.parentId (ver D-OKR-*).
+//   D-DOC-4: Se versiona en cada `updateDoc` (no debouncing en BD). El
+//            cliente debounce 1s antes de llamar la action; aún así, dos
+//            saves rápidos generan dos versions. La página de versiones
+//            permite collapsar duplicados visualmente si es ruido.
+//   D-DOC-5: `position Float` para reordering dentro del mismo nivel
+//            (fractional indexing como en Task / KeyResult).
+// ─────────────────────────────────────────────────────────────
+
+model Doc {
+  id      String @id @default(uuid())
+  title   String
+  // Markdown crudo. Validado en server action: ≤ 200 KB.
+  content String @db.Text
+
+  // Tree jerárquico — null ⇒ doc raíz.
+  parentId String?
+  parent   Doc?    @relation("DocHierarchy", fields: [parentId], references: [id], onDelete: SetNull)
+  children Doc[]   @relation("DocHierarchy")
+  // Orden visual dentro del mismo nivel (fractional indexing).
+  position Float   @default(1)
+
+  // Vinculación opcional a Project / Task. SetNull preserva histórico.
+  projectId String?
+  project   Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  taskId    String?
+  task      Task?    @relation(fields: [taskId], references: [id], onDelete: SetNull)
+
+  // Metadata de autoría. `authorId` = creador original (no se cambia).
+  // `lastEditorId` = último que pasó por updateDoc (puede ser null si
+  // todavía no se ha editado tras crear).
+  authorId     String
+  author       User    @relation("DocAuthor", fields: [authorId], references: [id])
+  lastEditorId String?
+  lastEditor   User?   @relation("DocLastEditor", fields: [lastEditorId], references: [id])
+
+  // Soft-archive (D-DOC-2) y publicación pública (futuro: shared link sin
+  // sesión; en MVP `isPublic` queda como flag UI sin gating real).
+  isArchived Boolean @default(false)
+  isPublic   Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  versions DocVersion[]
+
+  @@index([parentId, position])
+  @@index([projectId])
+  @@index([taskId])
+  @@index([isArchived])
+}
+
+model DocVersion {
+  id String @id @default(uuid())
+
+  docId String
+  doc   Doc    @relation(fields: [docId], references: [id], onDelete: Cascade)
+
+  // Snapshot del contenido al momento de la versión.
+  content String @db.Text
+
+  authorId String
+  author   User   @relation(fields: [authorId], references: [id])
+
+  // Etiqueta opcional capturada en la UI ("antes de revisión técnica",
+  // "post-feedback Edwin", …).
+  changeNote String?
+
+  createdAt DateTime @default(now())
+
+  @@index([docId, createdAt(sort: Desc)])
 }
