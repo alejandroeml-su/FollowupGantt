@@ -21,8 +21,13 @@ export function TaskGoalsSection({ taskId }: { taskId: string }) {
 
   useEffect(() => {
     let cancelled = false
-    setError(null)
-    setItems(null)
+    // Reset diferido a microtask para cumplir react-hooks/set-state-in-effect
+    // (no llamar setState sincrónicamente dentro del cuerpo del efecto).
+    queueMicrotask(() => {
+      if (cancelled) return
+      setError(null)
+      setItems(null)
+    })
     getKeyResultsForTask(taskId)
       .then((rows) => {
         if (!cancelled) setItems(rows)

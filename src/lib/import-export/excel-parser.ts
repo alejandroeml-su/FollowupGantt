@@ -31,49 +31,31 @@ import {
   type ImportError,
   type ImportWarning,
 } from './MAPPING'
+import type {
+  DepType2L,
+  ExcelDepRow,
+  ExcelResourceRow,
+  ExcelTaskRow,
+  ParsedExcel,
+  Priority,
+} from './types'
 
 // ───────────────────────── Tipos públicos ─────────────────────────
+//
+// Los tipos viven en `./types.ts` (archivo puro, sin runtime ni
+// dependencias de servidor) y se re-exportan desde aquí para mantener
+// compatibilidad con consumers que hacían
+// `import type { ExcelTaskRow } from '@/lib/import-export/excel-parser'`.
+// Para imports nuevos, prefiere `'@/lib/import-export/types'` —
+// evita arrastrar `exceljs`/`zod` al grafo del cliente.
 
-export type Priority = 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL'
-export type DepType2L = 'FS' | 'SS' | 'FF' | 'SF'
-
-export interface ExcelTaskRow {
-  mnemonic: string
-  title: string
-  parent_mnemonic: string | null
-  start_date: Date
-  end_date: Date
-  duration_days: number | null
-  is_milestone: boolean
-  progress: number
-  priority: Priority
-  assignee_email: string | null
-  tags: string
-  description: string | null
-  /** Fila Excel 1-based (incluye header). Útil para ubicar errores. */
-  rowIndex: number
-}
-
-export interface ExcelDepRow {
-  predecessor_mnemonic: string
-  successor_mnemonic: string
-  type: DepType2L
-  lag_days: number
-  rowIndex: number
-}
-
-export interface ExcelResourceRow {
-  email: string
-  name: string
-  role: string
-  rowIndex: number
-}
-
-export interface ParsedExcel {
-  tasks: ExcelTaskRow[]
-  deps: ExcelDepRow[]
-  resources: ExcelResourceRow[]
-  warnings: ImportWarning[]
+export type {
+  DepType2L,
+  ExcelDepRow,
+  ExcelResourceRow,
+  ExcelTaskRow,
+  ParsedExcel,
+  Priority,
 }
 
 // ───────────────────────── Coerción de celdas (D20) ─────────────────────────

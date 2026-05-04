@@ -95,6 +95,14 @@ type Props = {
   baselineCountByProject?: Record<string, number>
   /** HU-3.2 — listado descriptivo de líneas base por proyecto, para el selector. */
   baselinesByProject?: Record<string, BaselineOption[]>
+  /**
+   * P4-3 — fallback opcional para viewports `<sm` (mobile). Si se pasa y
+   * el viewport actual es <768 px (matchMedia) renderizamos este nodo
+   * en lugar del timeline. Defensa en profundidad: la página
+   * `/gantt/page.tsx` ya hace el split por Tailwind (`md:hidden` /
+   * `hidden md:block`). Útil para vistas embebidas (ej. dashboards).
+   */
+  mobileFallback?: React.ReactNode
 }
 
 const DAY_WIDTH = 40 // px por día — balance legibilidad / densidad
@@ -139,7 +147,29 @@ function parseActionError(err: unknown): { code: string; detail: string } {
   return m ? { code: m[1], detail: m[2] } : { code: 'UNKNOWN', detail: msg }
 }
 
-export function GanttBoardClient({
+export function GanttBoardClient(props: Props) {
+  // P4-3 — Si hay `mobileFallback` y el viewport es <768 px renderizamos
+  // la versión lista en lugar del timeline. `useState` + `useEffect` con
+  // matchMedia para evitar flash en SSR (default `false` = desktop-first).
+  // Hook montado antes del early-return para respetar rules-of-hooks.
+  const [isMobile, setIsMobile] = useState(false)
+  useEffect(() => {
+    if (typeof window === 'undefined' || !props.mobileFallback) return
+    const mql = window.matchMedia('(max-width: 767px)')
+    const onChange = () => setIsMobile(mql.matches)
+    onChange()
+    mql.addEventListener('change', onChange)
+    return () => mql.removeEventListener('change', onChange)
+  }, [props.mobileFallback])
+
+  if (props.mobileFallback && isMobile) {
+    return <>{props.mobileFallback}</>
+  }
+
+  return <GanttBoardClientImpl {...props} />
+}
+
+function GanttBoardClientImpl({
   tasks,
   rangeStart,
   rangeDays,
@@ -763,6 +793,11 @@ export function GanttBoardClient({
       <div
         data-testid="gantt-board"
         className="flex-1 min-w-0 rounded-xl border border-border bg-subtle/80 shadow-sm"
+        // P4-3 · Permitir pinch-to-zoom nativo en mobile/tablet sin
+        // interferir con el scroll horizontal. `manipulation` desactiva
+        // el double-tap-to-zoom (que retrasa los taps 300 ms) y
+        // `pinch-zoom` deja que el navegador escale el contenido.
+        style={{ touchAction: 'pan-x pan-y pinch-zoom' }}
       >
         {/* Header: etiquetas de nombre + escala de días */}
         <div className="flex border-b border-border">

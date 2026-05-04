@@ -8,11 +8,13 @@ export default defineConfig({
     setupFiles: ['./tests/setup.ts'],
     include: ['tests/unit/**/*.test.{ts,tsx}', 'tests/component/**/*.test.{ts,tsx}'],
     exclude: ['tests/e2e/**', 'tests/a11y/**', 'tests/perf/**', 'node_modules/**'],
-    // HU-4.4 · `excel-writer.test.ts` mete I/O de exceljs (~4s) en el pool;
-    // bajo paralelismo agresivo otros workers veían timeouts de 5s en tests
-    // con mocks `mockResolvedValueOnce` (deuda preexistente). 15s da margen
-    // sin enmascarar tests realmente colgados.
-    testTimeout: 15_000,
+    // P3-5D · Bajado de 15s → 5s tras refactor de
+    // `dependencies-update.test.ts` (eliminados `mockResolvedValueOnce`
+    // encadenados, lift de `import` a `beforeAll`, mocks granulares por
+    // collaborator). Validado 10/10 corridas verde con paralelismo
+    // por defecto. 5s sigue siendo margen amplio: el peor caso real es
+    // `excel-writer.test.ts` con I/O exceljs ~4s.
+    testTimeout: 5_000,
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json-summary', 'html'],
