@@ -14,6 +14,9 @@ import { exportElementsToPng, downloadDataUrl } from '@/lib/whiteboards/export-p
 import type { WhiteboardElement } from '@/lib/whiteboards/types'
 import { WhiteboardCanvas } from './WhiteboardCanvas'
 import { WhiteboardToolbar, type ToolId, toolToElementType } from './WhiteboardToolbar'
+import { usePresence } from '@/lib/realtime/use-presence'
+import PresenceAvatars from '@/components/realtime/PresenceAvatars'
+import type { CurrentUserPresence } from '@/lib/auth/get-current-user-presence'
 
 type Props = {
   whiteboard: {
@@ -23,12 +26,31 @@ type Props = {
     projectName: string | null
   }
   initialElements: WhiteboardElement[]
+  /**
+   * Wave P6 · Equipo B1 — Identidad mínima para presence/cursors. Llega
+   * drilled desde el RSC `app/whiteboards/[id]/page.tsx`. Si es `null`
+   * (visitante anónimo o env vars Supabase ausentes), el wiring de
+   * presence se desactiva graceful.
+   */
+  currentUser?: CurrentUserPresence | null
 }
 
 const AUTOSAVE_DEBOUNCE_MS = 500
 
-export function WhiteboardEditor({ whiteboard, initialElements }: Props) {
+export function WhiteboardEditor({ whiteboard, initialElements, currentUser }: Props) {
   const [elements, setElements] = useState<WhiteboardElement[]>(initialElements)
+  // Wave P6 · Equipo B1 — Presence wiring. Si no hay sesión, pasamos
+  // identity null y `usePresence` queda en no-op (lista vacía).
+  const presence = usePresence(
+    currentUser ? `whiteboard:${whiteboard.id}` : null,
+    currentUser
+      ? {
+          userId: currentUser.userId,
+          name: currentUser.name,
+          avatarUrl: currentUser.avatarUrl,
+        }
+      : null,
+  )
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [activeTool, setActiveTool] = useState<ToolId | null>(null)
   const [snapEnabled, setSnapEnabled] = useState(true)
@@ -203,7 +225,7 @@ export function WhiteboardEditor({ whiteboard, initialElements }: Props) {
         <SaveIndicator state={savingState} />
       </header>
 
-      <div className="flex items-center justify-center border-b border-border bg-subtle/30 px-4 py-2">
+      <div className="flex items-center justify-center gap-4 border-b border-border bg-subtle/30 px-4 py-2">
         <WhiteboardToolbar
           activeTool={activeTool}
           onSelectTool={setActiveTool}
@@ -211,6 +233,15 @@ export function WhiteboardEditor({ whiteboard, initialElements }: Props) {
           onToggleSnap={setSnapEnabled}
           onExportPng={handleExportPng}
         />
+        {/* Wave P6 · Equipo B1 — Presencia en vivo (avatares solapados). */}
+        {presence.users.length > 0 ? (
+          <div
+            className="flex items-center"
+            data-testid="whiteboard-toolbar-presence"
+          >
+            <PresenceAvatars users={presence.users} max={5} />
+          </div>
+        ) : null}
       </div>
 
       <div className="relative flex-1 overflow-hidden">

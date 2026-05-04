@@ -3,6 +3,7 @@ import { getWhiteboardById } from '@/lib/actions/whiteboards'
 import { WhiteboardEditor } from '@/components/whiteboards/WhiteboardEditor'
 import prisma from '@/lib/prisma'
 import type { WhiteboardElement } from '@/lib/whiteboards/types'
+import { getCurrentUserPresence } from '@/lib/auth/get-current-user-presence'
 
 export const dynamic = 'force-dynamic'
 
@@ -49,6 +50,10 @@ export default async function WhiteboardEditorPage({ params }: PageProps) {
     data: el.data as WhiteboardElement['data'],
   }))
 
+  // Wave P6 · Equipo B1 — Carga la identidad del usuario en server para
+  // pasarla al editor (presence/cursors). `null` = no hay sesión.
+  const currentUser = await getCurrentUserPresence()
+
   return (
     <WhiteboardEditor
       whiteboard={{
@@ -58,6 +63,7 @@ export default async function WhiteboardEditorPage({ params }: PageProps) {
         projectName,
       }}
       initialElements={initialElements}
+      currentUser={currentUser}
     />
   )
 }
