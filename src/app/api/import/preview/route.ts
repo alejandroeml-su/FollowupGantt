@@ -21,9 +21,11 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-import { buildImportPreview } from '@/lib/actions/import-export'
-import { buildMspImportPreview } from '@/lib/actions/import-export-msp'
 import { FILE_SIZE_LIMIT_BYTES, FILE_SIZE_LIMIT_MB } from '@/lib/import-export/MAPPING'
+
+// Imports dinámicos de las server actions: evita que Turbopack las resuelva
+// durante page-data collection del build (regression Next 16 que causaba
+// "Failed to collect page data for /api/import/preview" en Vercel).
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -102,6 +104,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   const buffer = Buffer.from(arrayBuffer)
 
   if (isXlsx) {
+    const { buildImportPreview } = await import('@/lib/actions/import-export')
     const preview = await buildImportPreview({
       buffer,
       projectId,
@@ -117,6 +120,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   }
 
   if (isXml) {
+    const { buildMspImportPreview } = await import('@/lib/actions/import-export-msp')
     const preview = await buildMspImportPreview({ buffer, projectId })
     if (preview.ok) {
       return NextResponse.json(
