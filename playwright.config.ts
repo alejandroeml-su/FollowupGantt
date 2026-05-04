@@ -6,7 +6,11 @@ const BASE_URL = process.env.BASE_URL ?? `http://localhost:${PORT}`
 export default defineConfig({
   testDir: './tests',
   testIgnore: ['**/unit/**', '**/component/**', '**/features/**', '**/perf/**'],
-  timeout: 30_000,
+  // P3-4 (C3 expansion): subimos el timeout por test a 45s para cubrir specs
+  // que combinan seed Prisma + navegación + acciones server (workspaces,
+  // audit, leveling). Local dev a 30s causaba flake intermitente cuando la
+  // primera build de Next.js ocurría dentro del primer test.
+  timeout: 45_000,
   expect: { timeout: 5_000 },
   retries: process.env.CI ? 2 : 0,
   // Sprint 6.5: los specs `dependency-creation` y `dependency-editor` mutan
