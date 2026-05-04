@@ -103,6 +103,19 @@ export function proxy(req: NextRequest) {
 
   const hasCookie = req.cookies.get(SESSION_COOKIE_NAME)?.value
   if (!hasCookie) {
+    // E2E_BYPASS_AUTH (P3-4): permite que los specs Playwright carguen
+    // rutas protegidas sin cookie real. Solo se honra cuando
+    // NODE_ENV !== 'production' como defensa-en-profundidad — si la env
+    // var se cuela en Vercel prod no abre la puerta. Las páginas y
+    // server actions siguen llamando `getCurrentUser()`, así que el
+    // bypass solo evita el redirect a /login (las pages que necesiten
+    // un user real seguirán necesitando un seed con `seedAuthUser`).
+    if (
+      process.env.E2E_BYPASS_AUTH === 'true' &&
+      process.env.NODE_ENV !== 'production'
+    ) {
+      return passThrough()
+    }
     const loginUrl = new URL('/login', req.nextUrl)
     // `next` para volver a la página tras login.
     loginUrl.searchParams.set('next', path)
