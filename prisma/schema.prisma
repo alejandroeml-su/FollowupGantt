@@ -180,6 +180,13 @@ model User {
   // Goal.
   ownedGoals Goal[] @relation("GoalOwner")
 
+  // Ola P3 · Equipo P3-2 · Audit Log centralizado.
+  // Eventos de auditoría donde este usuario figura como `actor`. La relación
+  // es onDelete: SetNull en `AuditEvent.actor` para conservar el log aún
+  // cuando el usuario sea borrado (compliance ITIL/SOC2: el evento debe
+  // sobrevivir al actor que lo originó).
+  auditEvents AuditEvent[] @relation("AuditEventActor")
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
@@ -1146,6 +1153,75 @@ model KeyResult {
   updatedAt DateTime @updatedAt
 
   @@index([goalId, position])
+}
+
+// ─────────────────────────────────────────────────────────────
+// Módulo Audit Log (Ola P3 · Equipo P3-2)
+//
+// Registro centralizado de eventos críticos del sistema (cambios de tareas,
+// dependencias, baselines, proyectos, accesos de usuario, imports/exports,
+// permisos…). Pieza obligatoria para compliance ITIL (gestión de cambios)
+// y SOC2 (auditoría de accesos y modificaciones).
+//
+// Decisiones de diseño:
+//   - `action` es un `String` (no enum) para permitir extender el catálogo
+//     sin migración de schema. La validación se hace en zod (capa app).
+//   - `before` / `after` son `Json?` para guardar snapshots ligeros pre/post
+//     cambio. Los callers deben recortar campos sensibles (passwords, tokens)
+//     antes de pasarlos al helper.
+//   - `actorId` es nullable: hay eventos que ocurren sin actor identificable
+//     (cron jobs, system events, login fallido). La relación inversa usa
+//     `onDelete: SetNull` para preservar el log aún si se borra el usuario.
+//   - Sin `updatedAt`: los eventos son inmutables una vez creados (append-only).
+//   - Retention: 90 días por default. La limpieza se ejecuta vía
+//     `purgeOldAuditEvents` (server action manual; en una fase futura
+//     se moverá a cron job).
+// ─────────────────────────────────────────────────────────────
+
+model AuditEvent {
+  id String @id @default(uuid())
+
+  // Actor que originó el evento. Nullable para system events / login fallido.
+  // SetNull para conservar el evento si el usuario es eliminado (compliance).
+  actorId String?
+  actor   User?   @relation("AuditEventActor", fields: [actorId], references: [id], onDelete: SetNull)
+
+  // Verb namespaced del evento (ej. "task.created", "user.login",
+  // "permission.granted"). Validado vs catálogo `KNOWN_AUDIT_ACTIONS` en
+  // capa app — no se restringe a enum para permitir extensión sin migración.
+  action String
+
+  // Tipo y id de la entidad afectada. `entityType` ∈ {task, project, user,
+  // dependency, baseline, permission, import, export, …}. `entityId` es
+  // nullable porque algunos eventos son globales (login, export sin id).
+  entityType String
+  entityId   String?
+
+  // Snapshots pre/post mutación. JSON nullable: si la acción es de creación
+  // sólo aplica `after`; si es delete sólo `before`. Los callers son
+  // responsables de excluir campos sensibles antes de loguear.
+  before Json?
+  after  Json?
+
+  // Contexto de red para forensics. Capturados desde headers de la request
+  // (x-forwarded-for, user-agent) por el wrapper `withAudit`. Pueden quedar
+  // null si el evento se dispara desde un job interno.
+  ipAddress String?
+  userAgent String?
+
+  // Metadata libre opcional (ej. razón del cambio, traceId). No reemplaza
+  // before/after — sirve para campos que no encajan en el snapshot.
+  metadata Json?
+
+  createdAt DateTime @default(now())
+
+  // Índices: consultas típicas son "eventos de un actor" (filtro UI),
+  // "eventos sobre una entidad" (drill-down forensic) y orden temporal
+  // global desc. createdAt sort:Desc acelera el listado paginado.
+  @@index([actorId, createdAt(sort: Desc)])
+  @@index([entityType, entityId, createdAt(sort: Desc)])
+  @@index([action, createdAt(sort: Desc)])
+  @@index([createdAt(sort: Desc)])
 }
 
 // ─────────────────────────────────────────────────────────────
