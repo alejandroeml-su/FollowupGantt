@@ -15,7 +15,7 @@
 
 import { useState, type FormEvent } from 'react'
 import type { FormField } from '@/lib/forms/schema'
-import { FORM_HONEYPOT_FIELD } from '@/lib/actions/forms'
+import { HONEYPOT_FIELD_NAME as FORM_HONEYPOT_FIELD } from '@/lib/forms/rate-limit'
 
 interface Props {
   slug: string
