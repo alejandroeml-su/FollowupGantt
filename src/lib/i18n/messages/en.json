@@ -1,0 +1,236 @@
+{
+  "common": {
+    "appName": "Avante Orq PRO",
+    "loading": "Loading...",
+    "saving": "Saving...",
+    "search": "Search",
+    "filter": "Filter",
+    "filters": "Filters",
+    "all": "All",
+    "none": "None",
+    "yes": "Yes",
+    "no": "No",
+    "actions": "Actions",
+    "more": "More",
+    "close": "Close",
+    "back": "Back",
+    "next": "Next",
+    "previous": "Previous",
+    "edit": "Edit",
+    "view": "View",
+    "details": "Details",
+    "settings": "Settings",
+    "language": "Language",
+    "theme": "Theme",
+    "logout": "Sign out",
+    "login": "Sign in",
+    "user": "User",
+    "name": "Name",
+    "email": "Email",
+    "password": "Password",
+    "description": "Description",
+    "status": "Status",
+    "priority": "Priority",
+    "type": "Type",
+    "assignee": "Assignee",
+    "unassigned": "Unassigned",
+    "from": "From",
+    "to": "To",
+    "today": "Today",
+    "yesterday": "Yesterday",
+    "tomorrow": "Tomorrow",
+    "required": "Required",
+    "optional": "Optional",
+    "noResults": "No results",
+    "empty": "Empty",
+    "expand": "Expand",
+    "collapse": "Collapse"
+  },
+  "buttons": {
+    "save": "Save",
+    "cancel": "Cancel",
+    "delete": "Delete",
+    "create": "Create",
+    "add": "Add",
+    "remove": "Remove",
+    "import": "Import",
+    "export": "Export",
+    "duplicate": "Duplicate",
+    "apply": "Apply",
+    "reset": "Reset",
+    "clear": "Clear",
+    "confirm": "Confirm",
+    "submit": "Submit",
+    "send": "Send",
+    "update": "Update",
+    "rename": "Rename",
+    "archive": "Archive",
+    "restore": "Restore",
+    "publish": "Publish",
+    "unpublish": "Unpublish",
+    "open": "Open",
+    "selectAll": "Select all",
+    "deselectAll": "Deselect all"
+  },
+  "sidebar": {
+    "title": "Hybrid Orchestration",
+    "themeLabel": "Theme",
+    "dashboard": "Dashboard",
+    "brain": "Avante Brain AI",
+    "groups": {
+      "views": "Views",
+      "management": "Management",
+      "agile": "Agile",
+      "strategy": "Strategy",
+      "settings": "Settings"
+    },
+    "items": {
+      "list": "List",
+      "kanban": "Kanban",
+      "gantt": "Gantt",
+      "table": "Table",
+      "mindmaps": "Mind Maps",
+      "docs": "Docs & Wiki",
+      "forms": "Forms",
+      "automations": "Automations",
+      "kpiDashboards": "KPI Dashboards",
+      "projectKpis": "Project KPIs",
+      "timesheets": "Timesheet",
+      "sprints": "Sprints",
+      "goals": "Goals",
+      "rolesPermissions": "Roles & Permissions",
+      "teams": "Teams",
+      "gerencias": "Departments",
+      "projects": "Projects",
+      "users": "Users",
+      "calendars": "Working calendars",
+      "workload": "Workload",
+      "audit": "Audit log",
+      "apiTokens": "API tokens",
+      "webhooks": "Webhooks",
+      "templates": "Templates"
+    },
+    "menuClose": "Close menu",
+    "menuExpand": "Expand menu",
+    "menuCollapse": "Collapse menu"
+  },
+  "userMenu": {
+    "logout": "Sign out",
+    "language": "Language",
+    "languageSpanish": "Spanish",
+    "languageEnglish": "English",
+    "switchLanguage": "Switch language"
+  },
+  "task": {
+    "form": {
+      "title": "Title",
+      "description": "Description",
+      "status": "Status",
+      "priority": "Priority",
+      "type": "Type",
+      "assignee": "Assignee",
+      "startDate": "Start date",
+      "endDate": "End date",
+      "estimate": "Estimate",
+      "tags": "Tags",
+      "project": "Project",
+      "parent": "Parent task",
+      "dependencies": "Dependencies",
+      "notes": "Notes"
+    },
+    "status": {
+      "todo": "To do",
+      "inProgress": "In progress",
+      "review": "Review",
+      "done": "Done"
+    },
+    "priority": {
+      "low": "Low",
+      "medium": "Medium",
+      "high": "High",
+      "critical": "Critical"
+    },
+    "type": {
+      "agileStory": "Agile Story",
+      "pmiTask": "PMI Task",
+      "itilTicket": "ITIL Ticket"
+    }
+  },
+  "filters": {
+    "title": "Filters",
+    "gerencia": "Department",
+    "area": "Area",
+    "project": "Project",
+    "status": "Status",
+    "type": "Type",
+    "priority": "Priority",
+    "assignee": "Assignee",
+    "unassigned": "Unassigned",
+    "dateFrom": "From",
+    "dateTo": "To",
+    "criticalOnly": "Critical path only",
+    "showingCritical": "Showing critical path",
+    "criticalOnlyAriaPressed": "Showing only the critical path. Click to show all tasks.",
+    "criticalOnlyAriaUnpressed": "Show only tasks on the critical path.",
+    "clearWithCount": "Clear ({count})"
+  },
+  "pages": {
+    "dashboard": {
+      "title": "Dashboard",
+      "subtitle": "Overall summary of your work",
+      "activeProjects": "Active projects",
+      "totalTasks": "Total tasks",
+      "environment": "Environment"
+    },
+    "gantt": {
+      "title": "Gantt",
+      "subtitle": "Project timeline"
+    },
+    "sprints": {
+      "title": "Sprints",
+      "subtitle": "Agile cycles and velocity"
+    },
+    "goals": {
+      "title": "Goals",
+      "subtitle": "Goals and key results (OKRs)"
+    },
+    "templates": {
+      "title": "Templates",
+      "subtitle": "Reusable templates"
+    },
+    "workload": {
+      "title": "Workload",
+      "subtitle": "Team capacity and allocation"
+    },
+    "audit": {
+      "title": "Audit log",
+      "subtitle": "System events log"
+    }
+  },
+  "toast": {
+    "saved": "Changes saved",
+    "created": "Created successfully",
+    "deleted": "Deleted successfully",
+    "updated": "Updated successfully",
+    "imported": "Import completed",
+    "exported": "Export completed",
+    "copied": "Copied to clipboard",
+    "errorGeneric": "Something went wrong",
+    "errorNetwork": "Network error",
+    "regionLabel": "Notifications",
+    "dismiss": "Dismiss"
+  },
+  "error": {
+    "unauthorized": "Session required. Sign in to continue.",
+    "forbidden": "You do not have permission to perform this action.",
+    "notFound": "The requested resource does not exist.",
+    "invalidInput": "Invalid input.",
+    "invalidCredentials": "Invalid credentials.",
+    "invalidSession": "Your session expired. Please sign in again.",
+    "conflict": "Conflict: the resource already exists or changed while editing.",
+    "rateLimited": "Too many requests. Try again later.",
+    "serverError": "Server error. Please try again.",
+    "networkError": "No connection. Check your network.",
+    "unknown": "Unknown error."
+  }
+}

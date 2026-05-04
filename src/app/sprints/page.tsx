@@ -25,6 +25,7 @@ import { computeVelocity } from '@/lib/agile/burndown'
 import SprintBoardClient from '@/components/sprints/SprintBoardClient'
 import SprintBacklog from '@/components/sprints/SprintBacklog'
 import VelocityChart from '@/components/sprints/VelocityChart'
+import { getServerT } from '@/lib/i18n/server'
 
 export const dynamic = 'force-dynamic'
 
@@ -42,11 +43,14 @@ async function pickActiveProjectId(): Promise<string | null> {
 }
 
 export default async function SprintsPage() {
+  const tt = await getServerT()
+  const shellTitle = tt('pages.sprints.title')
+  const shellSubtitle = tt('pages.sprints.subtitle')
   const projectId = await pickActiveProjectId()
 
   if (!projectId) {
     return (
-      <PageShell>
+      <PageShell title={shellTitle} subtitle={shellSubtitle}>
         <div className="rounded-lg border border-dashed border-border bg-card/30 p-8 text-sm text-muted-foreground">
           No hay proyectos activos. Crea uno desde <code>/projects</code> para
           empezar a planificar Sprints.
@@ -68,7 +72,7 @@ export default async function SprintsPage() {
   } catch {
     // Migración pendiente: la columna `capacity` aún no existe ⇒ fallback.
     return (
-      <PageShell>
+      <PageShell title={shellTitle} subtitle={shellSubtitle}>
         <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 p-6 text-sm text-amber-200">
           La migración de Sprints (capacity / storyPoints / velocityActual)
           aún no se ha aplicado. Ejecuta el SQL de
@@ -108,7 +112,7 @@ export default async function SprintsPage() {
   )
 
   return (
-    <PageShell>
+    <PageShell title={shellTitle} subtitle={shellSubtitle}>
       <div className="space-y-8">
         {/* ── Sprint activo ───────────────────────────── */}
         <section>
@@ -223,15 +227,21 @@ function SprintRow({
   )
 }
 
-function PageShell({ children }: { children: React.ReactNode }) {
+function PageShell({
+  children,
+  title,
+  subtitle,
+}: {
+  children: React.ReactNode
+  title: string
+  subtitle: string
+}) {
   return (
     <div className="flex h-full flex-col bg-background">
       <header className="flex h-16 shrink-0 items-center justify-between border-b border-border bg-subtle/50 px-8">
         <div>
-          <h1 className="text-xl font-semibold text-white">Sprints</h1>
-          <p className="mt-1 text-xs text-muted-foreground">
-            Velocity, Burndown y Puntos de historia para el proyecto activo.
-          </p>
+          <h1 className="text-xl font-semibold text-white">{title}</h1>
+          <p className="mt-1 text-xs text-muted-foreground">{subtitle}</p>
         </div>
       </header>
       <div className="flex-1 overflow-auto p-6">
@@ -240,3 +250,4 @@ function PageShell({ children }: { children: React.ReactNode }) {
     </div>
   )
 }
+

@@ -131,8 +131,15 @@ model User {
   password      String?
   emailVerified DateTime?
 
-  accounts Account[]
-  sessions Session[]
+  // ── Auth (P3) · 2FA TOTP opcional (RFC 6238) ─────────────────
+  // Secret base32 cifrado at-rest cuando se acuerde KMS; por ahora
+  // se guarda raw porque sólo super-admin lo activa y la BD ya está
+  // protegida con RLS + secret manager. NULL → 2FA deshabilitado.
+  twoFactorSecret String?
+
+  accounts            Account[]
+  sessions            Session[]
+  passwordResetTokens PasswordResetToken[]
 
   // Roles y Permisos
   roles UserRole[]
@@ -178,6 +185,13 @@ model User {
   apiTokens ApiToken[]
   webhooks  Webhook[]
 
+  // Ola P3 · Equipo P3-2 · Audit Log centralizado.
+  // Eventos de auditoría donde este usuario figura como `actor`. La relación
+  // es onDelete: SetNull en `AuditEvent.actor` para conservar el log aún
+  // cuando el usuario sea borrado (compliance ITIL/SOC2: el evento debe
+  // sobrevivir al actor que lo originó).
+  auditEvents AuditEvent[] @relation("AuditEventActor")
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
@@ -214,9 +228,36 @@ model Session {
   userId       String
   expires      DateTime
 
+  // ── Auth (P3) · Session management UI ────────────────────────
+  // Metadata para listar y revocar dispositivos activos. Capturada
+  // en el momento del login (oauth callback o credentials). Todos
+  // nullable para no romper sesiones legacy creadas en P1.
+  userAgent  String?
+  ipAddress  String?
+  lastSeenAt DateTime?
+  createdAt  DateTime  @default(now())
+
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
+}
+
+// ── Auth (P3) · Password reset flow ─────────────────────────────
+// Token hasheado (SHA-256 hex) con TTL 1h. Se hashea para que un
+// dump de BD no permita usar el token directamente — el correo
+// envía el token plano y aquí guardamos sólo el digest.
+model PasswordResetToken {
+  id        String    @id @default(uuid())
+  userId    String
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
 }
 
 model Role {
@@ -339,6 +380,12 @@ model Project {
   // Objetivos asociados al proyecto. `onDelete: SetNull` en Goal preserva
   // los OKRs históricos aunque se elimine el proyecto.
   goals Goal[]
+
+  // Ola P4 · Equipo P4-5 · Integraciones externas.
+  // Integraciones (Slack/Teams/GitHub) ancladas a este proyecto. `projectId`
+  // es opcional en `Integration`: las integraciones globales del workspace
+  // viven con `projectId = null` y aplican a todos los proyectos.
+  integrations Integration[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -514,6 +561,11 @@ model Task {
   // KRs (con metric=TASKS_COMPLETED) que esta tarea contribuye a alcanzar.
   // M:N a través de la tabla implícita "_KeyResultTasks".
   keyResults KeyResult[] @relation("KeyResultTasks")
+
+  // Ola P4 · Equipo P4-5 · Integraciones · GitHub.
+  // Vínculos de la tarea a issues/PRs externos en GitHub. Una tarea puede
+  // tener múltiples links (ej. issue de bug + PR que lo resuelve).
+  githubLinks TaskGitHubLink[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1186,4 +1238,156 @@ model Webhook {
 
   @@index([userId])
   @@index([active])
+}
+
+// ─────────────────────────────────────────────────────────────
+// Módulo Audit Log (Ola P3 · Equipo P3-2)
+//
+// Registro centralizado de eventos críticos del sistema (cambios de tareas,
+// dependencias, baselines, proyectos, accesos de usuario, imports/exports,
+// permisos…). Pieza obligatoria para compliance ITIL (gestión de cambios)
+// y SOC2 (auditoría de accesos y modificaciones).
+//
+// Decisiones de diseño:
+//   - `action` es un `String` (no enum) para permitir extender el catálogo
+//     sin migración de schema. La validación se hace en zod (capa app).
+//   - `before` / `after` son `Json?` para guardar snapshots ligeros pre/post
+//     cambio. Los callers deben recortar campos sensibles (passwords, tokens)
+//     antes de pasarlos al helper.
+//   - `actorId` es nullable: hay eventos que ocurren sin actor identificable
+//     (cron jobs, system events, login fallido). La relación inversa usa
+//     `onDelete: SetNull` para preservar el log aún si se borra el usuario.
+//   - Sin `updatedAt`: los eventos son inmutables una vez creados (append-only).
+//   - Retention: 90 días por default. La limpieza se ejecuta vía
+//     `purgeOldAuditEvents` (server action manual; en una fase futura
+//     se moverá a cron job).
+// ─────────────────────────────────────────────────────────────
+
+model AuditEvent {
+  id String @id @default(uuid())
+
+  // Actor que originó el evento. Nullable para system events / login fallido.
+  // SetNull para conservar el evento si el usuario es eliminado (compliance).
+  actorId String?
+  actor   User?   @relation("AuditEventActor", fields: [actorId], references: [id], onDelete: SetNull)
+
+  // Verb namespaced del evento (ej. "task.created", "user.login",
+  // "permission.granted"). Validado vs catálogo `KNOWN_AUDIT_ACTIONS` en
+  // capa app — no se restringe a enum para permitir extensión sin migración.
+  action String
+
+  // Tipo y id de la entidad afectada. `entityType` ∈ {task, project, user,
+  // dependency, baseline, permission, import, export, …}. `entityId` es
+  // nullable porque algunos eventos son globales (login, export sin id).
+  entityType String
+  entityId   String?
+
+  // Snapshots pre/post mutación. JSON nullable: si la acción es de creación
+  // sólo aplica `after`; si es delete sólo `before`. Los callers son
+  // responsables de excluir campos sensibles antes de loguear.
+  before Json?
+  after  Json?
+
+  // Contexto de red para forensics. Capturados desde headers de la request
+  // (x-forwarded-for, user-agent) por el wrapper `withAudit`. Pueden quedar
+  // null si el evento se dispara desde un job interno.
+  ipAddress String?
+  userAgent String?
+
+  // Metadata libre opcional (ej. razón del cambio, traceId). No reemplaza
+  // before/after — sirve para campos que no encajan en el snapshot.
+  metadata Json?
+
+  createdAt DateTime @default(now())
+
+  // Índices: consultas típicas son "eventos de un actor" (filtro UI),
+  // "eventos sobre una entidad" (drill-down forensic) y orden temporal
+  // global desc. createdAt sort:Desc acelera el listado paginado.
+  @@index([actorId, createdAt(sort: Desc)])
+  @@index([entityType, entityId, createdAt(sort: Desc)])
+  @@index([action, createdAt(sort: Desc)])
+  @@index([createdAt(sort: Desc)])
+}
+
+// ─────────────────────────────────────────────────────────────
+// Módulo Integraciones externas (Ola P4 · Equipo P4-5)
+//
+// Soporta tres tipos de integración:
+//   - SLACK : webhook outbound a un canal Slack (Block Kit).
+//   - TEAMS : webhook outbound a un canal MS Teams (Adaptive Card v1.4).
+//   - GITHUB: vincula tareas a issues/PRs (no webhooks inbound en P4).
+//
+// `config` es JSON libre validado en server action según el `type` (zod
+// dispatch). Para SLACK/TEAMS contiene `{ webhookUrl: string, channel? }`;
+// para GITHUB contiene `{ defaultRepo?: string, token? }` (token opcional
+// para futuras llamadas autenticadas — en P4 sólo guardamos referencia).
+//
+// `projectId` opcional: integraciones globales del workspace viven con
+// `projectId = null` y se disparan para todos los proyectos. Cuando hay
+// integración específica del proyecto, ésta se prefiere sobre la global.
+// ─────────────────────────────────────────────────────────────
+
+enum IntegrationType {
+  SLACK
+  TEAMS
+  GITHUB
+}
+
+model Integration {
+  id   String          @id @default(uuid())
+  type IntegrationType
+
+  // Etiqueta visible en la UI (ej. "Slack #devops", "Repo principal").
+  // Permite distinguir varias integraciones del mismo tipo.
+  name String
+
+  // Configuración por tipo. Validada en `validateIntegrationConfig` del
+  // server action. Mantener pequeño y sin secretos largos (tokens van
+  // cifrados en una iteración futura — P4 los guarda en claro asumiendo
+  // que el webhook URL ya es el secreto).
+  config Json
+
+  // Toggle global. Cuando `false` los dispatchers son no-op silencioso.
+  enabled Boolean @default(true)
+
+  // Anclaje opcional a proyecto. NULL = integración global del workspace.
+  projectId String?
+  project   Project? @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([type, enabled])
+  @@index([projectId])
+}
+
+// Vínculo de una `Task` a un issue/PR concreto de GitHub. No hay webhooks
+// inbound en P4 — esta tabla solo guarda la referencia para poder abrir el
+// issue desde el TaskDrawer. `repoFullName` es "owner/repo" (validado con
+// regex en server action). `issueNumber` es entero positivo; aplica tanto a
+// issues como a PRs (GitHub comparte el namespace numérico).
+model TaskGitHubLink {
+  id String @id @default(uuid())
+
+  taskId String
+  task   Task   @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  // "owner/repo" (ej. "alejandroeml-su/FollowupGantt").
+  repoFullName String
+
+  // Número del issue/PR (positivo). GitHub usa el mismo namespace para
+  // ambos, pero etiquetamos con `kind` para que la UI muestre el icono
+  // correcto sin tener que llamar a la API.
+  issueNumber Int
+
+  // "ISSUE" | "PR". String libre (no enum) para no requerir migración si
+  // GitHub introduce nuevos tipos. Validado vs un set conocido en zod.
+  kind String @default("ISSUE")
+
+  createdAt DateTime @default(now())
+
+  // Una tarea no puede vincular dos veces el mismo issue del mismo repo.
+  @@unique([taskId, repoFullName, issueNumber])
+  @@index([taskId])
+  @@index([repoFullName, issueNumber])
 }
