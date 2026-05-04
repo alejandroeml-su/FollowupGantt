@@ -24,6 +24,7 @@ import { z } from 'zod'
 import { revalidatePath, revalidateTag, unstable_cache } from 'next/cache'
 import { Prisma, type NotificationType } from '@prisma/client'
 import prisma from '@/lib/prisma'
+import { sendPushToUser, type WebPushPayload } from '@/lib/web-push/server'
 
 // ───────────────────────── Errores tipados ─────────────────────────
 
@@ -148,6 +149,65 @@ export async function invalidateNotificationsCache(
   revalidateTag(`notifications:${userId}`, 'max')
 }
 
+// ───────────────────────── Push side-effect helper ─────────────────────────
+
+/**
+ * Wave P6 · Equipo B2 — Tipos de notificación que disparan Web Push
+ * adicional al canal in-app. Curado a los tipos "alta-señal" donde el
+ * usuario espera enterarse en tiempo real (asignación, mención, hilo de
+ * comentarios, baseline). `DEPENDENCY_VIOLATION` y `IMPORT_COMPLETED`
+ * quedan FUERA: el primero suele venir en lotes (saturación), el segundo
+ * lo dispara el propio usuario (ruido).
+ */
+const PUSH_NOTIFICATION_TYPES: ReadonlyArray<NotificationType> = [
+  'MENTION',
+  'TASK_ASSIGNED',
+  'COMMENT_REPLY',
+  'BASELINE_CAPTURED',
+]
+
+/**
+ * Dispara `sendPushToUser` para una Notification recién creada. **No
+ * propaga errores**: el flujo principal (persistencia + revalidate cache)
+ * ya cumplió el SLA, el push es side-channel best-effort. Cualquier
+ * fallo (VAPID no configurado, endpoint 410 Gone, red caída) se loggea
+ * y se traga.
+ *
+ * El payload del push hereda title/body/link de la Notification. La URL
+ * se trunca a `link ?? undefined` — el SW del cliente la abre con
+ * `clients.openWindow(url)` cuando el usuario tappea la notificación.
+ */
+async function maybeSendPush(notification: {
+  id: string
+  userId: string
+  type: NotificationType
+  title: string
+  body: string | null
+  link: string | null
+}): Promise<void> {
+  if (!PUSH_NOTIFICATION_TYPES.includes(notification.type)) return
+
+  const payload: WebPushPayload = {
+    title: notification.title,
+    body: notification.body ?? undefined,
+    url: notification.link ?? undefined,
+    data: {
+      notificationId: notification.id,
+      type: notification.type,
+    },
+  }
+
+  try {
+    await sendPushToUser(notification.userId, payload)
+  } catch (err) {
+    // Best-effort: NO propagamos. La Notification ya quedó persistida.
+    console.error(
+      '[notifications] sendPushToUser falló — Notification ya persistida',
+      err,
+    )
+  }
+}
+
 // ───────────────────────── Auth fallback ─────────────────────────
 
 /**
@@ -214,6 +274,19 @@ export async function createNotification(
   })
 
   await invalidateNotificationsCache(data.userId)
+
+  // Wave P6 · B2 — Web Push opcional para tipos críticos. Best-effort:
+  // si VAPID no está configurado o el endpoint falla, NO rompemos el
+  // flujo (la Notification ya está persistida).
+  await maybeSendPush({
+    id: created.id,
+    userId: created.userId,
+    type: created.type,
+    title: created.title,
+    body: created.body,
+    link: created.link,
+  })
+
   return serialize(created)
 }
 
@@ -257,6 +330,24 @@ export async function createNotificationsBatch(
   // por userId — no por notificación.
   const uniqueUsers = new Set(valid.map((v) => v.userId))
   for (const uid of uniqueUsers) await invalidateNotificationsCache(uid)
+
+  // Wave P6 · B2 — Web Push para tipos críticos. Iteramos sobre las
+  // inputs ya validadas (no re-fetch desde DB: el push no necesita el
+  // id de Notification, solo userId + payload). Errores tragados por
+  // `maybeSendPush`. El uso de `Promise.allSettled` evita que un push
+  // caído por `IndexedSubscriptionExpired` aborte el resto del batch.
+  await Promise.allSettled(
+    valid.map((v) =>
+      maybeSendPush({
+        id: '',
+        userId: v.userId,
+        type: v.type as NotificationType,
+        title: v.title,
+        body: v.body ?? null,
+        link: v.link ?? null,
+      }),
+    ),
+  )
 
   return { count: result.count }
 }
