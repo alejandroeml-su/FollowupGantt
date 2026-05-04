@@ -122,7 +122,7 @@ export function TaskDrawerContent({
   // Lifecycle: al montar el drawer iniciamos editing; al desmontar liberamos.
   // `startEditing`/`stopEditing` son idempotentes — basta una vez por mount.
   useEffect(() => {
-    if (!resolvedCurrentUser) return
+    if (!resolvedLockUser) return
     lock.startEditing()
     return () => {
       lock.stopEditing()
@@ -130,7 +130,7 @@ export function TaskDrawerContent({
     // Sólo re-correr si cambia la tarea o el usuario; no depender del lock
     // entero para evitar suscripciones duplicadas con cada render.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [task.id, resolvedCurrentUser?.id])
+  }, [task.id, resolvedLockUser?.id])
 
   // Estado del ConflictDialog. La fuente de verdad es `lock.hasConflict`;
   // el `dismissConflict` del hook lo limpia. No usamos `useEffect→setState`

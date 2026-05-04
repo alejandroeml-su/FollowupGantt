@@ -78,23 +78,28 @@ export function DocEditor({
   const [error, setError] = useState<string | null>(null)
 
   // Wave P6 · B3 — Edit lock + conflict detection.
-  const resolvedCurrentUser = useMemo(() => currentUser ?? null, [currentUser])
+  // `useDocEditLock` espera EditingUser `{ id, name }`; `currentUser` entrega
+  // CurrentUserPresence `{ userId, name }`. Mapeamos.
+  const resolvedLockUser = useMemo(
+    () => (currentUser ? { id: currentUser.userId, name: currentUser.name } : null),
+    [currentUser],
+  )
   const lock = useDocEditLock({
     docId,
-    currentUser: resolvedCurrentUser,
+    currentUser: resolvedLockUser,
     currentVersion: initialUpdatedAt ?? null,
   })
 
   // Lifecycle: marcar editing en mount, liberar en unmount. El padre re-monta
   // el componente con key={docId}, así que cada doc abre su propio lock.
   useEffect(() => {
-    if (!resolvedCurrentUser) return
+    if (!resolvedLockUser) return
     lock.startEditing()
     return () => {
       lock.stopEditing()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [docId, resolvedCurrentUser?.id])
+  }, [docId, resolvedLockUser?.id])
 
   const handleResolveConflict = useCallback(
     (action: 'overwrite' | 'accept_remote' | 'cancel') => {

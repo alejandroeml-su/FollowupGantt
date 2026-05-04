@@ -71,16 +71,21 @@ export function WhiteboardEditor({
   const [savingState, setSavingState] = useState<'idle' | 'pending' | 'saving' | 'error'>('idle')
 
   // Wave P6 · B3 — Edit lock + conflict detection.
-  const resolvedCurrentUser = useMemo(() => currentUser ?? null, [currentUser])
+  // `useWhiteboardEditLock` espera EditingUser `{ id, name }`; `currentUser`
+  // entrega CurrentUserPresence `{ userId, name }`. Mapeamos.
+  const resolvedLockUser = useMemo(
+    () => (currentUser ? { id: currentUser.userId, name: currentUser.name } : null),
+    [currentUser],
+  )
   const lock = useWhiteboardEditLock({
     whiteboardId: whiteboard.id,
-    currentUser: resolvedCurrentUser,
+    currentUser: resolvedLockUser,
     currentVersion: whiteboard.updatedAt ?? null,
   })
 
   // Lifecycle: marcar editing al montar; liberar al desmontar.
   useEffect(() => {
-    if (!resolvedCurrentUser) return
+    if (!resolvedLockUser) return
     lock.startEditing()
     return () => {
       lock.stopEditing()
@@ -88,7 +93,7 @@ export function WhiteboardEditor({
     // Sólo dependemos del id de la entidad y del usuario. Re-suscribir el
     // lock por cada render rompería el heartbeat.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [whiteboard.id, resolvedCurrentUser?.id])
+  }, [whiteboard.id, resolvedLockUser?.id])
 
   // Resolución del conflicto: el editor autosalva por elemento. El caller
   // tiene tres salidas:
