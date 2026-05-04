@@ -23,6 +23,8 @@ import { TaskTimeTrackingSection } from '@/components/time-tracking/TaskTimeTrac
 import { TaskCustomFieldsSection } from '@/components/custom-fields/TaskCustomFieldsSection'
 import { TaskGoalsSection } from '@/components/goals/TaskGoalsSection'
 import { TaskDocsSection } from '@/components/docs/TaskDocsSection'
+import { TaskAuditHistorySection } from '@/components/tasks/TaskAuditHistorySection'
+import { TaskInsightsSection } from '@/components/tasks/TaskInsightsSection'
 
 type Props = {
   task: SerializedTask
@@ -99,6 +101,23 @@ export function TaskDrawerContent({ task, projects, users, allTasks = [] }: Prop
        */}
       <div className="border-t border-border bg-card/40 px-6 py-4">
         <TaskDocsSection taskId={task.id} />
+      </div>
+      {/*
+       * Equipo D2 — Auditoría: últimos eventos del entityType "task" para
+       * `task.id`. Collapsible (default cerrado), carga lazy on-open.
+       */}
+      <div className="border-t border-border bg-card/40 px-6 py-4">
+        <TaskAuditHistorySection taskId={task.id} limit={10} />
+      </div>
+      {/*
+       * Equipo D2 — Insights AI (Ola P5): muestra los `TaskInsight`
+       * activos. Permite descartar y recalcular (a nivel proyecto).
+       */}
+      <div className="border-t border-border bg-card/40 px-6 py-4">
+        <TaskInsightsSection
+          taskId={task.id}
+          projectId={task.projectId ?? null}
+        />
       </div>
     </div>
   )
