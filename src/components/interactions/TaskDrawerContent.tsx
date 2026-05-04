@@ -21,6 +21,7 @@ import {
 } from './task-form/TaskForm'
 import { TaskTimeTrackingSection } from '@/components/time-tracking/TaskTimeTrackingSection'
 import { TaskCustomFieldsSection } from '@/components/custom-fields/TaskCustomFieldsSection'
+import { TaskGoalsSection } from '@/components/goals/TaskGoalsSection'
 
 type Props = {
   task: SerializedTask
@@ -82,6 +83,14 @@ export function TaskDrawerContent({ task, projects, users, allTasks = [] }: Prop
           />
         </div>
       )}
+      {/*
+       * Ola P2 · Equipo P2-4 — Sección de OKRs. Lista los KRs vinculados
+       * a la tarea con el goal padre, ciclo y progreso. Read-only en MVP:
+       * los vínculos se gestionan desde /goals.
+       */}
+      <div className="border-t border-border bg-card/40 px-6 py-4">
+        <TaskGoalsSection taskId={task.id} />
+      </div>
     </div>
   )
 }
