@@ -122,11 +122,48 @@ enum WhiteboardElementType {
 //     currentValue / targetValue.
 //   - BOOLEAN: true/false (1 = done, 0 = pending).
 //   - TASKS_COMPLETED: progress derivado de tasks vinculadas.
+// Ola P4 · Equipo P4-1 — Multi-tenancy / Workspaces.
+// Plan comercial del Workspace: condiciona límites (proyectos, miembros)
+// que pueden añadirse en P4.x. En el MVP de tenancy guardamos sólo el
+// enum; los límites por plan se aplicarán en server actions cuando se
+// monetice el producto.
+enum WorkspacePlan {
+  FREE
+  PRO
+  ENTERPRISE
+}
+
+// Rol del miembro DENTRO del workspace (independiente del Role global
+// SUPER_ADMIN/ADMIN/AGENTE). Un usuario puede ser OWNER en su workspace
+// personal y MEMBER en el workspace corporativo.
+//   - OWNER  : único e inamovible — sólo se puede transferir.
+//   - ADMIN  : invita y elimina miembros, edita configuración del WS.
+//   - MEMBER : acceso al contenido del workspace, sin gestión de miembros.
+enum WorkspaceRole {
+  OWNER
+  ADMIN
+  MEMBER
+}
+
 enum KeyResultMetric {
   PERCENT
   NUMERIC
   BOOLEAN
   TASKS_COMPLETED
+}
+
+// Ola P5 · Equipo P5-4 · AI Insights heurísticos.
+// Tipos de insight generados sin LLM externo en este sprint:
+//   - CATEGORIZATION: sugerencia de TaskType + tags + assignee derivada
+//     de keywords/menciones del título/descripción.
+//   - DELAY_RISK:    score 0-1 derivado de progress vs tiempo elapsed,
+//     historial del assignee, tamaño y predecesoras pendientes.
+//   - NEXT_ACTION:   sugerencia accionable a nivel proyecto (ej. "X
+//     tareas en CP sin assignee").
+enum InsightKind {
+  CATEGORIZATION
+  DELAY_RISK
+  NEXT_ACTION
 }
 
 // ---------------------------------------------------------
@@ -197,6 +234,26 @@ model User {
   // Pizarras creadas por el usuario. `SetNull` en Whiteboard preserva el
   // tablero aunque se elimine el creador.
   createdWhiteboards Whiteboard[] @relation("WhiteboardCreator")
+
+  // Ola P4 · Equipo P4-1 — Multi-tenancy / Workspaces.
+  // Un usuario puede ser dueño de varios workspaces (ej. personal + del
+  // cliente A) y miembro de muchos. Las invitaciones que el usuario envía
+  // se guardan en `WorkspaceInvitation.invitedById` para auditoría.
+  ownedWorkspaces      Workspace[]            @relation("WorkspaceOwner")
+  workspaceMemberships WorkspaceMember[]
+  sentInvitations      WorkspaceInvitation[]  @relation("InvitationInviter")
+
+  // Ola P4 · Equipo P4-2 · API REST pública + Webhooks.
+  // Tokens y webhooks pertenecen al usuario que los creó; cascadean al borrar.
+  apiTokens ApiToken[]
+  webhooks  Webhook[]
+
+  // Ola P2 · Equipo P2-5 — Docs / Wikis. Un usuario puede ser autor original
+  // de un doc, último editor (último que pasó por `updateDoc`) y autor de
+  // versiones intermedias del histórico.
+  authoredDocs   Doc[]        @relation("DocAuthor")
+  lastEditedDocs Doc[]        @relation("DocLastEditor")
+  docVersions    DocVersion[]
 
   // Ola P3 · Equipo P3-2 · Audit Log centralizado.
   // Eventos de auditoría donde este usuario figura como `actor`. La relación
@@ -356,6 +413,13 @@ model Project {
   description String?
   status      ProjectStatus @default(PLANNING)
 
+  // Ola P4 · Equipo P4-1 — Multi-tenancy / Workspaces.
+  // Opcional inicial: las server actions usan `getDefaultWorkspaceForUser`
+  // para inferir el WS por defecto si no viene del cliente. En migración
+  // futura se promoverá a NOT NULL una vez backfilled todos los proyectos.
+  workspaceId String?
+  workspace   Workspace? @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
+
   // Área / Gerencia
   areaId String?
   area   Area?   @relation(fields: [areaId], references: [id])
@@ -399,6 +463,12 @@ model Project {
   // preserva la pizarra aunque se elimine el proyecto.
   whiteboards Whiteboard[]
 
+  // Ola P2 · Equipo P2-5 · Docs / Wikis.
+  // Documentos vinculados al proyecto. `SetNull` en Doc.projectId conserva
+  // el doc histórico aunque se elimine el proyecto (queda "huérfano" pero
+  // accesible).
+  docs Doc[]
+
   // Ola P4 · Equipo P4-5 · Integraciones externas.
   // Integraciones (Slack/Teams/GitHub) ancladas a este proyecto. `projectId`
   // es opcional en `Integration`: las integraciones globales del workspace
@@ -407,6 +477,8 @@ model Project {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@index([workspaceId])
 }
 
 // Fases del Proyecto (Waterfall / PMI)
@@ -448,10 +520,10 @@ model Sprint {
   project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
   // ── Agile metrics (Ola P2) ──────────────────────────────────────
-  capacity        Int?
-  startedAt       DateTime?
-  endedAt         DateTime?
-  velocityActual  Int?
+  capacity       Int?
+  startedAt      DateTime?
+  endedAt        DateTime?
+  velocityActual Int?
 
   tasks Task[]
 
@@ -579,6 +651,19 @@ model Task {
   // KRs (con metric=TASKS_COMPLETED) que esta tarea contribuye a alcanzar.
   // M:N a través de la tabla implícita "_KeyResultTasks".
   keyResults KeyResult[] @relation("KeyResultTasks")
+
+  // Ola P5 · Equipo P5-4 · AI Insights heurísticos.
+  // Histórico de sugerencias generadas para esta tarea (categorización,
+  // riesgo de retraso, etc.). Cascade al borrar la tarea para no dejar
+  // huérfanos. La acción `dismissInsight` es soft-delete (setea
+  // `dismissedAt`) y NO borra la fila — preservamos el rastro para
+  // afinar las heurísticas a futuro.
+  insights TaskInsight[]
+
+  // Ola P2 · Equipo P2-5 · Docs / Wikis.
+  // Documentos vinculados a esta tarea. `SetNull` en Doc.taskId preserva
+  // el doc al eliminar la tarea — mismo criterio que Project.docs.
+  docs Doc[]
 
   // Ola P4 · Equipo P4-5 · Integraciones · GitHub.
   // Vínculos de la tarea a issues/PRs externos en GitHub. Una tarea puede
@@ -1154,19 +1239,19 @@ model KeyResult {
   goalId String
   goal   Goal   @relation(fields: [goalId], references: [id], onDelete: Cascade)
 
-  title       String
-  metric      KeyResultMetric
+  title        String
+  metric       KeyResultMetric
   // Valor objetivo. Para PERCENT y TASKS_COMPLETED suele ser 100; para
   // NUMERIC depende de unit; para BOOLEAN es 1.
-  targetValue Float
+  targetValue  Float
   // Valor actual. Para TASKS_COMPLETED se recalcula automáticamente al
   // completar tareas vinculadas.
-  currentValue Float @default(0)
+  currentValue Float           @default(0)
   // Unidad opcional human-readable (USD, %, users…). Solo se muestra en
   // la UI; no afecta cálculo.
-  unit     String?
+  unit         String?
   // Orden visual del KR dentro del Goal (fractional indexing).
-  position Float   @default(1)
+  position     Float           @default(1)
 
   // Tasks vinculadas — solo relevante cuando `metric=TASKS_COMPLETED`. M:N
   // implícita ("_KeyResultTasks"). El recompute consulta status=DONE.
@@ -1251,6 +1336,299 @@ model WhiteboardElement {
   updatedAt DateTime @updatedAt
 
   @@index([whiteboardId, zIndex])
+}
+
+// ─────────────────────────────────────────────────────────────
+// Módulo AI Insights heurísticos (Ola P5 · Equipo P5-4)
+//
+// Persistencia de sugerencias generadas por heurísticas locales (sin
+// LLM externo en este sprint). Cada fila documenta:
+//   - `kind`: tipo de insight (categorización / riesgo / next-action).
+//   - `score`: confianza (categorización/next-action) o nivel de riesgo
+//      (delay) en el rango 0..1.
+//   - `payload`: detalle estructurado (suggestedType, factors[], etc.).
+//
+// Decisiones:
+//   D-AI-1: `taskId` es required + cascade. Para insights "global" del
+//           proyecto (NEXT_ACTION) usamos un task representativo (la
+//           primera task pendiente del proyecto) o creamos un sentinel.
+//           En la práctica el server action siempre tiene un taskId
+//           válido.
+//   D-AI-2: `dismissedAt` es soft-delete: la UI filtra sólo los activos
+//           pero conservamos el histórico para afinar las heurísticas.
+//   D-AI-3: índice `(taskId, kind, createdAt)` para la query típica
+//           "últimos insights por tarea agrupados por kind".
+// ─────────────────────────────────────────────────────────────
+
+model TaskInsight {
+  id          String      @id @default(uuid())
+  taskId      String
+  task        Task        @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  kind        InsightKind
+  // Score 0..1. Para CATEGORIZATION = confianza; DELAY_RISK = severidad;
+  // NEXT_ACTION = relevancia (mayor = más urgente).
+  score       Float
+  // Estructura libre validada por zod en el server action según `kind`.
+  payload     Json
+  // Soft-delete: la UI filtra `dismissedAt IS NULL`.
+  dismissedAt DateTime?
+  createdAt   DateTime    @default(now())
+
+  @@index([taskId, kind, createdAt(sort: Desc)])
+  @@index([kind, dismissedAt])
+}
+
+// ─────────────────────────────────────────────────────────────
+// Ola P4 · Equipo P4-1 — Multi-tenancy / Workspaces.
+//
+// Modelo:
+//   - Workspace             : organización lógica que agrupa Projects,
+//                             Goals, Templates, etc. Soporta plan comercial
+//                             (FREE/PRO/ENTERPRISE) y posee un OWNER.
+//   - WorkspaceMember       : tabla pivote M:N User ↔ Workspace con `role`
+//                             (OWNER/ADMIN/MEMBER). PK compuesta para
+//                             garantizar membresía única.
+//   - WorkspaceInvitation   : invitación por email con token aleatorio y
+//                             expiración. Una vez aceptada se elimina y se
+//                             crea el WorkspaceMember correspondiente.
+//
+// Estrategia de migración (P4 inicial):
+//   - `Project.workspaceId` opcional ahora; helper
+//     `getDefaultWorkspaceForUser(userId)` crea/devuelve un WS por defecto
+//     para usuarios legacy.
+//   - Las server actions filtran por `workspaceId` activo de la sesión vía
+//     cookie `x-active-workspace`.
+// ─────────────────────────────────────────────────────────────
+
+model Workspace {
+  id   String @id @default(uuid())
+  name String
+
+  // Slug URL-safe único globalmente. La validación (lowercase, sin espacios)
+  // vive en el server action `createWorkspace`. Se persiste en lower-case.
+  slug String @unique
+
+  plan WorkspacePlan @default(FREE)
+
+  // Owner único del workspace. Restrict para evitar borrar al dueño sin
+  // transferir antes la propiedad (handler explícito en server action).
+  ownerId String
+  owner   User   @relation("WorkspaceOwner", fields: [ownerId], references: [id])
+
+  members     WorkspaceMember[]
+  invitations WorkspaceInvitation[]
+  projects    Project[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([ownerId])
+}
+
+model WorkspaceMember {
+  workspaceId String
+  userId      String
+  role        WorkspaceRole @default(MEMBER)
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@id([workspaceId, userId])
+  @@index([userId])
+}
+
+model WorkspaceInvitation {
+  id          String        @id @default(uuid())
+  workspaceId String
+  workspace   Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  email     String
+  // Token aleatorio (base64url, 32 bytes) que el invitee abre desde
+  // `/invite/[token]`. Único globalmente para evitar colisiones cross-WS.
+  token     String        @unique
+  role      WorkspaceRole @default(MEMBER)
+  expiresAt DateTime
+
+  // Quien envió la invitación (auditoría). SetNull para conservar registro
+  // si el inviter es eliminado.
+  invitedById String?
+  invitedBy   User?   @relation("InvitationInviter", fields: [invitedById], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+
+  @@index([workspaceId])
+  @@index([email])
+}
+
+// ─────────────────────────────────────────────────────────────
+// Módulo API REST pública v1 + Webhooks (Ola P4 · Equipo P4-2)
+//
+// Permite que clientes externos (CI, scripts, integraciones) interactúen
+// con FollowupGantt vía HTTP estándar usando tokens portables. La
+// autenticación es Bearer-token sobre header Authorization; los scopes
+// (JSON array) gobiernan qué endpoints puede invocar cada token.
+//
+// Decisiones documentadas:
+//   D-API-1: El token se persiste HASHEADO (SHA-256) en `tokenHash`. El
+//            valor en claro solo se muestra una vez al crearlo. El prefix
+//            (`fg_xxxxxx…`) se guarda en `prefix` para mostrar listados.
+//   D-API-2: `scopes Json` = array de strings tipo `projects:read`,
+//            `tasks:write`, `webhooks:admin`. Ver `src/lib/api/scopes.ts`.
+//   D-API-3: `expiresAt` opcional — null = no expira. La expiración se
+//            verifica en cada request (no se usa cron de purga).
+//   D-API-4: Webhook.events es array de strings (`task.created`,
+//            `baseline.captured`, etc.). El dispatcher filtra hooks
+//            activos cuyo `events` contenga el eventType disparado.
+//   D-API-5: Firma HMAC SHA-256 sobre el body JSON, header
+//            `X-FollowupGantt-Signature: sha256=<hex>`. Receptor verifica
+//            con su `secret`.
+// ─────────────────────────────────────────────────────────────
+
+model ApiToken {
+  id          String    @id @default(uuid())
+  // Etiqueta human-readable elegida por el usuario (ej. "CI Vercel", "Script Edwin").
+  name        String
+  // Hash SHA-256 (hex) del token completo. NUNCA almacenamos el token claro.
+  tokenHash   String    @unique
+  // Primeros 12 chars del token (incluye prefijo `fg_`) para mostrar en lista
+  // sin exponer el resto. Visual hint para que el usuario reconozca cuál revocar.
+  prefix      String
+  // Array de scopes JSON: ["projects:read","tasks:write",…]. Validado contra
+  // `KNOWN_SCOPES` en `src/lib/api/scopes.ts`.
+  scopes      Json
+  // Owner del token. Cascade: si se elimina el usuario, sus tokens se purgan.
+  userId      String
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  // Opcional: null = no expira. Si está en el pasado el auth helper devuelve 401.
+  expiresAt   DateTime?
+  // Timestamp del último uso (set on auth-success). Útil para auditoría +
+  // detectar tokens dormidos. Best-effort: el update es fire-and-forget.
+  lastUsedAt  DateTime?
+  revokedAt   DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@index([revokedAt])
+}
+
+model Webhook {
+  id        String  @id @default(uuid())
+  // URL del receptor (https only se valida en server action). Hasta 2048 chars.
+  url       String
+  // Secret hex (≥32 chars). Lo usa el dispatcher como key del HMAC.
+  secret    String
+  // Array de eventTypes suscritos: ["task.created","baseline.captured",…].
+  events    Json
+  // Permite pausar el webhook sin borrarlo (preserva secret + url).
+  active    Boolean @default(true)
+  // Owner: cascade al borrar el usuario. (No project-scoped: los webhooks son
+  // globales por usuario; futura iteración puede agregar projectId nullable.)
+  userId    String
+  user      User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  // Estadísticas básicas para troubleshooting; el dispatcher las actualiza
+  // best-effort tras cada delivery.
+  lastDeliveryAt     DateTime?
+  lastDeliveryStatus Int?
+  failureCount       Int       @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@index([active])
+}
+
+// ─────────────────────────────────────────────────────────────
+// Módulo Docs / Wikis (Ola P2 · Equipo P2-5)
+//
+// Editor de documentos markdown con tree jerárquico (Doc.parentId), opcional-
+// mente vinculados a un Project o Task. Cada save crea una `DocVersion` para
+// permitir restaurar versiones anteriores ("time machine" de doc).
+//
+// Decisiones documentadas:
+//   D-DOC-1: `content` es markdown crudo en TEXT (sin parsing en BD). El
+//            render a HTML corre del lado cliente con regex propia
+//            (`renderMarkdown`) — evita instalar `marked`/`remark`.
+//   D-DOC-2: Soft-delete via `isArchived` en lugar de cascada destructiva.
+//            Permite "papelera" y restore. Hard-delete no se expone en MVP.
+//   D-DOC-3: `parentId` SetNull en lugar de Cascade — al borrar el doc
+//            padre los hijos quedan en raíz, no se pierden. Decisión
+//            paralela a Goal.parentId (ver D-OKR-*).
+//   D-DOC-4: Se versiona en cada `updateDoc` (no debouncing en BD). El
+//            cliente debounce 1s antes de llamar la action; aún así, dos
+//            saves rápidos generan dos versions. La página de versiones
+//            permite collapsar duplicados visualmente si es ruido.
+//   D-DOC-5: `position Float` para reordering dentro del mismo nivel
+//            (fractional indexing como en Task / KeyResult).
+// ─────────────────────────────────────────────────────────────
+
+model Doc {
+  id      String @id @default(uuid())
+  title   String
+  // Markdown crudo. Validado en server action: ≤ 200 KB.
+  content String @db.Text
+
+  // Tree jerárquico — null ⇒ doc raíz.
+  parentId String?
+  parent   Doc?    @relation("DocHierarchy", fields: [parentId], references: [id], onDelete: SetNull)
+  children Doc[]   @relation("DocHierarchy")
+  // Orden visual dentro del mismo nivel (fractional indexing).
+  position Float   @default(1)
+
+  // Vinculación opcional a Project / Task. SetNull preserva histórico.
+  projectId String?
+  project   Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  taskId    String?
+  task      Task?    @relation(fields: [taskId], references: [id], onDelete: SetNull)
+
+  // Metadata de autoría. `authorId` = creador original (no se cambia).
+  // `lastEditorId` = último que pasó por updateDoc (puede ser null si
+  // todavía no se ha editado tras crear).
+  authorId     String
+  author       User    @relation("DocAuthor", fields: [authorId], references: [id])
+  lastEditorId String?
+  lastEditor   User?   @relation("DocLastEditor", fields: [lastEditorId], references: [id])
+
+  // Soft-archive (D-DOC-2) y publicación pública (futuro: shared link sin
+  // sesión; en MVP `isPublic` queda como flag UI sin gating real).
+  isArchived Boolean @default(false)
+  isPublic   Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  versions DocVersion[]
+
+  @@index([parentId, position])
+  @@index([projectId])
+  @@index([taskId])
+  @@index([isArchived])
+}
+
+model DocVersion {
+  id String @id @default(uuid())
+
+  docId String
+  doc   Doc    @relation(fields: [docId], references: [id], onDelete: Cascade)
+
+  // Snapshot del contenido al momento de la versión.
+  content String @db.Text
+
+  authorId String
+  author   User   @relation(fields: [authorId], references: [id])
+
+  // Etiqueta opcional capturada en la UI ("antes de revisión técnica",
+  // "post-feedback Edwin", …).
+  changeNote String?
+
+  createdAt DateTime @default(now())
+
+  @@index([docId, createdAt(sort: Desc)])
 }
 
 // ─────────────────────────────────────────────────────────────
