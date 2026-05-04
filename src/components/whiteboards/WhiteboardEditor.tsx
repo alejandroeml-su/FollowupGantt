@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import { ArrowLeft, Save, Loader2 } from 'lucide-react'
 import {
@@ -14,6 +14,10 @@ import { exportElementsToPng, downloadDataUrl } from '@/lib/whiteboards/export-p
 import type { WhiteboardElement } from '@/lib/whiteboards/types'
 import { WhiteboardCanvas } from './WhiteboardCanvas'
 import { WhiteboardToolbar, type ToolId, toolToElementType } from './WhiteboardToolbar'
+import { SoftLockProvider } from '@/components/realtime-locks/SoftLockProvider'
+import { EditingByBanner } from '@/components/realtime-locks/EditingByBanner'
+import { ConflictDialog } from '@/components/realtime-locks/ConflictDialog'
+import { useWhiteboardEditLock } from '@/components/realtime-locks/useWhiteboardEditLock'
 
 type Props = {
   whiteboard: {
@@ -21,19 +25,73 @@ type Props = {
     title: string
     description: string | null
     projectName: string | null
+    /**
+     * ISO `updatedAt` del whiteboard top-level. Wave P6 · B3 lo usa para
+     * detectar conflictos via `useVersionCheck`. Opcional para no romper
+     * callers existentes; si falta, conflict detection queda inactivo.
+     */
+    updatedAt?: string | null
   }
   initialElements: WhiteboardElement[]
+  /**
+   * Identidad del usuario activo. Wave P6 · B3: opcional. Sin currentUser
+   * el editor renderiza igual pero sin presence ni conflict detection.
+   */
+  currentUser?: { id: string; name: string } | null
 }
 
 const AUTOSAVE_DEBOUNCE_MS = 500
 
-export function WhiteboardEditor({ whiteboard, initialElements }: Props) {
+export function WhiteboardEditor({
+  whiteboard,
+  initialElements,
+  currentUser,
+}: Props) {
   const [elements, setElements] = useState<WhiteboardElement[]>(initialElements)
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [activeTool, setActiveTool] = useState<ToolId | null>(null)
   const [snapEnabled, setSnapEnabled] = useState(true)
   const [panMode, setPanMode] = useState(false)
   const [savingState, setSavingState] = useState<'idle' | 'pending' | 'saving' | 'error'>('idle')
+
+  // Wave P6 · B3 — Edit lock + conflict detection.
+  const resolvedCurrentUser = useMemo(() => currentUser ?? null, [currentUser])
+  const lock = useWhiteboardEditLock({
+    whiteboardId: whiteboard.id,
+    currentUser: resolvedCurrentUser,
+    currentVersion: whiteboard.updatedAt ?? null,
+  })
+
+  // Lifecycle: marcar editing al montar; liberar al desmontar.
+  useEffect(() => {
+    if (!resolvedCurrentUser) return
+    lock.startEditing()
+    return () => {
+      lock.stopEditing()
+    }
+    // Sólo dependemos del id de la entidad y del usuario. Re-suscribir el
+    // lock por cada render rompería el heartbeat.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [whiteboard.id, resolvedCurrentUser?.id])
+
+  // Resolución del conflicto: el editor autosalva por elemento. El caller
+  // tiene tres salidas:
+  //   - 'overwrite': descartamos el flag; los próximos autosaves siguen
+  //     y la BD queda last-write-wins.
+  //   - 'accept_remote': recargamos la página para descartar cambios
+  //     locales y traer el estado remoto fresco.
+  //   - 'cancel': cierra el dialog; el flag persiste.
+  const handleResolveConflict = useCallback(
+    (action: 'overwrite' | 'accept_remote' | 'cancel') => {
+      if (action === 'overwrite') {
+        lock.dismissConflict()
+      } else if (action === 'accept_remote') {
+        lock.dismissConflict()
+        if (typeof window !== 'undefined') window.location.reload()
+      }
+    },
+    [lock],
+  )
 
   const pendingPatches = useRef<Map<string, { x?: number; y?: number; width?: number; height?: number }>>(
     new Map(),
@@ -203,27 +261,73 @@ export function WhiteboardEditor({ whiteboard, initialElements }: Props) {
         <SaveIndicator state={savingState} />
       </header>
 
-      <div className="flex items-center justify-center border-b border-border bg-subtle/30 px-4 py-2">
-        <WhiteboardToolbar
-          activeTool={activeTool}
-          onSelectTool={setActiveTool}
-          snapEnabled={snapEnabled}
-          onToggleSnap={setSnapEnabled}
-          onExportPng={handleExportPng}
+      {/* Wave P6 · B3 — banner de presencia. Sólo se muestra si hay otros
+          peers editando (el componente devuelve null en otro caso). */}
+      <div className="px-4 pt-2">
+        <EditingByBanner
+          editingUsers={lock.editingUsers}
+          isLockedByOther={lock.isLockedByOther}
+          onForceOverride={lock.forceOverride}
         />
       </div>
 
-      <div className="relative flex-1 overflow-hidden">
-        <WhiteboardCanvas
-          elements={elements}
-          selectedId={selectedId}
-          onSelect={setSelectedId}
-          onMove={handleMove}
-          onCanvasClick={handleCanvasClick}
-          snapEnabled={snapEnabled}
-          panMode={panMode}
-        />
-      </div>
+      {/* SoftLockProvider en modo `unwrap` — sólo proporciona contexto, no
+          envuelve con div para no romper el flexbox del shell. La toolbar y
+          el canvas reciben `aria-disabled` directamente cuando está locked. */}
+      <SoftLockProvider isLocked={lock.isLockedByOther} unwrap>
+        <div
+          className={
+            lock.isLockedByOther
+              ? 'flex flex-1 flex-col pointer-events-none select-none opacity-70'
+              : 'flex flex-1 flex-col'
+          }
+          data-testid="whiteboard-editor-region"
+          data-locked={lock.isLockedByOther ? 'true' : 'false'}
+          aria-disabled={lock.isLockedByOther || undefined}
+        >
+          <div className="flex items-center justify-center border-b border-border bg-subtle/30 px-4 py-2">
+            <WhiteboardToolbar
+              activeTool={activeTool}
+              onSelectTool={setActiveTool}
+              snapEnabled={snapEnabled}
+              onToggleSnap={setSnapEnabled}
+              onExportPng={handleExportPng}
+            />
+          </div>
+
+          <div className="relative flex-1 overflow-hidden">
+            <WhiteboardCanvas
+              elements={elements}
+              selectedId={selectedId}
+              onSelect={setSelectedId}
+              onMove={handleMove}
+              onCanvasClick={handleCanvasClick}
+              snapEnabled={snapEnabled}
+              panMode={panMode}
+            />
+          </div>
+        </div>
+      </SoftLockProvider>
+
+      {/* Wave P6 · B3 — ConflictDialog. Aparece en cuanto llega un UPDATE
+          remoto más nuevo. Las pizarras autosalvan, así que mostramos esto
+          como aviso post-hoc para que el usuario decida si seguir o
+          recargar. */}
+      <ConflictDialog
+        open={lock.hasConflict}
+        onOpenChange={(next) => {
+          if (!next) lock.dismissConflict()
+        }}
+        fieldLabel="Pizarra"
+        localValue={whiteboard.title}
+        remoteValue={
+          lock.remoteVersion
+            ? `Versión remota guardada el ${lock.remoteVersion}`
+            : 'Versión remota desconocida'
+        }
+        remoteAuthor={lock.remoteAuthorId ?? null}
+        onResolve={handleResolveConflict}
+      />
     </div>
   )
 }
