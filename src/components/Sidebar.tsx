@@ -7,7 +7,7 @@ import {
   LayoutDashboard, Columns, CalendarDays, Target, FolderKanban, Building2,
   List, Users, Table, Network, FileText, ClipboardList,
   Zap, LayoutTemplate, Sparkles, ChevronDown, Eye, Settings, Briefcase,
-  Menu, PanelLeftClose, BarChart3, Rocket, Clock, Compass,
+  Menu, PanelLeftClose, BarChart3, Rocket, Clock, Compass, ScrollText,
   type LucideIcon
 } from 'lucide-react';
 import { clsx } from 'clsx';
@@ -91,6 +91,10 @@ const menuGroups: RouteGroup[] = [
       { name: 'Usuarios', path: '/settings/users', icon: Users },
       { name: 'Calendarios laborales', path: '/settings/calendars', icon: CalendarDays },
       { name: 'Cargas de trabajo', path: '/workload', icon: ClipboardList },
+      // Ola P3 · Equipo P3-2 · Audit Log centralizado (compliance ITIL/SOC2).
+      // Solo visible para ADMIN/SUPER_ADMIN: el filtro `filteredMenuGroups`
+      // ya esconde la entrada para AGENTE.
+      { name: 'Auditoría', path: '/audit-log', icon: ScrollText },
     ],
   },
 ];
