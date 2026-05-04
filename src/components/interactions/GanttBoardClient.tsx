@@ -36,6 +36,8 @@ import {
   type DependencyEditorPayload,
 } from './DependencyEditor'
 import { CaptureBaselineButton } from './CaptureBaselineButton'
+import { LiveCursorsLayer } from '@/components/realtime-cursors/LiveCursorsLayer'
+import type { CurrentUserIdentity } from '@/lib/realtime-cursors/use-live-cursors'
 import { BaselineSelector, type BaselineOption } from './BaselineSelector'
 import { BaselineTrendPanel } from './BaselineTrendPanel'
 import { BaselineTrendToggle } from './BaselineTrendToggle'
@@ -103,6 +105,12 @@ type Props = {
    * `hidden md:block`). Útil para vistas embebidas (ej. dashboards).
    */
   mobileFallback?: React.ReactNode
+  /**
+   * Wave P6 — usuario actual para suscribirse al canal de cursores en
+   * vivo. Si es `null` el componente sigue mostrando los cursores
+   * remotos pero no emite los suyos.
+   */
+  currentUser?: CurrentUserIdentity | null
 }
 
 const DAY_WIDTH = 40 // px por día — balance legibilidad / densidad
@@ -183,6 +191,7 @@ function GanttBoardClientImpl({
   taskCountByProject,
   baselineCountByProject,
   baselinesByProject,
+  currentUser,
 }: Props) {
   const start = useMemo(() => new Date(rangeStart), [rangeStart])
   const days = useMemo(
@@ -792,7 +801,7 @@ function GanttBoardClientImpl({
       <div className="flex gap-3">
       <div
         data-testid="gantt-board"
-        className="flex-1 min-w-0 rounded-xl border border-border bg-subtle/80 shadow-sm"
+        className="relative flex-1 min-w-0 rounded-xl border border-border bg-subtle/80 shadow-sm"
         // P4-3 · Permitir pinch-to-zoom nativo en mobile/tablet sin
         // interferir con el scroll horizontal. `manipulation` desactiva
         // el double-tap-to-zoom (que retrasa los taps 300 ms) y
@@ -1015,6 +1024,12 @@ function GanttBoardClientImpl({
               )}
             </div>
           </div>
+        )}
+        {activeProjectId && (
+          <LiveCursorsLayer
+            channelName={`project:${activeProjectId}:gantt`}
+            currentUser={currentUser ?? null}
+          />
         )}
       </div>
 
