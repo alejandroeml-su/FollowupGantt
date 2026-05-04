@@ -25,12 +25,22 @@ import { TaskGoalsSection } from '@/components/goals/TaskGoalsSection'
 import { TaskDocsSection } from '@/components/docs/TaskDocsSection'
 import { TaskAuditHistorySection } from '@/components/tasks/TaskAuditHistorySection'
 import { TaskInsightsSection } from '@/components/tasks/TaskInsightsSection'
+import { usePresence } from '@/lib/realtime/use-presence'
+import PresenceIndicator from '@/components/realtime/PresenceIndicator'
+import type { CurrentUserPresence } from '@/lib/auth/get-current-user-presence'
 
 type Props = {
   task: SerializedTask
   projects: { id: string; name: string }[]
   users: { id: string; name: string }[]
   allTasks?: SerializedTask[]
+  /**
+   * Wave P6 · Equipo B1 — Identidad mínima para presence.
+   * Opcional para no romper consumidores existentes (Kanban/Gantt/List/etc.);
+   * cuando ausente, no se monta el indicador. Los containers que ya cargan
+   * sesión (RSC pages) deberían propagarlo cuando esté disponible.
+   */
+  currentUser?: CurrentUserPresence | null
 }
 
 /**
@@ -42,9 +52,38 @@ type Props = {
  *     interferir con la navegación de tabs (los CF aplican a todas las
  *     tabs, conceptualmente "metadatos del proyecto").
  */
-export function TaskDrawerContent({ task, projects, users, allTasks = [] }: Props) {
+export function TaskDrawerContent({
+  task,
+  projects,
+  users,
+  allTasks = [],
+  currentUser,
+}: Props) {
+  // Wave P6 · Equipo B1 — Mini indicador de presence en el header del drawer.
+  // Si `currentUser` es null, pasamos channel=null al hook para que sea
+  // no-op (lista vacía + isOnline=false). El render condicional debajo
+  // del hook respeta las reglas de hooks en React 19.
+  const presence = usePresence(
+    currentUser ? `task:${task.id}` : null,
+    currentUser
+      ? {
+          userId: currentUser.userId,
+          name: currentUser.name,
+          avatarUrl: currentUser.avatarUrl,
+        }
+      : null,
+  )
+
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
+      {presence.users.length > 0 ? (
+        <div
+          className="flex items-center justify-end px-6 pt-3"
+          data-testid="task-drawer-presence"
+        >
+          <PresenceIndicator count={presence.users.length} label="viendo" />
+        </div>
+      ) : null}
       <TaskForm
         mode="edit"
         task={task}
