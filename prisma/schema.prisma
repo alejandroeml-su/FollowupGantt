@@ -116,6 +116,20 @@ enum KeyResultMetric {
   TASKS_COMPLETED
 }
 
+// Ola P5 · Equipo P5-4 · AI Insights heurísticos.
+// Tipos de insight generados sin LLM externo en este sprint:
+//   - CATEGORIZATION: sugerencia de TaskType + tags + assignee derivada
+//     de keywords/menciones del título/descripción.
+//   - DELAY_RISK:    score 0-1 derivado de progress vs tiempo elapsed,
+//     historial del assignee, tamaño y predecesoras pendientes.
+//   - NEXT_ACTION:   sugerencia accionable a nivel proyecto (ej. "X
+//     tareas en CP sin assignee").
+enum InsightKind {
+  CATEGORIZATION
+  DELAY_RISK
+  NEXT_ACTION
+}
+
 // ---------------------------------------------------------
 // ENTIDADES PRINCIPALES
 // ---------------------------------------------------------
@@ -509,6 +523,14 @@ model Task {
   // KRs (con metric=TASKS_COMPLETED) que esta tarea contribuye a alcanzar.
   // M:N a través de la tabla implícita "_KeyResultTasks".
   keyResults KeyResult[] @relation("KeyResultTasks")
+
+  // Ola P5 · Equipo P5-4 · AI Insights heurísticos.
+  // Histórico de sugerencias generadas para esta tarea (categorización,
+  // riesgo de retraso, etc.). Cascade al borrar la tarea para no dejar
+  // huérfanos. La acción `dismissInsight` es soft-delete (setea
+  // `dismissedAt`) y NO borra la fila — preservamos el rastro para
+  // afinar las heurísticas a futuro.
+  insights TaskInsight[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1101,4 +1123,44 @@ model KeyResult {
   updatedAt DateTime @updatedAt
 
   @@index([goalId, position])
+}
+
+// ─────────────────────────────────────────────────────────────
+// Módulo AI Insights heurísticos (Ola P5 · Equipo P5-4)
+//
+// Persistencia de sugerencias generadas por heurísticas locales (sin
+// LLM externo en este sprint). Cada fila documenta:
+//   - `kind`: tipo de insight (categorización / riesgo / next-action).
+//   - `score`: confianza (categorización/next-action) o nivel de riesgo
+//      (delay) en el rango 0..1.
+//   - `payload`: detalle estructurado (suggestedType, factors[], etc.).
+//
+// Decisiones:
+//   D-AI-1: `taskId` es required + cascade. Para insights "global" del
+//           proyecto (NEXT_ACTION) usamos un task representativo (la
+//           primera task pendiente del proyecto) o creamos un sentinel.
+//           En la práctica el server action siempre tiene un taskId
+//           válido.
+//   D-AI-2: `dismissedAt` es soft-delete: la UI filtra sólo los activos
+//           pero conservamos el histórico para afinar las heurísticas.
+//   D-AI-3: índice `(taskId, kind, createdAt)` para la query típica
+//           "últimos insights por tarea agrupados por kind".
+// ─────────────────────────────────────────────────────────────
+
+model TaskInsight {
+  id          String      @id @default(uuid())
+  taskId      String
+  task        Task        @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  kind        InsightKind
+  // Score 0..1. Para CATEGORIZATION = confianza; DELAY_RISK = severidad;
+  // NEXT_ACTION = relevancia (mayor = más urgente).
+  score       Float
+  // Estructura libre validada por zod en el server action según `kind`.
+  payload     Json
+  // Soft-delete: la UI filtra `dismissedAt IS NULL`.
+  dismissedAt DateTime?
+  createdAt   DateTime    @default(now())
+
+  @@index([taskId, kind, createdAt(sort: Desc)])
+  @@index([kind, dismissedAt])
 }
