@@ -29,6 +29,7 @@ import { TaskGoalsSection } from '@/components/goals/TaskGoalsSection'
 import { TaskDocsSection } from '@/components/docs/TaskDocsSection'
 import { TaskAuditHistorySection } from '@/components/tasks/TaskAuditHistorySection'
 import { TaskInsightsSection } from '@/components/tasks/TaskInsightsSection'
+import { AITaskRefineMenu } from '@/components/tasks/AITaskRefineMenu'
 import { SoftLockProvider } from '@/components/realtime-locks/SoftLockProvider'
 import { EditingByBanner } from '@/components/realtime-locks/EditingByBanner'
 import { ConflictDialog } from '@/components/realtime-locks/ConflictDialog'
@@ -215,7 +216,25 @@ export function TaskDrawerContent({
                 ]}
               />
             )}
-            renderHeaderActions={(ctx) => <TaskFormHeaderActions ctx={ctx} />}
+            renderHeaderActions={(ctx) => (
+              <>
+                {/* Wave P7 · Equipo P7-5 — Refinamiento IA: dropdown con
+                    5 acciones (mejorar descripción / checklist / tags /
+                    duplicados / categoría). Cada acción abre un dialog
+                    de preview con opción "Editar antes de aplicar". */}
+                <AITaskRefineMenu
+                  taskId={task.id}
+                  currentTask={{
+                    title: task.title,
+                    description: task.description,
+                    type: task.type,
+                    priority: task.priority,
+                    tags: task.tags ?? [],
+                  }}
+                />
+                <TaskFormHeaderActions ctx={ctx} />
+              </>
+            )}
           />
           {/*
            * Ola P1 · Equipo 4 — Sección de Time Tracking. Mientras no haya
