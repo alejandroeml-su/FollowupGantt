@@ -1,44 +1,97 @@
-import prisma from "@/lib/prisma";
-import { getServerT } from "@/lib/i18n/server";
+/**
+ * Equipo D3 · Dashboard ejecutivo unificado (server component).
+ *
+ * Reemplaza el dashboard minimalista previo con:
+ *   - Carga paralela de portfolio + riesgos + hitos + next actions.
+ *   - Empty state que enlaza a `/onboarding` cuando el usuario aún no
+ *     tiene workspaces asociados.
+ *   - Redirección automática a `/onboarding` cuando un usuario nuevo
+ *     loguea por primera vez (sin proyectos visibles).
+ *
+ * Decisión D3-PAGE-1: si el caller NO está autenticado, NO bloqueamos
+ * la página (mantener compatibilidad con el comportamiento anterior).
+ * En ese caso usamos un nombre genérico y un fallback de empty state.
+ */
+
+import Link from 'next/link'
+import { redirect } from 'next/navigation'
+import { getCurrentUser } from '@/lib/auth/get-current-user'
+import { listMyWorkspaces } from '@/lib/actions/workspaces'
+import {
+  ExecutiveDashboard,
+  loadExecutiveDashboard,
+} from '@/components/dashboard/ExecutiveDashboard'
 
 export default async function HomePage() {
-  const tt = await getServerT();
-  const projects = await prisma.project.findMany({
-    include: { _count: { select: { tasks: true } } }
-  });
+  const user = await getCurrentUser()
 
+  // Sin sesión: render mínimo con CTA al login (no hard-redirect para no
+  // romper anonimous landing). El proxy aplica el gating de auth real.
+  if (!user) {
+    return <UnauthenticatedFallback />
+  }
+
+  // Si el usuario aún no pertenece a ningún workspace → onboarding.
+  // listMyWorkspaces puede fallar si la sesión expira en el medio;
+  // capturamos como UNAUTHORIZED y degradamos al fallback.
+  let workspaceCount = 0
+  try {
+    const workspaces = await listMyWorkspaces()
+    workspaceCount = workspaces.length
+  } catch {
+    workspaceCount = 0
+  }
+
+  if (workspaceCount === 0) {
+    redirect('/onboarding')
+  }
+
+  const data = await loadExecutiveDashboard()
+
+  // Empty state cuando hay workspace pero no proyectos ni datos cargados.
+  if (data.portfolio.summary.totalProjects === 0) {
+    return <NoProjectsEmptyState userName={user.name} />
+  }
+
+  return <ExecutiveDashboard userName={user.name} data={data} />
+}
+
+function UnauthenticatedFallback() {
   return (
-    <div className="flex h-full flex-col bg-background">
-      <div className="flex-1 overflow-auto p-12 custom-scrollbar">
-        <div className="max-w-4xl mx-auto space-y-12">
-          <header className="space-y-4">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 border border-primary/20 text-primary text-xs font-bold uppercase tracking-widest animate-pulse">
-              {tt('common.appName')}
-            </div>
-            <h1 className="text-5xl font-black text-foreground tracking-tight leading-none">
-              {tt('pages.dashboard.title')}
-            </h1>
-            <p className="text-xl text-muted-foreground max-w-2xl leading-relaxed">
-              {tt('pages.dashboard.subtitle')}
-            </p>
-          </header>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-             <div className="p-6 rounded-2xl bg-card border border-border shadow-sm space-y-2">
-                <p className="text-xs font-bold text-muted-foreground uppercase">{tt('pages.dashboard.activeProjects')}</p>
-                <p className="text-4xl font-black text-foreground">{projects.length}</p>
-             </div>
-             <div className="p-6 rounded-2xl bg-card border border-border shadow-sm space-y-2">
-                <p className="text-xs font-bold text-muted-foreground uppercase">{tt('pages.dashboard.totalTasks')}</p>
-                <p className="text-4xl font-black text-indigo-500">{projects.reduce((acc, p) => acc + p._count.tasks, 0)}</p>
-             </div>
-             <div className="p-6 rounded-2xl bg-card border border-border shadow-sm space-y-2">
-                <p className="text-xs font-bold text-muted-foreground uppercase">{tt('pages.dashboard.environment')}</p>
-                <p className="text-4xl font-black text-emerald-500">PRO</p>
-             </div>
-          </div>
-        </div>
-      </div>
+    <div className="flex h-full flex-col items-center justify-center bg-background p-12 text-center">
+      <h1 className="text-3xl font-black text-foreground">FollowupGantt</h1>
+      <p className="mt-2 max-w-md text-muted-foreground">
+        Inicia sesión para ver tu resumen ejecutivo.
+      </p>
+      <Link
+        href="/login"
+        className="mt-6 inline-flex items-center rounded-md bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90"
+      >
+        Iniciar sesión
+      </Link>
     </div>
-  );
+  )
+}
+
+function NoProjectsEmptyState({ userName }: { userName: string }) {
+  return (
+    <div
+      data-testid="dashboard-empty-state"
+      className="flex h-full flex-col items-center justify-center bg-background p-12 text-center"
+    >
+      <h1 className="text-3xl font-black text-foreground">
+        ¡Hola, {userName.split(' ')[0]}!
+      </h1>
+      <p className="mt-2 max-w-md text-muted-foreground">
+        Aún no tienes proyectos en este workspace. Empieza con el flujo
+        guiado para crear tu primer proyecto y tu primera tarea.
+      </p>
+      <Link
+        href="/onboarding"
+        className="mt-6 inline-flex items-center rounded-md bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90"
+      >
+        Iniciar onboarding
+      </Link>
+    </div>
+  )
 }
