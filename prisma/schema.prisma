@@ -475,6 +475,17 @@ model Task {
   // Enlace externo de referencia (Confluence, Figma, ticket externo, etc.)
   referenceUrl String?
 
+  // Ola P5 · Hard deadlines + Resource Leveling.
+  // `hardDeadline`: fecha límite forzosa; si la EF de la tarea (calculada
+  // por CPM) la supera ⇒ violación que se reporta en /leveling. Distinto
+  // de `endDate`: endDate es la fecha planificada (puede moverse), mientras
+  // que hardDeadline es un compromiso que NO debe romperse.
+  // `dailyEffortHours`: estimación de horas/día por defecto que consume
+  // esta tarea para el cálculo de carga del recurso (assignee). Si NULL,
+  // el algoritmo de leveling asume `WorkCalendar.workdayHours` o 8h.
+  hardDeadline     DateTime?
+  dailyEffortHours Float?
+
   // Seguimiento y comentarios
   comments      Comment[]
   history       TaskHistory[]
