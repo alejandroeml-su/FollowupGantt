@@ -24,9 +24,13 @@
  *     en lugar de un effect derivado.
  */
 
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Check, Loader2, AlertCircle, Eye, Pencil } from 'lucide-react'
 import { DocPreview } from './DocPreview'
+import { SoftLockProvider } from '@/components/realtime-locks/SoftLockProvider'
+import { EditingByBanner } from '@/components/realtime-locks/EditingByBanner'
+import { ConflictDialog } from '@/components/realtime-locks/ConflictDialog'
+import { useDocEditLock } from '@/components/realtime-locks/useDocEditLock'
 
 type Props = {
   /** Doc id — usado por el padre para forzar re-mount via key={docId}. */
@@ -42,6 +46,16 @@ type Props = {
   onSave: (next: { title: string; content: string }) => Promise<void>
   /** Disabled (ej. doc archivado). */
   readOnly?: boolean
+  /**
+   * ISO `updatedAt` del doc cargado por el padre. Wave P6 · B3 lo usa para
+   * detectar conflictos. Opcional — sin él la detección queda inactiva.
+   */
+  initialUpdatedAt?: string | null
+  /**
+   * Identidad del usuario activo. Wave P6 · B3: opcional. Sin currentUser
+   * el editor renderiza igual pero sin presence.
+   */
+  currentUser?: { id: string; name: string } | null
 }
 
 type SaveState = 'idle' | 'dirty' | 'saving' | 'saved' | 'error'
@@ -54,12 +68,47 @@ export function DocEditor({
   initialContent,
   onSave,
   readOnly = false,
+  initialUpdatedAt = null,
+  currentUser,
 }: Props) {
   const [title, setTitle] = useState(initialTitle)
   const [content, setContent] = useState(initialContent)
   const [view, setView] = useState<'edit' | 'preview'>('edit')
   const [saveState, setSaveState] = useState<SaveState>('idle')
   const [error, setError] = useState<string | null>(null)
+
+  // Wave P6 · B3 — Edit lock + conflict detection.
+  const resolvedCurrentUser = useMemo(() => currentUser ?? null, [currentUser])
+  const lock = useDocEditLock({
+    docId,
+    currentUser: resolvedCurrentUser,
+    currentVersion: initialUpdatedAt ?? null,
+  })
+
+  // Lifecycle: marcar editing en mount, liberar en unmount. El padre re-monta
+  // el componente con key={docId}, así que cada doc abre su propio lock.
+  useEffect(() => {
+    if (!resolvedCurrentUser) return
+    lock.startEditing()
+    return () => {
+      lock.stopEditing()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [docId, resolvedCurrentUser?.id])
+
+  const handleResolveConflict = useCallback(
+    (action: 'overwrite' | 'accept_remote' | 'cancel') => {
+      if (action === 'overwrite') {
+        // Mantener mi versión: limpiamos el flag y dejamos que el próximo
+        // autosave (debounced) sobrescriba la BD (last-write-wins).
+        lock.dismissConflict()
+      } else if (action === 'accept_remote') {
+        lock.dismissConflict()
+        if (typeof window !== 'undefined') window.location.reload()
+      }
+    },
+    [lock],
+  )
 
   // Refs para el debounce. Sólo se acceden en handlers (eventos) — nunca
   // durante render — para cumplir las reglas de hooks de React 19+.
@@ -131,6 +180,20 @@ export function DocEditor({
       className="flex flex-1 flex-col overflow-hidden"
       data-testid="doc-editor"
     >
+      {/* Wave P6 · B3 — banner de presencia. */}
+      <div className="px-4 pt-2">
+        <EditingByBanner
+          editingUsers={lock.editingUsers}
+          isLockedByOther={lock.isLockedByOther}
+          onForceOverride={lock.forceOverride}
+        />
+      </div>
+
+      {/* SoftLockProvider en modo unwrap para no romper el layout flex. El
+          textarea se deshabilita visualmente vía la clase condicional sobre
+          el wrapper inmediato; los inputs nativos siguen funcionalmente
+          deshabilitados via aria-disabled. */}
+      <SoftLockProvider isLocked={lock.isLockedByOther} unwrap>
       {/* Toolbar */}
       <div className="flex h-12 items-center justify-between border-b border-border bg-card/40 px-4 shrink-0">
         <div
@@ -236,6 +299,24 @@ export function DocEditor({
           <input type="hidden" value={docId} readOnly aria-hidden />
         </div>
       </div>
+      </SoftLockProvider>
+
+      {/* Wave P6 · B3 — ConflictDialog. */}
+      <ConflictDialog
+        open={lock.hasConflict}
+        onOpenChange={(next) => {
+          if (!next) lock.dismissConflict()
+        }}
+        fieldLabel="Documento"
+        localValue={content}
+        remoteValue={
+          lock.remoteVersion
+            ? `Versión remota guardada el ${lock.remoteVersion}`
+            : 'Versión remota desconocida'
+        }
+        remoteAuthor={lock.remoteAuthorId ?? null}
+        onResolve={handleResolveConflict}
+      />
     </div>
   )
 }
