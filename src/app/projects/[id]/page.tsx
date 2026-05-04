@@ -2,10 +2,12 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { 
-  ArrowLeft, Plus, Calendar as CalendarIcon, Link as LinkIcon, 
+import {
+  ArrowLeft, Plus, Calendar as CalendarIcon, Link as LinkIcon,
   GitCommit, ChevronRight, ChevronDown, CheckCircle2, ListTree, SlidersHorizontal, Settings, X
 } from 'lucide-react';
+import { ExportProjectButton } from '@/components/backup/ExportProjectButton';
+import { ImportProjectDialog } from '@/components/backup/ImportProjectDialog';
 
 // Datos Mock con jerarquía
 const initialTasks = [
@@ -138,6 +140,9 @@ export default function ProjectDetailManagement({ params }: { params: { id: stri
             <button className="flex items-center gap-2 rounded-md bg-secondary px-4 py-2 text-sm font-medium text-foreground/90 hover:bg-secondary/80 border border-border">
               <Settings className="h-4 w-4" /> Línea Base
             </button>
+            {/* P3-3 · Backup/Restore: export full + import nuevo proyecto. */}
+            <ExportProjectButton projectId={params.id} />
+            <ImportProjectDialog />
           </div>
         </div>
 
