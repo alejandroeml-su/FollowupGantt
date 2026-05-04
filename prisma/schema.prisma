@@ -335,6 +335,10 @@ model Project {
   // los OKRs históricos aunque se elimine el proyecto.
   goals Goal[]
 
+  // Ola P5 · Equipo P5-5 · Public Forms + Automation engine.
+  publicForms     PublicForm[]
+  automationRules AutomationRule[]
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
@@ -1101,4 +1105,128 @@ model KeyResult {
   updatedAt DateTime @updatedAt
 
   @@index([goalId, position])
+}
+
+// ─────────────────────────────────────────────────────────────
+// Módulo Public Forms + Automation Engine (Ola P5 · Equipo P5-5)
+//
+// 1. PublicForm + FormSubmission: captura externa (sin auth) de tickets/
+//    requerimientos. Cada PublicForm define su shape en `schema` (Json) y
+//    un `targetTaskTitleTemplate` con interpolación `{campo}` para crear
+//    Tasks automáticamente al recibir submissions.
+// 2. AutomationRule + AutomationExecution: motor "if-this-then-that"
+//    interno. Ejecutado desde server actions mediante `runAutomations`.
+//    `trigger` describe el evento, `conditions` filtra el contexto y
+//    `actions` lista pasos secuenciales (createTask, sendWebhook,
+//    updateField, assignUser).
+//
+// Decisiones documentadas (D-FA-*):
+//   D-FA-1: `slug` del PublicForm es ÚNICO (no únicamente por proyecto)
+//           porque la URL `/forms/[slug]` es global y pública.
+//   D-FA-2: `FormSubmission.taskId` es SetNull para preservar la submission
+//           histórica aunque la task generada se borre.
+//   D-FA-3: `AutomationRule` no tiene unique compuesto; la app permite
+//           múltiples reglas con el mismo trigger (cadenas if-this-then-
+//           that paralelas). El anti-loop se hace en runtime.
+//   D-FA-4: `AutomationExecution.result` guarda { actions: [...] } con el
+//           detalle de cada paso (ok, error, output) para auditoría.
+// ─────────────────────────────────────────────────────────────
+
+model PublicForm {
+  id          String  @id @default(uuid())
+  // URL pública: /forms/<slug>. Único globalmente (D-FA-1).
+  slug        String  @unique
+  title       String
+  description String?
+
+  // Proyecto opcional al que se anclan las tasks creadas. SetNull para
+  // preservar formularios huérfanos ante borrado del proyecto.
+  projectId String?
+  project   Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+
+  // Lista de campos: [{ name, type, label?, required, options? }, ...]
+  // Validado por zod en el server action; aquí Json libre.
+  schema Json
+
+  // Plantilla del título de Task generada al recibir submission.
+  // Interpolación `{nombre}`, `{email}`, etc.
+  targetTaskTitleTemplate String @default("Submission de {slug}")
+
+  isActive Boolean @default(true)
+
+  submissions FormSubmission[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([slug])
+  @@index([projectId])
+}
+
+model FormSubmission {
+  id     String     @id @default(uuid())
+  formId String
+  form   PublicForm @relation(fields: [formId], references: [id], onDelete: Cascade)
+
+  // Payload bruto del submit (clave=valor por nombre del campo).
+  payload Json
+
+  // Task generada por la regla (opcional). SetNull (D-FA-2).
+  taskId String?
+
+  // Metadatos anti-spam / auditoría.
+  ip        String?
+  userAgent String?
+
+  submittedAt DateTime @default(now())
+
+  @@index([formId, submittedAt(sort: Desc)])
+  @@index([ip, submittedAt(sort: Desc)])
+}
+
+model AutomationRule {
+  id   String @id @default(uuid())
+  name String
+
+  projectId String?
+  project   Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+
+  // { event: 'task.created' | 'status.changed' | 'form.submitted', ... }
+  trigger Json
+
+  // Lista de filtros [{ field, op, value }] con op = '=' | '!=' | '>' | '<' | 'contains'.
+  conditions Json @default("[]")
+
+  // Lista de acciones [{ kind: 'createTask' | 'sendWebhook' | 'updateField' | 'assignUser', ... }]
+  actions Json @default("[]")
+
+  isActive Boolean @default(true)
+
+  executions AutomationExecution[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([isActive])
+  @@index([projectId])
+}
+
+model AutomationExecution {
+  id     String         @id @default(uuid())
+  ruleId String
+  rule   AutomationRule @relation(fields: [ruleId], references: [id], onDelete: Cascade)
+
+  // Identificador del agente disparador: "task:<id>", "form:<slug>", "user:<id>"…
+  triggeredBy String
+
+  // 'success' | 'failed' (string libre para evitar acoplar enum a runtime).
+  status String
+
+  // { actions: [{ kind, ok, output?, error? }], skippedReason? }
+  result Json
+
+  executedAt DateTime @default(now())
+
+  @@index([ruleId, executedAt(sort: Desc)])
+  @@index([status, executedAt(sort: Desc)])
 }
