@@ -218,6 +218,10 @@ model User {
   notifications          Notification[]
   notificationPreference NotificationPreference?
 
+  // Wave P6 · Equipo A4 · Web Push API — suscripciones del navegador
+  // (pushManager.subscribe) por device. CASCADE al borrar usuario.
+  pushSubscriptions      PushSubscription[]
+
   // Ola P2 · Vistas guardadas (Equipo P2-1).
   savedViews SavedView[]
 
@@ -1061,6 +1065,29 @@ model NotificationPreference {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+// ─────────────────────────────────────────────────────────────
+// Módulo Web Push (Wave P6 · Equipo A4)
+//
+// Persistencia de suscripciones del navegador (PushManager.subscribe).
+// Cada `endpoint` es único por device-browser; el campo `keys` almacena
+// `{ p256dh, auth }` necesarios para `webpush.sendNotification`.
+// `userAgent` es informativo (UI de "dispositivos activos") y `lastUsedAt`
+// se actualiza al enviar push correctamente para limpieza de inactivas.
+// FK a User con CASCADE: al borrar usuario se eliminan suscripciones.
+// ─────────────────────────────────────────────────────────────
+model PushSubscription {
+  id         String    @id @default(uuid())
+  userId     String
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  endpoint   String    @unique
+  keys       Json // { p256dh, auth }
+  userAgent  String?
+  createdAt  DateTime  @default(now())
+  lastUsedAt DateTime?
+
+  @@index([userId])
 }
 
 // ─────────────────────────────────────────────────────────────
