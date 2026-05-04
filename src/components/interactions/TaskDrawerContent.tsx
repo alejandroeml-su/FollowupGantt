@@ -33,6 +33,7 @@ import { SoftLockProvider } from '@/components/realtime-locks/SoftLockProvider'
 import { EditingByBanner } from '@/components/realtime-locks/EditingByBanner'
 import { ConflictDialog } from '@/components/realtime-locks/ConflictDialog'
 import { useTaskEditLock } from '@/components/realtime-locks/useTaskEditLock'
+import { TaskCommentsRealtime } from '@/components/comments/TaskCommentsRealtime'
 
 type Props = {
   task: SerializedTask
@@ -259,6 +260,18 @@ export function TaskDrawerContent({
         remoteAuthor={lock.remoteAuthorId ?? null}
         onResolve={handleResolve}
       />
+
+      {/*
+       * Wave P6 · Equipo A3 — Comentarios en vivo (Supabase Realtime).
+       * INSERTs propagados via `postgres_changes`; typing via `broadcast`.
+       * Si Realtime no está configurado, degrada a fetch normal.
+       */}
+      <div className="border-t border-border bg-card/40 px-6 py-4">
+        <TaskCommentsRealtime
+          taskId={task.id}
+          currentUser={users[0] ?? null}
+        />
+      </div>
     </div>
   )
 }
