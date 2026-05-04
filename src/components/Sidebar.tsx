@@ -7,7 +7,7 @@ import {
   LayoutDashboard, Columns, CalendarDays, Target, FolderKanban, Building2,
   List, Users, Table, Network, FileText, ClipboardList,
   Zap, LayoutTemplate, Sparkles, ChevronDown, Eye, Settings, Briefcase,
-  Menu, PanelLeftClose, BarChart3, Rocket, Clock, Compass, ScrollText,
+  Menu, PanelLeftClose, BarChart3, Rocket, Clock, Compass, Key, Cable, ScrollText,
   type LucideIcon
 } from 'lucide-react';
 import { clsx } from 'clsx';
@@ -99,9 +99,10 @@ const menuGroups: RouteGroup[] = [
       { name: 'sidebar.items.calendars', path: '/settings/calendars', icon: CalendarDays },
       { name: 'sidebar.items.workload', path: '/workload', icon: ClipboardList },
       // Ola P3 · Equipo P3-2 · Audit Log centralizado (compliance ITIL/SOC2).
-      // Solo visible para ADMIN/SUPER_ADMIN: el filtro `filteredMenuGroups`
-      // ya esconde la entrada para AGENTE.
       { name: 'sidebar.items.audit', path: '/audit-log', icon: ScrollText },
+      // Ola P4 · Equipo P4-2 · API REST + Webhooks.
+      { name: 'sidebar.items.apiTokens', path: '/settings/api', icon: Key },
+      { name: 'sidebar.items.webhooks', path: '/settings/webhooks', icon: Cable },
     ],
   },
 ];
