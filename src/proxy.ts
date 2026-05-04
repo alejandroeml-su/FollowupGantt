@@ -45,7 +45,9 @@ const PROTECTED_PREFIXES = [
   '/workload',
   '/mindmaps',
   '/calendar',
-  '/forms',
+  // '/forms' está PÚBLICO en P5: los formularios `/forms/<slug>` se
+  // sirven sin auth (captura externa de tickets). El listado interno se
+  // mueve a `/settings/forms`.
   '/docs',
   '/automations',
   '/brain',
