@@ -1,39 +1,112 @@
-import { Presentation, Sparkles, Info } from "lucide-react";
+import { Presentation, AlertTriangle, Database } from 'lucide-react'
+import prisma from '@/lib/prisma'
+import { WhiteboardListClient } from '@/components/whiteboards/WhiteboardListClient'
+import { getWhiteboardList } from '@/lib/actions/whiteboards'
+import type { WhiteboardListItem } from '@/lib/whiteboards/types'
 
-export default function WhiteboardsPage() {
+export const dynamic = 'force-dynamic'
+
+/**
+ * Ola P5 · Equipo P5-1 — `/whiteboards` (server component).
+ *
+ * Carga defensiva: si la migración aún no se aplicó en la BD (ej. tras
+ * merge sin db push) mostramos un banner de setup en lugar de tumbar la
+ * página, igual que `/mindmaps`.
+ */
+export default async function WhiteboardsPage() {
+  let whiteboards: WhiteboardListItem[] = []
+  let projects: { id: string; name: string }[] = []
+  try {
+    const [wbs, prjs] = await Promise.all([
+      getWhiteboardList(),
+      prisma.project.findMany({ select: { id: true, name: true }, orderBy: { name: 'asc' } }),
+    ])
+    whiteboards = wbs
+    projects = prjs
+  } catch (err) {
+    return <SetupPending error={err instanceof Error ? err.message : 'Error desconocido'} />
+  }
+
   return (
-    <div className="flex-1 overflow-y-auto bg-background p-8">
-      <div className="mx-auto max-w-7xl">
-        <header className="mb-8 flex items-center justify-between border-b border-border pb-6">
-          <div className="flex items-center gap-4">
-            <div className="rounded-xl bg-indigo-500/10 p-3 ring-1 ring-indigo-500/20">
-              <Presentation className="h-8 w-8 text-indigo-400" />
-            </div>
-            <div>
-              <h1 className="text-3xl font-bold tracking-tight text-white">Whiteboards</h1>
-              <p className="mt-1 text-sm text-muted-foreground flex items-center gap-2">
-                 <Info className="h-4 w-4" /> Espacios de colaboración visual para diagramar procesos y flujos.
-              </p>
-            </div>
-          </div>
-          <div className="flex items-center gap-3">
-            <button className="flex items-center gap-2 rounded-lg bg-indigo-500 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-400 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-500 transition-colors">
-              <Sparkles className="h-4 w-4" />
-              ClickUp Brain
-            </button>
-          </div>
-        </header>
-
-        <div className="flex h-[60vh] flex-col items-center justify-center rounded-2xl border border-dashed border-border bg-subtle/50">
-          <div className="rounded-full bg-secondary p-4 mb-4">
-            <Presentation className="h-10 w-10 text-muted-foreground" />
-          </div>
-          <h2 className="text-xl font-semibold text-white">Módulo Whiteboards en Construcción</h2>
-          <p className="mt-2 text-muted-foreground max-w-md text-center">
-            Esta vista premium ha sido provisionada arquitectónicamente para el Release correspondiente. Las integraciones con Prisma y los componentes React están en la cola de desarrollo del SDLC Autónomo.
+    <div className="p-8 space-y-8">
+      <header className="flex items-center justify-between gap-4">
+        <div>
+          <h1 className="flex items-center gap-2 text-2xl font-bold text-foreground">
+            <Presentation className="h-6 w-6 text-primary" />
+            Pizarras
+          </h1>
+          <p className="text-sm text-muted-foreground mt-1">
+            Espacios colaborativos visuales con sticky notes, formas, conectores y zoom infinito.
           </p>
         </div>
+      </header>
+
+      <WhiteboardListClient whiteboards={whiteboards} projects={projects} />
+    </div>
+  )
+}
+
+function SetupPending({ error }: { error: string }) {
+  const isMissingTable = /does not exist|relation .* does not exist|P2021|UNAUTHORIZED/i.test(error)
+  return (
+    <div className="p-8 space-y-6 max-w-3xl">
+      <header>
+        <h1 className="flex items-center gap-2 text-2xl font-bold text-foreground">
+          <Presentation className="h-6 w-6 text-primary" />
+          Pizarras
+        </h1>
+      </header>
+
+      <div className="rounded-2xl border-2 border-dashed border-amber-500/40 bg-amber-500/5 p-8 space-y-4">
+        <div className="flex items-start gap-3">
+          <AlertTriangle className="h-6 w-6 text-amber-400 shrink-0 mt-0.5" />
+          <div className="space-y-2">
+            <p className="text-base font-semibold text-foreground">
+              Módulo pendiente de configuración
+            </p>
+            <p className="text-sm text-muted-foreground">
+              {isMissingTable ? (
+                <>
+                  Las tablas <code>Whiteboard</code> y <code>WhiteboardElement</code> aún no
+                  existen en la base de datos, o no hay sesión activa. Aplica la migración o
+                  inicia sesión para continuar.
+                </>
+              ) : (
+                <>No se pudo conectar con la base de datos para cargar las pizarras.</>
+              )}
+            </p>
+          </div>
+        </div>
+
+        {isMissingTable && (
+          <div className="rounded-lg border border-border bg-card p-4 space-y-2">
+            <p className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+              <Database className="h-3.5 w-3.5 text-primary" />
+              Para resolverlo (administrador)
+            </p>
+            <ol className="list-decimal pl-5 space-y-1 text-xs text-muted-foreground">
+              <li>
+                Aplicar la migración SQL en Supabase:
+                <code className="ml-1 block bg-background border border-border rounded px-2 py-1 mt-1 text-foreground/90 font-mono">
+                  prisma/migrations/20260503_whiteboards/migration.sql
+                </code>
+              </li>
+              <li>
+                O ejecutar <code className="font-mono">npx prisma db push</code> apuntando a la BD
+                de producción.
+              </li>
+              <li>Recargar esta página.</li>
+            </ol>
+          </div>
+        )}
+
+        <details className="text-xs text-muted-foreground">
+          <summary className="cursor-pointer hover:text-foreground">Detalle técnico</summary>
+          <pre className="mt-2 bg-card border border-border rounded p-2 overflow-x-auto whitespace-pre-wrap break-all">
+            {error}
+          </pre>
+        </details>
       </div>
     </div>
-  );
+  )
 }
