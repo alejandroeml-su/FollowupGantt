@@ -214,6 +214,10 @@ model User {
   comments           Comment[]          @relation("CommentAuthor")
   history            TaskHistory[]
   attachments        Attachment[]
+  // Wave P8-4 — Relación explícita para `Attachment.uploadedById` (alias
+  // semántico de `userId` durante migración). Inversa nombrada porque la
+  // relación con `userId` ya ocupa la default.
+  uploadedAttachments Attachment[]      @relation("AttachmentUploadedBy")
   mindMaps           MindMap[]          @relation("MindMapOwner")
 
   // Time Tracking (Ola P1, Equipo 4) — un usuario tiene múltiples entries
@@ -759,13 +763,32 @@ model TaskHistory {
   createdAt DateTime @default(now())
 }
 
-// Adjuntos / Archivos de respaldo
+// Adjuntos / Archivos de respaldo.
+//
+// Wave P8 · Equipo P8-4 — Supabase Storage real. Se mantienen los campos
+// `url`, `size`, `mimetype`, `userId` (legacy, originalmente `Attachment.url`
+// guardaba un placeholder/URL externa). Se añaden:
+//   - `storagePath`: ruta en bucket `attachments` (`{userId}/{uuid}-{name}`).
+//   - `mimeType`, `sizeBytes`: nuevas columnas tipadas (los legacy `mimetype`/
+//     `size` quedan en read-only para no romper rows previas).
+//   - `uploadedById`/`uploadedBy` (alias semántico de `userId`/`user`). Se
+//     mantienen ambos pares de campos en paralelo durante la transición; el
+//     código nuevo escribe `uploadedById` + `userId` para compatibilidad.
+//
+// Acceso al archivo: NUNCA `url` directo. Llamar `getSignedUrl(attachmentId)`
+// (server action) que valida `requireProjectAccess` y devuelve URL temporal.
 model Attachment {
   id       String  @id @default(uuid())
   filename String
-  url      String
+  url      String? // legacy, deprecated; nuevo flujo usa storagePath + signed URL
   size     Int?
-  mimetype String?
+  mimetype String? // legacy
+
+  // Wave P8-4 — Nuevos campos para Supabase Storage.
+  storagePath  String? // path dentro del bucket `attachments`
+  mimeType     String? // mime type validado por whitelist (image/*, application/pdf, ...)
+  sizeBytes    Int? // tamaño real del blob subido (cap 25MB)
+  uploadedById String? // alias semántico; se persiste junto con `userId`
 
   taskId String
   task   Task   @relation(fields: [taskId], references: [id], onDelete: Cascade)
@@ -773,7 +796,13 @@ model Attachment {
   userId String?
   user   User?   @relation(fields: [userId], references: [id])
 
-  createdAt DateTime @default(now())
+  uploadedBy User? @relation("AttachmentUploadedBy", fields: [uploadedById], references: [id], onDelete: SetNull)
+
+  createdAt  DateTime @default(now())
+  uploadedAt DateTime @default(now())
+
+  @@index([taskId])
+  @@index([uploadedById, uploadedAt])
 }
 
 // Dependencias entre tareas (FS, SS, FF, SF)
