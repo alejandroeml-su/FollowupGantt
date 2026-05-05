@@ -28,7 +28,7 @@ import {
   listAttachmentsForTask,
   deleteAttachment,
 } from '@/lib/actions/attachments'
-import type { AttachmentDTO } from '@/lib/storage/upload-attachment'
+import type { AttachmentDTO } from '@/lib/storage/attachment-validation'
 import { AttachmentUploader } from './AttachmentUploader'
 import { AttachmentPreview } from './AttachmentPreview'
 

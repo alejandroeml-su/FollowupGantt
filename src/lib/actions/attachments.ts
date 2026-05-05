@@ -24,7 +24,7 @@ import { revalidatePath } from 'next/cache'
 import prisma from '@/lib/prisma'
 import { requireProjectAccess } from '@/lib/auth/check-project-access'
 import { removeAttachment } from '@/lib/storage/supabase-storage'
-import type { AttachmentDTO } from '@/lib/storage/upload-attachment'
+import type { AttachmentDTO } from '@/lib/storage/attachment-validation'
 
 // ─────────────────────────── Errores tipados ──────────────────────────
 
