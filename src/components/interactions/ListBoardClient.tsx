@@ -48,6 +48,7 @@ import { EMPTY_TASK_FILTERS, filterTasksWithSubtasks, type TaskFilters } from '@
 import { SavedViewsDropdown, type SavedViewSummary } from '@/components/views/SavedViewsDropdown'
 import { GroupBySelector } from '@/components/views/GroupBySelector'
 import { groupTasks, type GroupKey } from '@/lib/views/group-tasks'
+import type { CurrentUserPresence } from '@/lib/auth/get-current-user-presence'
 
 type Props = {
   tasks: (SerializedTask & { subtasks?: SerializedTask[] })[]
@@ -57,6 +58,12 @@ type Props = {
   areas?: { id: string; name: string; gerenciaId?: string | null }[]
   /** Ola P2 · Equipo P2-1 — vistas guardadas disponibles para LIST. */
   savedViews?: SavedViewSummary[]
+  /**
+   * Wave P7 · C-DEBT-2 — Identidad del usuario actual para el drawer
+   * (presence + edit locks). Forwardeada a `<TaskDrawerContent>`.
+   * Default `null` = back-compat para callers sin sesión.
+   */
+  currentUser?: CurrentUserPresence | null
 }
 
 const STATUS_ICON: Record<string, React.ReactNode> = {
@@ -85,6 +92,7 @@ export function ListBoardClient({
   gerencias = [],
   areas = [],
   savedViews = [],
+  currentUser = null,
 }: Props) {
   const [items, setItems] = useState(tasks)
   const [activeId, setActiveId] = useState<string | null>(null)
@@ -354,13 +362,15 @@ export function ListBoardClient({
           const prev = orderedIds[i - 1]
           if (prev) useUIStore.getState().openDrawer(prev)
         }}
+        currentUser={currentUser}
       >
         {drawerTask ? (
-          <TaskDrawerContent 
-            task={drawerTask} 
-            projects={projects} 
-            users={users} 
+          <TaskDrawerContent
+            task={drawerTask}
+            projects={projects}
+            users={users}
             allTasks={items}
+            currentUser={currentUser}
           />
         ) : null}
       </TaskDrawer>

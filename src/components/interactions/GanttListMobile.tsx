@@ -7,6 +7,7 @@ import type { SerializedTask } from '@/lib/types'
 import { useUIStore } from '@/lib/stores/ui'
 import { TaskDrawer } from './TaskDrawer'
 import { TaskDrawerContent } from './TaskDrawerContent'
+import type { CurrentUserPresence } from '@/lib/auth/get-current-user-presence'
 
 /**
  * Vista vertical de tareas para mobile (P4-3).
@@ -25,12 +26,18 @@ export function GanttListMobile({
   projects = [],
   users = [],
   allTasks,
+  currentUser = null,
 }: {
   tasks: SerializedTask[]
   rangeLabel?: string
   projects?: { id: string; name: string }[]
   users?: { id: string; name: string }[]
   allTasks?: SerializedTask[]
+  /**
+   * Wave P7 · C-DEBT-2 — Identidad del usuario actual para el drawer
+   * (presence + edit locks). Forwardeada a `<TaskDrawerContent>`.
+   */
+  currentUser?: CurrentUserPresence | null
 }) {
   const openDrawer = useUIStore((s) => s.openDrawer)
   const drawerTaskId = useUIStore((s) => s.drawerTaskId)
@@ -132,13 +139,14 @@ export function GanttListMobile({
       </div>
 
       {/* Drawer compartido — full-screen en mobile gracias a max-md:max-w-full */}
-      <TaskDrawer>
+      <TaskDrawer currentUser={currentUser}>
         {drawerTask ? (
           <TaskDrawerContent
             task={drawerTask}
             projects={projects}
             users={users}
             allTasks={allTasks ?? sorted}
+            currentUser={currentUser}
           />
         ) : null}
       </TaskDrawer>

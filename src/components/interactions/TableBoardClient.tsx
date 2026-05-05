@@ -9,6 +9,7 @@ import { TaskDrawerContent } from './TaskDrawerContent'
 import { NewTaskButton } from './NewTaskButton'
 import { TaskFiltersBar } from './TaskFiltersBar'
 import { EMPTY_TASK_FILTERS, filterTasks, type TaskFilters } from '@/lib/taskFilters'
+import type { CurrentUserPresence } from '@/lib/auth/get-current-user-presence'
 
 type ParentOption = Pick<SerializedTask, 'id' | 'title' | 'mnemonic'> & {
   project?: { id: string; name: string } | null
@@ -22,6 +23,11 @@ type Props = {
   allTasks?: ParentOption[]
   gerencias?: { id: string; name: string }[]
   areas?: { id: string; name: string; gerenciaId?: string | null }[]
+  /**
+   * Wave P7 · C-DEBT-2 — Identidad del usuario actual para el drawer
+   * (presence + edit locks). Forwardeada a `<TaskDrawerContent>`.
+   */
+  currentUser?: CurrentUserPresence | null
 }
 
 export function TableBoardClient({
@@ -31,6 +37,7 @@ export function TableBoardClient({
   allTasks = [],
   gerencias = [],
   areas = [],
+  currentUser = null,
 }: Props) {
   const [search, setSearch] = useState('')
   const [filters, setFilters] = useState<TaskFilters>(EMPTY_TASK_FILTERS)
@@ -203,12 +210,14 @@ export function TableBoardClient({
             </>
           ) : null
         }
+        currentUser={currentUser}
       >
         {drawerTask ? (
-          <TaskDrawerContent 
-            task={drawerTask} 
-            projects={projects} 
-            users={users} 
+          <TaskDrawerContent
+            task={drawerTask}
+            projects={projects}
+            users={users}
+            currentUser={currentUser}
           />
         ) : null}
       </TaskDrawer>

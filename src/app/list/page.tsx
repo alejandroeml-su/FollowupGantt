@@ -4,10 +4,16 @@ import { ListBoardClient } from '@/components/interactions/ListBoardClient'
 import { GlobalBreadcrumbs } from '@/components/interactions/GlobalBreadcrumbs'
 import { ViewSwitcher } from '@/components/interactions/ViewSwitcher'
 import { NewTaskButton } from '@/components/interactions/NewTaskButton'
+import { getCurrentUserPresence } from '@/lib/auth/get-current-user-presence'
 
 export const dynamic = 'force-dynamic'
 
 export default async function ListViewPage() {
+  // Wave P7 · C-DEBT-2 — Cargar la identidad del usuario activo para
+  // drillarla al drawer (presence + edit locks). Sin sesión cae a `null`
+  // y el drawer degrada (sin presence pero la UX de tarea sigue OK).
+  const currentUser = await getCurrentUserPresence()
+
   const dbTasks = await prisma.task.findMany({
     where: { parentId: null, archivedAt: null },
     include: {
@@ -81,6 +87,7 @@ export default async function ListViewPage() {
             users={users}
             gerencias={gerencias}
             areas={areas}
+            currentUser={currentUser}
           />
         </div>
       </div>

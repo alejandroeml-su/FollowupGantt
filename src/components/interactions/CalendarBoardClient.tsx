@@ -14,6 +14,7 @@ import { TaskDrawerContent } from './TaskDrawerContent'
 import { QuickCreatePopover } from './QuickCreatePopover'
 import { shiftTaskDates } from '@/lib/actions/schedule'
 import { toast } from './Toaster'
+import type { CurrentUserPresence } from '@/lib/auth/get-current-user-presence'
 
 type Props = {
   tasks: SerializedTask[]
@@ -29,6 +30,11 @@ type Props = {
   areas: { id: string; name: string; gerenciaId: string }[]
   projects: { id: string; name: string; areaId: string | null }[]
   users: { id: string; name: string }[]
+  /**
+   * Wave P7 · C-DEBT-2 — Identidad del usuario actual para el drawer
+   * (presence + edit locks). Forwardeada a `<TaskDrawerContent>`.
+   */
+  currentUser?: CurrentUserPresence | null
 }
 
 const WEEKDAYS = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom']
@@ -135,6 +141,7 @@ export function CalendarBoardClient({
   areas,
   projects,
   users,
+  currentUser = null,
 }: Props) {
   const router = useRouter()
   const pathname = usePathname()
@@ -555,13 +562,14 @@ export function CalendarBoardClient({
         currentUserRoles={['SUPER_ADMIN']}
       />
 
-      <TaskDrawer>
+      <TaskDrawer currentUser={currentUser}>
         {drawerTask ? (
           <TaskDrawerContent
             task={drawerTask}
             projects={projects}
             users={users}
             allTasks={local}
+            currentUser={currentUser}
           />
         ) : null}
       </TaskDrawer>
