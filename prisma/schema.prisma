@@ -292,6 +292,13 @@ model User {
   // a la rotación de su dueño original).
   risksOwned Risk[] @relation("RiskOwner")
 
+  // Wave P8 · Equipo P8-5 — Calendar sync (Google + Microsoft + ICS).
+  // Conexiones por provider (Google Calendar, MS Graph, ICS feed). Un
+  // usuario puede tener hasta una conexión por provider (constraint
+  // `@@unique([userId, provider])` en CalendarConnection). Cascade al
+  // borrar el usuario para no dejar tokens huérfanos.
+  calendarConnections CalendarConnection[]
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
@@ -2161,4 +2168,92 @@ model Risk {
 
   @@index([projectId, status])
   @@index([probability, impact])
+}
+
+// ─────────────────────────────────────────────────────────────────
+// Wave P8 · Equipo P8-5 — Calendar sync (Google + Microsoft + ICS).
+//
+// Decisiones aprobadas:
+//   - One-way sync (FollowupGantt → Calendar). En MVP NO leemos eventos
+//     externos: evita merge conflicts y reduce rate-limit a Google/MS.
+//   - OAuth tokens en raw (text); rotación a KMS/encrypted-at-rest se
+//     hará en P9. La superficie es baja porque solo el dueño los ve.
+//   - ICS público con token aleatorio (no PII en URL): cualquier client
+//     (Apple Calendar, Thunderbird, ICS-aware fallback) puede subscribir
+//     al feed sin OAuth. Token rotativo por usuario.
+//   - `CalendarEvent` actúa como ledger de auditoría: una fila por cada
+//     item enviado al provider. Con `externalEventId` la siguiente sync
+//     es idempotente (PATCH en vez de POST si ya existe).
+//
+// Consumidores: `sync-engine.ts`, `ics-export.ts`, cron `/api/cron/calendar-sync`.
+// ─────────────────────────────────────────────────────────────────
+
+enum CalendarProvider {
+  GOOGLE
+  MICROSOFT
+  ICS
+}
+
+model CalendarConnection {
+  id             String           @id @default(uuid())
+  userId         String
+  user           User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  provider       CalendarProvider
+
+  // OAuth credentials (raw en MVP — encrypt-at-rest queda como deuda P9).
+  // ICS provider deja estos null y solo usa `icsToken`.
+  accessToken    String?
+  refreshToken   String?
+  expiresAt      DateTime?
+
+  // Calendar id en el provider (Google "primary" / MS calendar GUID).
+  externalId     String?
+
+  // Toggles granulares: el usuario puede sincronizar solo milestones,
+  // o además sus deadlines, o también boundaries de sprints.
+  syncEnabled    Boolean          @default(true)
+  syncMilestones Boolean          @default(true)
+  syncDeadlines  Boolean          @default(true)
+  syncSprints    Boolean          @default(false)
+
+  // Token rotativo para feed ICS público. Único por seguridad: si el
+  // usuario sospecha que el feed se filtró, regenera el token y el
+  // anterior queda inutilizable.
+  icsToken       String?          @unique
+
+  lastSyncAt     DateTime?
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+
+  events         CalendarEvent[]
+
+  // Un usuario solo puede tener una conexión por provider (multi-cuenta
+  // Google se modelaría en una tabla separada en el futuro).
+  @@unique([userId, provider])
+  @@index([userId])
+}
+
+model CalendarEvent {
+  id              String              @id @default(uuid())
+  connectionId    String
+  connection      CalendarConnection  @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+
+  // Id devuelto por Google/MS (null para ICS — el cliente externo arma
+  // su propio uid desde el VEVENT). Permite upsert idempotente.
+  externalEventId String?
+
+  // Referencia opcional al objeto interno. Para milestones/deadlines es
+  // un Task.id; para sprints es un Sprint.id. NO es FK porque Task y
+  // Sprint son entidades distintas y queremos audit-log aún si se borra
+  // el origen.
+  taskId          String?
+
+  type            String              // "milestone" | "deadline" | "sprint"
+  title           String
+  startsAt        DateTime
+  endsAt          DateTime
+  syncedAt        DateTime            @default(now())
+
+  @@index([connectionId, type])
+  @@index([taskId])
 }
