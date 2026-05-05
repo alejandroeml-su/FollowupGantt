@@ -4,23 +4,41 @@ import * as Dialog from '@radix-ui/react-dialog'
 import { X, ChevronLeft, ChevronRight } from 'lucide-react'
 import { useUIStore } from '@/lib/stores/ui'
 import type { ReactNode } from 'react'
+import type { CurrentUserPresence } from '@/lib/auth/get-current-user-presence'
 
 /**
  * Panel lateral deslizable (Drawer) para el detalle de una tarea.
  * Se monta una sola vez por vista y se controla con el store UI.
  * La lista/kanban permanece visible: el drawer ocupa ~520px a la derecha.
+ *
+ * Wave P7 · C-DEBT-2 — Acepta `currentUser` para alinear el contrato con
+ * los containers que abren el drawer (List/Kanban/Table/Calendar/Gantt/
+ * GanttListMobile). El drawer NO consume el campo en su propio DOM —
+ * `TaskDrawerContent` (B3) es el consumidor real. La prop existe aquí
+ * para que el plumbing desde RSC sea consistente y para que tests
+ * puedan verificar que la identidad atraviesa toda la cadena.
  */
+export type TaskDrawerProps = {
+  children: ReactNode
+  breadcrumbs?: ReactNode
+  onNext?: () => void
+  onPrev?: () => void
+  /**
+   * Identidad mínima del usuario actual. `null`/`undefined` = sin sesión.
+   * Mantenido opcional para back-compat con callers existentes que no
+   * forwardean la prop todavía.
+   */
+  currentUser?: CurrentUserPresence | null
+}
+
 export function TaskDrawer({
   children,
   breadcrumbs,
   onNext,
   onPrev,
-}: {
-  children: ReactNode
-  breadcrumbs?: ReactNode
-  onNext?: () => void
-  onPrev?: () => void
-}) {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- API contract; consumido por TaskDrawerContent vía children
+  currentUser: _currentUser = null,
+}: TaskDrawerProps) {
   const open = useUIStore((s) => s.drawerTaskId != null)
   const closeDrawer = useUIStore((s) => s.closeDrawer)
 

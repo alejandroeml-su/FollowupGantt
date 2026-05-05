@@ -4,6 +4,7 @@ import { KanbanBoardClient } from '@/components/interactions/KanbanBoardClient'
 import { GlobalBreadcrumbs } from '@/components/interactions/GlobalBreadcrumbs'
 import { ViewSwitcher } from '@/components/interactions/ViewSwitcher'
 import { NewTaskButton } from '@/components/interactions/NewTaskButton'
+import { getCurrentUserPresence } from '@/lib/auth/get-current-user-presence'
 
 export const dynamic = 'force-dynamic'
 
@@ -15,6 +16,10 @@ const COLUMNS = [
 ] as const
 
 export default async function KanbanBoard() {
+  // Wave P7 · C-DEBT-2 — Identidad del usuario activo para drillarla al
+  // drawer (presence + edit locks).
+  const currentUser = await getCurrentUserPresence()
+
   const tasks = await prisma.task.findMany({
     where: { parentId: null, archivedAt: null },
     include: {
@@ -96,6 +101,7 @@ export default async function KanbanBoard() {
         allTasks={allTasksRaw}
         phases={phases}
         sprints={sprints}
+        currentUser={currentUser}
       />
     </div>
   )

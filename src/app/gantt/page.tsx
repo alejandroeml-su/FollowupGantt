@@ -13,6 +13,7 @@ import { ViewSwitcher } from '@/components/interactions/ViewSwitcher'
 import { NewTaskButton } from '@/components/interactions/NewTaskButton'
 import { getCachedCpmForProject } from '@/lib/scheduling/cache'
 import { getBaselinesForProject } from '@/lib/actions/baselines'
+import { getCurrentUserPresence } from '@/lib/auth/get-current-user-presence'
 
 export const dynamic = 'force-dynamic'
 
@@ -110,6 +111,11 @@ export default async function GanttTimeline({
   const sp = await searchParams
   const win = monthWindow(sp.month)
   const rangeEnd = new Date(+win.start + win.days * 86_400_000)
+
+  // Wave P7 · C-DEBT-2 — Identidad del usuario activo para drillarla al
+  // drawer (presence + edit locks) y a la capa de cursores en vivo del
+  // Gantt (B1 ya tipa la prop, sólo le faltaba que la page la cargara).
+  const currentUser = await getCurrentUserPresence()
 
   const dbTasks = await prisma.task.findMany({
     where: {
@@ -298,6 +304,7 @@ export default async function GanttTimeline({
           projects={projects}
           users={users}
           allTasks={tasks}
+          currentUser={currentUser}
         />
       </div>
 
@@ -318,6 +325,7 @@ export default async function GanttTimeline({
           taskCountByProject={taskCountByProject}
           baselineCountByProject={baselineCountByProject}
           baselinesByProject={baselinesByProject}
+          currentUser={currentUser}
         />
       </div>
     </div>

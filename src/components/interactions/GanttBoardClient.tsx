@@ -38,6 +38,7 @@ import {
 import { CaptureBaselineButton } from './CaptureBaselineButton'
 import { LiveCursorsLayer } from '@/components/realtime-cursors/LiveCursorsLayer'
 import type { CurrentUserIdentity } from '@/lib/realtime-cursors/use-live-cursors'
+import type { CurrentUserPresence } from '@/lib/auth/get-current-user-presence'
 import { BaselineSelector, type BaselineOption } from './BaselineSelector'
 import { BaselineTrendPanel } from './BaselineTrendPanel'
 import { BaselineTrendToggle } from './BaselineTrendToggle'
@@ -109,8 +110,13 @@ type Props = {
    * Wave P6 — usuario actual para suscribirse al canal de cursores en
    * vivo. Si es `null` el componente sigue mostrando los cursores
    * remotos pero no emite los suyos.
+   *
+   * Wave P7 · C-DEBT-2 — Tipo unificado a `CurrentUserPresence` para
+   * compartir la prop con el drawer (presence + edit locks). El mapeo
+   * a `CurrentUserIdentity` (que espera `{id, name}`) ocurre on-site
+   * cuando se monta el `<LiveCursorsLayer>`.
    */
-  currentUser?: CurrentUserIdentity | null
+  currentUser?: CurrentUserPresence | null
 }
 
 const DAY_WIDTH = 40 // px por día — balance legibilidad / densidad
@@ -1028,7 +1034,11 @@ function GanttBoardClientImpl({
         {activeProjectId && (
           <LiveCursorsLayer
             channelName={`project:${activeProjectId}:gantt`}
-            currentUser={currentUser ?? null}
+            currentUser={
+              currentUser
+                ? ({ id: currentUser.userId, name: currentUser.name } as CurrentUserIdentity)
+                : null
+            }
           />
         )}
       </div>
@@ -1060,12 +1070,14 @@ function GanttBoardClientImpl({
           const p = orderedIds[i - 1]
           if (p) useUIStore.getState().openDrawer(p)
         }}
+        currentUser={currentUser ?? null}
       >
         {drawerTask ? (
           <TaskDrawerContent
             task={drawerTask}
             projects={projects}
             users={users}
+            currentUser={currentUser ?? null}
           />
         ) : null}
       </TaskDrawer>

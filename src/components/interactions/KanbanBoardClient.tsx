@@ -49,6 +49,7 @@ import { useTaskShortcuts } from '@/lib/hooks/useTaskShortcuts'
 import { toast } from './Toaster'
 import { TaskFiltersBar } from './TaskFiltersBar'
 import { EMPTY_TASK_FILTERS, filterTasks, type TaskFilters } from '@/lib/taskFilters'
+import type { CurrentUserPresence } from '@/lib/auth/get-current-user-presence'
 
 type Column = {
   id: string        // TaskStatus literal (TODO, IN_PROGRESS, …)
@@ -75,6 +76,11 @@ type Props = {
   allTasks?: ParentOption[]
   phases?: PhaseOption[]
   sprints?: SprintOption[]
+  /**
+   * Wave P7 · C-DEBT-2 — Identidad del usuario actual para el drawer
+   * (presence + edit locks). Forwardeada a `<TaskDrawerContent>`.
+   */
+  currentUser?: CurrentUserPresence | null
 }
 
 const TYPE_COLOR: Record<string, string> = {
@@ -107,6 +113,7 @@ export function KanbanBoardClient({
   allTasks = [],
   phases = [],
   sprints = [],
+  currentUser = null,
 }: Props) {
   const [local, setLocal] = useState(tasksByColumn)
   const [activeId, setActiveId] = useState<string | null>(null)
@@ -352,6 +359,7 @@ export function KanbanBoardClient({
           const prev = orderedIds[i - 1]
           if (prev) useUIStore.getState().openDrawer(prev)
         }}
+        currentUser={currentUser}
       >
         {drawerTask ? (
           <TaskDrawerContent
@@ -359,6 +367,7 @@ export function KanbanBoardClient({
             projects={projects}
             users={users}
             allTasks={allTasks.length > 0 ? (allTasks as SerializedTask[]) : Object.values(local).flat()}
+            currentUser={currentUser}
           />
         ) : null}
       </TaskDrawer>

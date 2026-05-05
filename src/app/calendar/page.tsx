@@ -5,6 +5,7 @@ import { GlobalBreadcrumbs } from '@/components/interactions/GlobalBreadcrumbs'
 import { ViewSwitcher } from '@/components/interactions/ViewSwitcher'
 import { NewTaskButton } from '@/components/interactions/NewTaskButton'
 import { CalendarBoardClient } from '@/components/interactions/CalendarBoardClient'
+import { getCurrentUserPresence } from '@/lib/auth/get-current-user-presence'
 
 export const dynamic = 'force-dynamic'
 
@@ -43,6 +44,9 @@ export default async function CalendarPage({
 }) {
   const sp = await searchParams
   const win = monthWindow(sp.month)
+  // Wave P7 · C-DEBT-2 — Identidad del usuario activo para drillarla al
+  // drawer (presence + edit locks).
+  const currentUser = await getCurrentUserPresence()
   // Extendemos la ventana a +/- 1 semana para cubrir las celdas de overflow
   // que muestran días del mes anterior/siguiente en el mismo grid.
   const paddedStart = new Date(+win.start - 7 * 86_400_000)
@@ -144,6 +148,7 @@ export default async function CalendarPage({
         areas={areas}
         projects={projects}
         users={users}
+        currentUser={currentUser}
       />
     </div>
   )

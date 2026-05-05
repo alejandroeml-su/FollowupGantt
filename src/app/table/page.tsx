@@ -1,10 +1,15 @@
 import prisma from "@/lib/prisma";
 import { serializeTask } from "@/lib/types";
 import { TableBoardClient } from "@/components/interactions/TableBoardClient";
+import { getCurrentUserPresence } from "@/lib/auth/get-current-user-presence";
 
 export const dynamic = "force-dynamic";
 
 export default async function TableDBPage() {
+  // Wave P7 · C-DEBT-2 — Identidad del usuario activo para drillarla al
+  // drawer (presence + edit locks).
+  const currentUser = await getCurrentUserPresence();
+
   const [dbTasks, projects, users, allTasksRaw, gerencias, areas] = await Promise.all([
     prisma.task.findMany({
       include: {
@@ -41,6 +46,7 @@ export default async function TableDBPage() {
         allTasks={allTasksRaw}
         gerencias={gerencias}
         areas={areas}
+        currentUser={currentUser}
       />
     </div>
   );
