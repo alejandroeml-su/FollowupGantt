@@ -19,11 +19,11 @@
 
 import { useCallback, useRef, useState } from 'react'
 import { Paperclip, Upload, X } from 'lucide-react'
+import { uploadAttachmentAction } from '@/lib/storage/upload-attachment'
 import {
-  uploadAttachmentAction,
   MAX_FILE_BYTES,
   type AttachmentDTO,
-} from '@/lib/storage/upload-attachment'
+} from '@/lib/storage/attachment-validation'
 
 interface Props {
   taskId: string

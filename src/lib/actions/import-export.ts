@@ -698,6 +698,3 @@ function topoSortByParent(tasks: ExcelTaskRow[]): ExcelTaskRow[] {
   for (const t of tasks) visit(t)
   return result
 }
-
-// Re-export helper shapes (necesarios para tipar la UI cliente).
-export type { ExcelTaskRow, ExcelDepRow, ExcelResourceRow }

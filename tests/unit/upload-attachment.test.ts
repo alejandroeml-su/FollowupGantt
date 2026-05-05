@@ -106,24 +106,24 @@ function makeFile(content: string, name: string, type: string): File {
 
 describe('sanitizeFilename', () => {
   it('preserva nombres simples ASCII', async () => {
-    const { sanitizeFilename } = await import('@/lib/storage/upload-attachment')
+    const { sanitizeFilename } = await import('@/lib/storage/attachment-validation')
     expect(sanitizeFilename('foo.png')).toBe('foo.png')
     expect(sanitizeFilename('mi_archivo-1.PDF')).toBe('mi_archivo-1.PDF')
   })
 
   it('reemplaza espacios y caracteres no seguros con guion bajo', async () => {
-    const { sanitizeFilename } = await import('@/lib/storage/upload-attachment')
+    const { sanitizeFilename } = await import('@/lib/storage/attachment-validation')
     expect(sanitizeFilename('Mi documento (final).pdf')).toBe('Mi_documento__final_.pdf')
   })
 
   it('previene path traversal removiendo segmentos previos', async () => {
-    const { sanitizeFilename } = await import('@/lib/storage/upload-attachment')
+    const { sanitizeFilename } = await import('@/lib/storage/attachment-validation')
     expect(sanitizeFilename('../../etc/passwd')).toBe('passwd')
     expect(sanitizeFilename('foo\\bar\\baz.txt')).toBe('baz.txt')
   })
 
   it('falla a archivo.bin si el resultado queda vacío', async () => {
-    const { sanitizeFilename } = await import('@/lib/storage/upload-attachment')
+    const { sanitizeFilename } = await import('@/lib/storage/attachment-validation')
     expect(sanitizeFilename('')).toBe('archivo.bin')
     expect(sanitizeFilename('   ')).toBe('archivo.bin')
     expect(sanitizeFilename('...')).toBe('archivo.bin')
@@ -132,21 +132,21 @@ describe('sanitizeFilename', () => {
 
 describe('isAllowedMime', () => {
   it('acepta image/* y text/*', async () => {
-    const { isAllowedMime } = await import('@/lib/storage/upload-attachment')
+    const { isAllowedMime } = await import('@/lib/storage/attachment-validation')
     expect(isAllowedMime('image/png')).toBe(true)
     expect(isAllowedMime('image/jpeg')).toBe(true)
     expect(isAllowedMime('text/csv')).toBe(true)
   })
 
   it('acepta application/pdf y application/zip', async () => {
-    const { isAllowedMime } = await import('@/lib/storage/upload-attachment')
+    const { isAllowedMime } = await import('@/lib/storage/attachment-validation')
     expect(isAllowedMime('application/pdf')).toBe(true)
     expect(isAllowedMime('application/zip')).toBe(true)
     expect(isAllowedMime('application/x-zip-compressed')).toBe(true)
   })
 
   it('rechaza application/octet-stream y otros binarios', async () => {
-    const { isAllowedMime } = await import('@/lib/storage/upload-attachment')
+    const { isAllowedMime } = await import('@/lib/storage/attachment-validation')
     expect(isAllowedMime('application/octet-stream')).toBe(false)
     expect(isAllowedMime('application/x-msdownload')).toBe(false)
     expect(isAllowedMime('')).toBe(false)
@@ -199,9 +199,10 @@ describe('uploadAttachmentAction', () => {
   })
 
   it('rechaza archivos > 25MB con [FILE_TOO_LARGE]', async () => {
-    const { uploadAttachmentAction, MAX_FILE_BYTES } = await import(
+    const { uploadAttachmentAction } = await import(
       '@/lib/storage/upload-attachment'
     )
+    const { MAX_FILE_BYTES } = await import('@/lib/storage/attachment-validation')
     // Construye un File "fake" con size > MAX_FILE_BYTES sin alocar memoria real
     const big = new File(['x'], 'big.png', { type: 'image/png' })
     Object.defineProperty(big, 'size', { value: MAX_FILE_BYTES + 1 })

@@ -52,10 +52,12 @@ type Props = {
    */
   initialUpdatedAt?: string | null
   /**
-   * Identidad del usuario activo. Wave P6 · B3: opcional. Sin currentUser
-   * el editor renderiza igual pero sin presence.
+   * Identidad del usuario activo (CurrentUserPresence). Wave P6 · B3:
+   * opcional — sin currentUser el editor renderiza igual pero sin presence.
+   * El shape `{ userId, name }` viene de `getCurrentUserPresence()` y aquí
+   * se mapea internamente al `EditingUser { id, name }` que espera el lock.
    */
-  currentUser?: { id: string; name: string } | null
+  currentUser?: { userId: string; name: string } | null
 }
 
 type SaveState = 'idle' | 'dirty' | 'saving' | 'saved' | 'error'

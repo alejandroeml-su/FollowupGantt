@@ -39,93 +39,21 @@ import prisma from '@/lib/prisma'
 import { requireProjectAccess } from '@/lib/auth/check-project-access'
 import { getCurrentUser } from '@/lib/auth/get-current-user'
 import { uploadAttachment as storageUpload } from '@/lib/storage/supabase-storage'
-
-// ─────────────────────────── Constantes ───────────────────────────
-
-/**
- * Tope de tamaño por archivo. Vercel y la mayoría de proxies aceptan body
- * hasta ~50MB; 25MB nos deja margen y reduce timeouts. Para subir mayor
- * usar pre-signed upload directo desde browser (deuda registrada).
- */
-export const MAX_FILE_BYTES = 25 * 1024 * 1024 // 25 MB
-
-/**
- * Whitelist de mime types aceptados. Si el archivo no matchea EXACTO o
- * por prefijo (`image/`, `text/`), se rechaza.
- */
-export const ALLOWED_MIME_PREFIXES = ['image/', 'text/'] as const
-export const ALLOWED_MIME_EXACT = [
-  'application/pdf',
-  'application/zip',
-  'application/x-zip-compressed',
-] as const
-
-// ─────────────────────────── Errores tipados ──────────────────────────
-
-export type UploadAttachmentErrorCode =
-  | 'INVALID_INPUT'
-  | 'INVALID_FILE'
-  | 'FILE_TOO_LARGE'
-  | 'UPLOAD_FAILED'
-  | 'TASK_NOT_FOUND'
-  | 'FORBIDDEN'
-  | 'UNAUTHORIZED'
+import {
+  MAX_FILE_BYTES,
+  type UploadAttachmentErrorCode,
+  type AttachmentDTO,
+  sanitizeFilename,
+  isAllowedMime,
+} from '@/lib/storage/attachment-validation'
 
 function actionError(code: UploadAttachmentErrorCode, detail: string): never {
   throw new Error(`[${code}] ${detail}`)
 }
 
-// ─────────────────────────── Helpers ────────────────────────────────
-
-/**
- * Sanea el filename preservando sólo `[a-zA-Z0-9._-]`. Espacios → `_`.
- * Cualquier otro carácter (acentos, símbolos, paths) → `_`. Si tras
- * sanear queda vacío o solo extensión, devuelve `archivo.bin`.
- *
- * Importante: previene path traversal (`..`, `/`, `\`) en el storage path.
- */
-export function sanitizeFilename(input: string): string {
-  if (!input) return 'archivo.bin'
-  // Quitar segmentos de path antes de sanear (toma solo el "basename").
-  const base = input.split(/[\\/]/).pop() ?? input
-  const cleaned = base
-    .trim()
-    .replace(/\s+/g, '_')
-    .replace(/[^a-zA-Z0-9._-]/g, '_')
-  // Si quedó vacío o solo separadores, fallback.
-  if (!cleaned || /^[._-]+$/.test(cleaned)) return 'archivo.bin'
-  return cleaned
-}
-
-/**
- * Valida que el mime type esté en whitelist. Acepta prefijos (`image/png`,
- * `text/csv`) o exactos (`application/pdf`).
- */
-export function isAllowedMime(mime: string): boolean {
-  if (!mime) return false
-  for (const prefix of ALLOWED_MIME_PREFIXES) {
-    if (mime.startsWith(prefix)) return true
-  }
-  return (ALLOWED_MIME_EXACT as readonly string[]).includes(mime)
-}
-
 // ─────────────────────────── Schema ────────────────────────────────
 
 const TaskIdSchema = z.string().min(1, 'taskId es obligatorio')
-
-// ─────────────────────────── Tipos públicos ────────────────────────────
-
-export interface AttachmentDTO {
-  id: string
-  taskId: string
-  filename: string
-  storagePath: string | null
-  mimeType: string | null
-  sizeBytes: number | null
-  uploadedById: string | null
-  uploadedAt: string
-  createdAt: string
-}
 
 function toDTO(row: {
   id: string
