@@ -273,6 +273,14 @@ model User {
   // sobrevivir al actor que lo originó).
   auditEvents AuditEvent[] @relation("AuditEventActor")
 
+  // Ola P8 · Equipo P8-1 · Resource Management.
+  // Habilidades del usuario con nivel 1-5 (matriz de skills). Se usa para
+  // filtrar usuarios "disponibles" en TaskForm y para el algoritmo de
+  // rebalanceo (un task se puede reasignar a otro user con la misma skill
+  // y nivel >= al requerido). Cascade: al borrar el usuario se borran sus
+  // entradas en la matriz.
+  userSkills UserSkill[]
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
@@ -539,6 +547,15 @@ model Sprint {
   startedAt      DateTime?
   endedAt        DateTime?
   velocityActual Int?
+
+  // Ola P8 · Equipo P8-1 · Resource Management — overrides puntuales
+  // de capacidad por usuario para este sprint (vacaciones, on-call,
+  // compromisos paralelos). Shape esperado:
+  // { [userId: string]: { dailyHours?: number, off?: string[] } }
+  // Donde `off` lista días ISO (YYYY-MM-DD) sin disponibilidad y
+  // `dailyHours` sobreescribe el default 8h del calendario. NULL ⇒
+  // se usa la capacidad estándar del calendar.
+  capacityPerUser Json?
 
   tasks Task[]
 
@@ -2005,4 +2022,39 @@ model ChecklistItem {
 
   @@index([checklistId, position])
   @@index([done])
+}
+
+// ────────────────────────────────────────────────────────────────────
+// Ola P8 · Equipo P8-1 · Resource Management Visual.
+//
+// Skills + matriz Users × Skills × nivel 1-5. Permite:
+//   - Filtrar "available users" en TaskForm por skill + nivel mínimo.
+//   - Sugerir reasignaciones en `rebalance.ts` priorizando candidatos
+//     con la misma skill primaria del task original.
+//   - Reporting cruzado capacidad/skills.
+//
+// La asociación es M:N estricta (un user puede dominar varias skills,
+// una skill la pueden tener varios users). El nivel se fija en la
+// fila de la tabla pivote.
+// ────────────────────────────────────────────────────────────────────
+
+model Skill {
+  id        String   @id @default(uuid())
+  name      String   @unique
+  category  String?  // "frontend" | "backend" | "design" | "qa" | etc.
+  createdAt DateTime @default(now())
+
+  userSkills UserSkill[]
+}
+
+model UserSkill {
+  userId    String
+  skillId   String
+  level     Int      @default(3) // 1=novato … 5=experto
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  skill     Skill    @relation(fields: [skillId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@id([userId, skillId])
+  @@index([skillId])
 }
