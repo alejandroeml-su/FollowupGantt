@@ -285,6 +285,13 @@ model User {
   // entradas en la matriz.
   userSkills UserSkill[]
 
+  // Wave P8 · Equipo P8-2 · Risk Register + Monte Carlo.
+  // Riesgos de los que este usuario figura como owner / responsable de la
+  // mitigación. `SetNull` en Risk.ownerId preserva el riesgo aunque el
+  // usuario sea borrado (compliance PMI: el risk register debe sobrevivir
+  // a la rotación de su dueño original).
+  risksOwned Risk[] @relation("RiskOwner")
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
@@ -501,6 +508,11 @@ model Project {
   // es opcional en `Integration`: las integraciones globales del workspace
   // viven con `projectId = null` y aplican a todos los proyectos.
   integrations Integration[]
+
+  // Wave P8 · Equipo P8-2 · Risk Register. CASCADE al borrar proyecto:
+  // los riesgos son metadata viva del proyecto y no deben sobrevivir a su
+  // borrado (a diferencia de baselines o docs).
+  risks Risk[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -2086,4 +2098,67 @@ model UserSkill {
 
   @@id([userId, skillId])
   @@index([skillId])
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// Wave P8 · Equipo P8-2 · Risk Register + Monte Carlo simulation
+// ─────────────────────────────────────────────────────────────────────
+//
+// Riesgos del proyecto siguiendo PMBOK §11 (Project Risk Management):
+//   - Identificación con probability × impact (matriz 5×5).
+//   - Score = probability * impact ∈ [1, 25] calculado en app-level
+//     (`@/lib/risks/risk-score`). NO se persiste para evitar drift.
+//   - Tier (LOW/MEDIUM/HIGH/CRITICAL) derivado del score.
+//   - `triggerDelayDays` alimenta la simulación Monte Carlo
+//     (`@/lib/risks/monte-carlo`) que reescribe el CPM con delays
+//     materializados según `probability/100`.
+//
+// Decisiones (D-RISK-1 .. D-RISK-3):
+//   D-RISK-1 · `score` no se persiste. Si Prisma migra a generated columns
+//             se promoverá a campo derivado; por ahora calculado en server
+//             actions y al render.
+//   D-RISK-2 · `Risk` no se acopla a Tasks específicas en el MVP — el
+//             delay se asume sobre el proyecto completo (toda la cadena
+//             crítica). Iteración P8.5 introducirá `RiskTaskImpact[]` para
+//             segmentar el efecto por sub-cadena.
+//   D-RISK-3 · `closedAt` se setea en server action al cambiar status a
+//             CLOSED. La transición desde ACCEPTED a CLOSED es válida
+//             (riesgo aceptado pero ya no aplicable).
+
+enum RiskStatus {
+  OPEN
+  MITIGATING
+  ACCEPTED
+  CLOSED
+}
+
+model Risk {
+  id          String  @id @default(uuid())
+  projectId   String
+  project     Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  title       String
+  description String?
+
+  // Probability ∈ [1,5] e impact ∈ [1,5] (matriz 5×5 PMBOK).
+  probability Int
+  impact      Int
+
+  status  RiskStatus @default(OPEN)
+  ownerId String?
+  owner   User?      @relation("RiskOwner", fields: [ownerId], references: [id], onDelete: SetNull)
+
+  mitigation String?
+
+  // Estimación de duración adicional al CPM si el risk se materializa
+  // (días corridos). Alimenta la simulación Monte Carlo.
+  triggerDelayDays Int?
+
+  detectedAt DateTime  @default(now())
+  closedAt   DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([projectId, status])
+  @@index([probability, impact])
 }
