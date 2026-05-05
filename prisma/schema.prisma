@@ -299,6 +299,14 @@ model User {
   // borrar el usuario para no dejar tokens huérfanos.
   calendarConnections CalendarConnection[]
 
+  // Ola P8 · Equipo P8-3 · Cost Management.
+  // Gastos sometidos por este usuario y aprobados por este usuario. Los
+  // gastos sometidos usan `Restrict` (no perdemos historial financiero al
+  // borrar un usuario), las aprobaciones usan `SetNull` (preservamos el
+  // gasto aunque el aprobador desaparezca).
+  submittedExpenses Expense[] @relation("ExpenseSubmitter")
+  approvedExpenses  Expense[] @relation("ExpenseApprover")
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
@@ -521,6 +529,14 @@ model Project {
   // borrado (a diferencia de baselines o docs).
   risks Risk[]
 
+  // Ola P8 · Equipo P8-3 · Cost Management.
+  // Presupuesto base del proyecto (BAC) y moneda. Si NULL, los reportes de
+  // EAC/VAC fallan-back al sum(plannedValue) de tasks. La moneda canónica
+  // para reporting es USD; las conversiones usan la última `CurrencyRate`.
+  budget         Decimal? @db.Decimal(14, 2)
+  budgetCurrency String?
+  expenses       Expense[]
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -537,6 +553,12 @@ model Phase {
   project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
   tasks Task[]
+
+  // Ola P8 · Equipo P8-3 · Cost Management.
+  // Presupuesto opcional por fase (Waterfall). Sirve para alertas de
+  // overrun granular y para el chart Budget vs Actual por fase.
+  budget         Decimal? @db.Decimal(14, 2)
+  budgetCurrency String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -581,6 +603,13 @@ model Sprint {
   capacityPerUser Json?
 
   tasks Task[]
+
+  // Ola P8 · Equipo P8-3 · Cost Management.
+  // Presupuesto opcional por sprint (Agile). Útil para teams con T&M /
+  // contratos por iteración. Independiente del budget de phase: ambos
+  // pueden coexistir en proyectos híbridos PMI/Agile.
+  budget         Decimal? @db.Decimal(14, 2)
+  budgetCurrency String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -742,6 +771,12 @@ model Task {
   // of Done", "Validación QA") cada una con sus items. Cascade al borrar la
   // tarea para no dejar checklists huérfanos.
   checklists Checklist[]
+
+  // Ola P8 · Equipo P8-3 · Cost Management.
+  // Gastos asociados puntualmente a esta task (e.g. licencia, materiales).
+  // `SetNull` preserva el gasto si la task se elimina — el gasto sigue
+  // perteneciendo al proyecto y reporting EVM.
+  expenses Expense[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -2256,4 +2291,86 @@ model CalendarEvent {
 
   @@index([connectionId, type])
   @@index([taskId])
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// Ola P8 · Equipo P8-3 · Cost Management
+//
+// Modelo de gastos (Expense) + tipos de cambio (CurrencyRate). Los gastos
+// se someten en su moneda original y se cachea su equivalente en USD
+// (`amountUsd`) usando la última `CurrencyRate` disponible en el momento
+// de la submisión. Esto permite reporting consolidado sin tener que
+// recalcular conversiones a la hora de leer.
+//
+// Decisiones autónomas (P8-3):
+//   D-COST-1: Decimal(12,2) para amounts (suficiente para ~9.999B sin
+//             pérdida; > USD para 99% de proyectos internos Avante).
+//   D-COST-2: `receiptUrl` es placeholder hasta que P8-4 implemente
+//             Storage uploads (Supabase Storage signed URLs).
+//   D-COST-3: `incurredAt` es la fecha de la transacción real (no del
+//             registro), separada de `createdAt`. Se usa para reporting
+//             temporal y allocation a sprints/phases por ventana.
+//   D-COST-4: Status REIMBURSED es terminal post-APPROVED y solo lo setea
+//             un admin/finance manualmente (sin cron en MVP).
+// ─────────────────────────────────────────────────────────────────────
+
+enum ExpenseStatus {
+  DRAFT
+  SUBMITTED
+  APPROVED
+  REJECTED
+  REIMBURSED
+}
+
+model Expense {
+  id String @id @default(uuid())
+
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  taskId String?
+  task   Task?   @relation(fields: [taskId], references: [id], onDelete: SetNull)
+
+  submittedById String
+  submittedBy   User   @relation("ExpenseSubmitter", fields: [submittedById], references: [id], onDelete: Restrict)
+
+  description String
+  amount      Decimal @db.Decimal(12, 2)
+  currency    String  // ISO 4217: USD/MXN/EUR/...
+
+  // Snapshot de conversión a USD calculado al submit/approve usando la
+  // `CurrencyRate` más reciente. Nullable porque al crear DRAFT la
+  // conversión puede deferirse hasta SUBMITTED si no hay rates aún.
+  amountUsd Decimal? @db.Decimal(12, 2)
+
+  // Placeholder para futuro Storage upload (Ola P8-4). En P8-3 aceptamos
+  // URLs externas (Drive, S3 público) o queda NULL.
+  receiptUrl String?
+
+  status        ExpenseStatus @default(DRAFT)
+  approvedById  String?
+  approvedBy    User?         @relation("ExpenseApprover", fields: [approvedById], references: [id], onDelete: SetNull)
+  approvedAt    DateTime?
+  reimbursedAt  DateTime?
+  rejectedReason String?
+  incurredAt    DateTime
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([projectId, status])
+  @@index([submittedById, createdAt])
+  @@index([incurredAt])
+}
+
+model CurrencyRate {
+  id        String   @id @default(uuid())
+  base      String   // "USD" — moneda canónica del repositorio
+  quote     String   // "MXN", "EUR", ... ISO 4217
+  rate      Decimal  @db.Decimal(18, 8)
+  source    String   // "ecb" | "exchangerate-api" | "manual"
+  fetchedAt DateTime @default(now())
+
+  @@unique([base, quote, fetchedAt])
+  @@index([base, quote, fetchedAt(sort: Desc)])
 }
