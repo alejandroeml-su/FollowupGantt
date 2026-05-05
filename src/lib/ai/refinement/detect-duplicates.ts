@@ -22,9 +22,8 @@ import {
   callLLMObject,
   buildDetectDuplicatesPrompt,
   SYSTEM_DETECT_DUPLICATES,
-  LLMDisabledError,
-  LLMCallError,
 } from './prompts'
+import { LLMError, LLM_ERROR_CODES } from '@/lib/ai/llm'
 
 export interface DetectDuplicatesTask {
   id: string
@@ -143,14 +142,14 @@ export async function detectDuplicates(
       .slice(0, topN)
     return { source: 'llm', data: { candidates: filtered } }
   } catch (err) {
-    if (err instanceof LLMDisabledError) {
-      return {
-        source: 'heuristic',
-        data: detectDuplicatesHeuristic(input),
-        fallbackReason: 'ANTHROPIC_API_KEY no configurada',
+    if (err instanceof LLMError) {
+      if (err.code === LLM_ERROR_CODES.NO_CLIENT) {
+        return {
+          source: 'heuristic',
+          data: detectDuplicatesHeuristic(input),
+          fallbackReason: 'ANTHROPIC_API_KEY no configurada',
+        }
       }
-    }
-    if (err instanceof LLMCallError) {
       return {
         source: 'heuristic',
         data: detectDuplicatesHeuristic(input),

@@ -6,22 +6,27 @@
  *   1) Prompts (system + builder de user prompt) para cada una de las 5
  *      acciones de refinamiento. Centralizar los strings facilita ajuste
  *      sin tocar la lógica.
- *   2) Un adapter mínimo `callLLMObject` que envuelve `generateObject` del
- *      AI SDK (`ai` + `@ai-sdk/anthropic`) con:
- *        - Detección de `ANTHROPIC_API_KEY`. Sin clave → lanza
- *          `LLM_DISABLED` (capturable por las heurísticas de fallback).
+ *   2) Un wrapper `callLLMObject` que delega en `generateObject` (alias
+ *      de `generateLLM` con schema) del adapter unificado P7-1
+ *      (`@/lib/ai/llm`). Aquí sólo añadimos:
+ *        - Detección de `ANTHROPIC_API_KEY` (los tests P7-5 alternan
+ *          presencia / ausencia entre casos para verificar fallback).
  *        - Cache en memoria (Map) con TTL configurable. Llave = hash
- *          determinista de `system + prompt + schema-fingerprint`.
- *        - Modelo Claude Sonnet (versión configurable por env
- *          `LLM_MODEL_REFINEMENT`, default `claude-sonnet-4-6`).
+ *          determinista de `system + prompt + cacheKey`.
  *
- *  NOTA: el equipo P7-1 (LLM adapter base) aún no ha aterrizado en master.
- *  Este wrapper local cumple la misma función para P7-5 sin tocar archivos
- *  fuera de `src/lib/ai/refinement/`. Cuando el adapter base llegue se
- *  reemplaza este archivo por re-exports.
+ *  Wave C-DEBT-3: eliminamos el `generateObject` directo y los errores
+ *  locales `LLMDisabledError`/`LLMCallError`. Los consumers
+ *  (`detect-duplicates.ts`, `improve-description.ts`, etc.) ahora
+ *  detectan el motivo del fallback inspeccionando `LLMError.code`.
  */
 
 import type { z } from 'zod'
+
+import {
+  generateObject,
+  LLMError,
+  LLM_ERROR_CODES,
+} from '@/lib/ai/llm'
 
 // ─── Tipos compartidos ─────────────────────────────────────────────
 
@@ -36,23 +41,6 @@ export interface CallLLMOptions<TSchema extends z.ZodTypeAny> {
   cacheTtlMs?: number
   /** Etiqueta opcional para ayudar a depurar el cache. */
   cacheKey?: string
-}
-
-export class LLMDisabledError extends Error {
-  constructor(message = 'ANTHROPIC_API_KEY no está configurada') {
-    super(message)
-    this.name = 'LLMDisabledError'
-  }
-}
-
-export class LLMCallError extends Error {
-  constructor(
-    message: string,
-    public readonly cause?: unknown,
-  ) {
-    super(message)
-    this.name = 'LLMCallError'
-  }
 }
 
 // ─── Cache TTL en memoria ──────────────────────────────────────────
@@ -99,21 +87,27 @@ function fnv1a(str: string): string {
   return h.toString(16)
 }
 
-// ─── Adapter LLM ───────────────────────────────────────────────────
+// ─── Adapter LLM (bridge a @/lib/ai/llm) ───────────────────────────
 
 /**
- * Llama al modelo y devuelve un objeto validado por `schema`. Lanza:
- *   - `LLMDisabledError` si no hay `ANTHROPIC_API_KEY`.
- *   - `LLMCallError` si el modelo falla (red, parse, validación zod).
+ * Llama al modelo (vía adapter unificado P7-1) y devuelve un objeto
+ * validado por `schema`. Lanza `LLMError` con códigos de P7-1:
+ *   - `LLM_NO_CLIENT` si no hay `ANTHROPIC_API_KEY`.
+ *   - `LLM_PROVIDER_ERROR` / `LLM_TIMEOUT` / `LLM_RATE_LIMIT` /
+ *     `LLM_INVALID_RESPONSE` según el origen del fallo.
  *
- * El AI SDK ya valida el output contra el schema internamente; aquí
- * solo añadimos cache + detección de feature flag.
+ * Los consumers (`improveDescription`, `suggestChecklist`,
+ * `suggestTags`, `detectDuplicates`, `refineCategorization`) inspeccionan
+ * `err.code` para decidir el `fallbackReason` que muestran al usuario.
  */
 export async function callLLMObject<TSchema extends z.ZodTypeAny>(
   opts: CallLLMOptions<TSchema>,
 ): Promise<z.infer<TSchema>> {
   if (!process.env.ANTHROPIC_API_KEY) {
-    throw new LLMDisabledError()
+    throw new LLMError(
+      LLM_ERROR_CODES.NO_CLIENT,
+      'ANTHROPIC_API_KEY no está configurada',
+    )
   }
 
   const ttl = opts.cacheTtlMs ?? 60 * 60 * 1000
@@ -121,32 +115,14 @@ export async function callLLMObject<TSchema extends z.ZodTypeAny>(
   const cached = cacheGet<z.infer<TSchema>>(key)
   if (cached !== undefined) return cached
 
-  // Lazy-load del SDK para no impactar startup ni tests que no necesitan el LLM.
-  let generateObjectFn: typeof import('ai').generateObject
-  let anthropicFactory: typeof import('@ai-sdk/anthropic').anthropic
-  try {
-    const aiMod = await import('ai')
-    const anthropicMod = await import('@ai-sdk/anthropic')
-    generateObjectFn = aiMod.generateObject
-    anthropicFactory = anthropicMod.anthropic
-  } catch (err) {
-    throw new LLMCallError('No se pudo cargar el SDK de IA', err)
-  }
-
-  const modelId = process.env.LLM_MODEL_REFINEMENT || 'claude-sonnet-4-6'
-
-  try {
-    const { object } = await generateObjectFn({
-      model: anthropicFactory(modelId),
-      schema: opts.schema,
-      system: opts.system,
-      prompt: opts.prompt,
-    })
-    cacheSet(key, object, ttl)
-    return object as z.infer<TSchema>
-  } catch (err) {
-    throw new LLMCallError('La llamada al modelo falló', err)
-  }
+  const result = await generateObject({
+    schema: opts.schema,
+    system: opts.system,
+    prompt: opts.prompt,
+  })
+  const object = result.output as z.infer<TSchema>
+  cacheSet(key, object, ttl)
+  return object
 }
 
 // ─── Prompts: Improve description ──────────────────────────────────

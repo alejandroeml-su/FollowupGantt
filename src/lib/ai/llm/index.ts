@@ -1,30 +1,137 @@
 /**
- * Wave P7 · Equipo P7-1 · Adapter base de LLM (stub).
+ * Wave P7 · Adapter LLM unificado · Barrel oficial.
  *
- * Este archivo es un STUB MÍNIMO creado por P7-2 porque la rama
- * `feat/p7-1-llm-adapter-base` aún no fue mergeada con contenido. Cuando
- * P7-1 traiga su implementación real (proveedor Anthropic / OpenAI vía
- * `@ai-sdk/*`, telemetría, rate limiting, etc.) este módulo se REEMPLAZA
- * por completo manteniendo la misma superficie pública:
+ * Reemplaza el stub que P7-2 introdujo en `index.ts` antes de mergear
+ * P7-1 con su implementación real (Anthropic + OpenAI + cache + métricas
+ * + redacción de PII exhaustiva). El barrel publica DOS superficies en
+ * el mismo paquete `@/lib/ai/llm`:
  *
- *   - getLLMClient(opts?)   → cliente con métodos de generación.
- *   - generateText(req)     → genera texto/JSON con schema opcional.
- *   - withFallback(a, b)    → corre `a()`, si falla corre `b()`.
- *   - redactPII(text)       → redacta emails, teléfonos, RFC, CURP, IDs.
+ *   1) **Surface P7-1 (real)**: `generateLLM`, `generateLLMText`,
+ *      `withLLMCache`, `withLLMFallback`, `getRealLLMClient`,
+ *      `getLLMConfig`, `LLMError`, `LLM_ERROR_CODES`, métricas, tipos
+ *      reales (`LLMResponse`, `GenerateOptions`, `FallbackResult`, etc.).
+ *      Aliases unificados `generateText`/`generateObject` apuntan a
+ *      `generateLLM` para los nuevos consumers (P7-3/4/5).
  *
- * Por defecto el "cliente" no llama a ninguna API: lanza
- * `[LLM_UNAVAILABLE]` para forzar el fallback heurístico. Los tests inyectan
- * un cliente mockeado vía `setLLMClient(client)`.
+ *   2) **Back-compat layer (stub legacy de P7-2)**: tipos y helpers que
+ *      WBS sigue usando: `LLMClient`, `LLMRole`, `LLMMessage`,
+ *      `GenerateTextRequest`, `GenerateTextResponse`, `setLLMClient`,
+ *      `getLLMClient` (legacy sync), `withFallback` (firma 2-arg
+ *      `(primary, fallback) → { value, source, primaryError }`),
+ *      `redactPII` con placeholders `[EMAIL_REDACTED]`/`[PHONE_REDACTED]`
+ *      /`[ID_REDACTED]` (lo que `wbs-generate.test.ts` y
+ *      `wbs/prompt-templates.ts` esperan). Esto evita romper:
+ *        - `src/lib/actions/wbs-generator.ts` (NO TOUCH per misión).
+ *        - `tests/unit/wbs-generate.test.ts` (NO TOUCH).
+ *        - `src/lib/ai/wbs/generate-wbs.ts` y `wbs/prompt-templates.ts`.
+ *
+ * El `redactPII` REAL de P7-1 (placeholders `[EMAIL]`/`[PHONE]`/`[RFC]`,
+ * más cobertura de tokens/bearers/URLs) se accede por subpath
+ * `@/lib/ai/llm/redact-pii` (los tests P7-1 lo importan así). Internamente
+ * `generate.ts` lo usa para sanear prompts antes de enviarlos al SDK.
+ *
+ * Decisión de naming: cuando hubo colisión (`withFallback`,
+ * `getLLMClient`), el LEGACY conserva el nombre canónico (porque
+ * `wbs-generator.ts` es NO TOUCH y lo importa así); el real P7-1 se
+ * publica con sufijo (`withLLMFallback`, `getRealLLMClient`). Los
+ * nuevos consumers (P7-3/4/5) importan `generateText`/`generateObject`
+ * que SÍ apuntan al adapter real (la firma legacy `{messages}` queda
+ * disponible vía sobrecarga para los pocos call sites históricos).
  */
 
-// ─────────────────────────── Tipos públicos ───────────────────────────
+// ─────────────────────────── Real P7-1 surface ─────────────────────────
 
+export {
+  getLLMClient as getRealLLMClient,
+  getLLMConfig,
+  resolveProvider,
+  __resetLLMClient,
+  type ResolvedLLMClient,
+} from './client'
+
+export {
+  generateLLM,
+  generateLLMText,
+} from './generate'
+
+export {
+  withFallback as withLLMFallback,
+  type LlmCallable,
+  type HeuristicCallable,
+  type WithFallbackOptions,
+} from './with-fallback'
+
+export {
+  withLLMCache,
+  buildLLMCacheKey,
+  buildLLMCacheTag,
+  __resetLLMCacheWarmTracking,
+  type WithLLMCacheOptions,
+  type CacheKeyParts,
+} from './with-cache'
+
+export {
+  redactPIIBatch,
+  listRedactionPlaceholders,
+} from './redact-pii'
+
+export {
+  LLMError,
+  LLM_ERROR_CODES,
+  type LLMErrorCode,
+  type LLMProvider,
+  type LLMConfig,
+  type LLMUsage,
+  type LLMResponse,
+  type GenerateOptions,
+  type FallbackResult,
+  type LLMMetricsSnapshot,
+} from './types'
+
+export {
+  recordLLMCall,
+  recordLLMCacheHit,
+  recordLLMError,
+  recordLLMFallback,
+  getLLMMetrics,
+  resetLLMMetrics,
+} from './metrics'
+
+// ─────────────────────────── Aliases unificados ────────────────────────
+//
+// `generateLLM` cubre ambos casos (texto y objeto) según haya schema o
+// no. Exportamos aliases con los nombres del SDK `ai` para legibilidad
+// en los call sites de P7-3/P7-4/P7-5. Para `generateText` mantenemos
+// además la sobrecarga legacy `{messages}` que el WBS usa históricamente.
+
+import { generateLLM } from './generate'
+import { LLMError as LLMErrorReal, LLM_ERROR_CODES } from './types'
+
+/**
+ * Alias de `generateLLM`. Útil cuando el caller pasa `schema` y espera
+ * un objeto tipado (`generateObject({ prompt, schema })`).
+ */
+export const generateObject = generateLLM
+
+// ═══════════════════════════════════════════════════════════════════════
+// LEGACY back-compat layer (stub P7-2 surface)
+// ═══════════════════════════════════════════════════════════════════════
+
+/** Roles soportados por el cliente legacy (estilo chat-completions). */
 export type LLMRole = 'system' | 'user' | 'assistant'
+
+/** Mensaje del cliente legacy. */
 export interface LLMMessage {
   role: LLMRole
   content: string
 }
 
+/**
+ * Request del cliente legacy. El stub P7-2 lo modelaba como una
+ * conversación con `system` + `messages`. Lo conservamos para que
+ * `src/lib/ai/wbs/generate-wbs.ts` (que aterrizó antes que P7-1) y los
+ * tests del WBS (`setLLMClient(buildClient(...))`) sigan funcionando.
+ */
 export interface GenerateTextRequest {
   /** Prompt de sistema (instrucciones globales). */
   system?: string
@@ -42,6 +149,7 @@ export interface GenerateTextRequest {
   signal?: AbortSignal
 }
 
+/** Respuesta del cliente legacy. */
 export interface GenerateTextResponse {
   /** Texto crudo devuelto por el modelo. */
   text: string
@@ -53,64 +161,111 @@ export interface GenerateTextResponse {
   provider: string
 }
 
+/**
+ * Cliente legacy estilo P7-2. Los tests del WBS inyectan implementaciones
+ * de éste vía `setLLMClient` para controlar la salida del LLM sin tocar
+ * el provider real.
+ */
 export interface LLMClient {
   generateText(req: GenerateTextRequest): Promise<GenerateTextResponse>
 }
 
-// ─────────────────────────── Errores ──────────────────────────────────
-
-export class LLMError extends Error {
-  constructor(public code: 'LLM_UNAVAILABLE' | 'LLM_TIMEOUT' | 'LLM_INVALID_OUTPUT', message: string) {
-    super(`[${code}] ${message}`)
-    this.name = 'LLMError'
-  }
-}
-
-// ─────────────────────────── Cliente por defecto ──────────────────────
-
-const stubClient: LLMClient = {
+/**
+ * Stub que lanza siempre. Sirve como cliente por defecto cuando no hay
+ * inyección y permite a `withFallback` (legacy) caer a la heurística.
+ */
+const legacyStubClient: LLMClient = {
   async generateText(): Promise<GenerateTextResponse> {
-    throw new LLMError(
-      'LLM_UNAVAILABLE',
-      'Adapter P7-1 stub: configura un cliente real con setLLMClient() o deja que withFallback active la heurística.',
+    throw new LLMErrorReal(
+      LLM_ERROR_CODES.NO_CLIENT,
+      'Adapter legacy sin cliente inyectado: usa setLLMClient() en tests o configura un provider real.',
     )
   },
 }
 
-let activeClient: LLMClient = stubClient
+let activeLegacyClient: LLMClient = legacyStubClient
 
 /**
- * Inyecta un cliente personalizado (típicamente desde tests). Si se pasa
- * `null`, restaura el stub.
+ * Inyecta un cliente legacy (típicamente desde tests). `null` restaura
+ * el stub. Lo usan los tests de WBS (`setLLMClient(buildClient(...))`).
  */
 export function setLLMClient(client: LLMClient | null): void {
-  activeClient = client ?? stubClient
+  activeLegacyClient = client ?? legacyStubClient
 }
-
-/** Devuelve el cliente activo. */
-export function getLLMClient(): LLMClient {
-  return activeClient
-}
-
-// ─────────────────────────── Helpers públicos ─────────────────────────
 
 /**
- * Wrapper de `client.generateText` con timeout suave.
+ * Devuelve el cliente legacy activo. Mantiene firma SÍNCRONA del stub
+ * P7-2 para no romper código existente. El cliente real P7-1 se obtiene
+ * vía `getRealLLMClient()` (async).
  */
-export async function generateText(
+export function getLLMClient(): LLMClient {
+  return activeLegacyClient
+}
+
+/**
+ * Implementación legacy de `generateText` (estilo `{system, messages}`).
+ * Delega en el cliente legacy inyectado. NO usa el adapter P7-1 porque
+ * los consumers que la invocan (WBS) dependen de la inyección
+ * sincronica vía `setLLMClient`; mezclar ambas APIs causaría más
+ * fricción que la deuda que evitamos.
+ */
+async function generateTextLegacy(
   req: GenerateTextRequest,
 ): Promise<GenerateTextResponse> {
-  return getLLMClient().generateText(req)
+  return activeLegacyClient.generateText(req)
+}
+
+/**
+ * `generateText` con sobrecarga unificada:
+ *   - Forma legacy `{messages}` → delega en el cliente legacy inyectado.
+ *   - Forma P7-1 `{prompt}` → delega en `generateLLM` real.
+ *
+ * Permite que `generate-wbs.ts` (call sites históricos `{messages}`) y
+ * los nuevos consumers (P7-3/4/5 con `{prompt, schema}`) compartan el
+ * mismo nombre.
+ */
+export function generateText(
+  req: GenerateTextRequest,
+): Promise<GenerateTextResponse>
+export function generateText(
+  req: Parameters<typeof generateLLM>[0],
+): ReturnType<typeof generateLLM>
+export function generateText(req: unknown): unknown {
+  if (
+    req != null &&
+    typeof req === 'object' &&
+    'messages' in (req as Record<string, unknown>) &&
+    Array.isArray((req as { messages?: unknown }).messages)
+  ) {
+    return generateTextLegacy(req as GenerateTextRequest)
+  }
+  return generateLLM(req as Parameters<typeof generateLLM>[0])
+}
+
+// ─────────────────────────── Legacy withFallback ───────────────────────
+
+/**
+ * Resultado de la firma legacy `withFallback(primary, fallback)`. Es lo
+ * que `wbs-generator.ts` (NO TOUCH) consume como
+ * `{ value, source, primaryError }`. La firma rica de P7-1 se publica
+ * como `withLLMFallback`.
+ */
+export interface LegacyFallbackResult<T> {
+  value: T
+  source: 'primary' | 'fallback'
+  primaryError?: string
 }
 
 /**
  * Ejecuta `primary()`. Si lanza, ejecuta `fallback()` y se queda con esa
- * respuesta. Devuelve también la fuente para auditoría.
+ * respuesta. Devuelve también la fuente para auditoría. Esta es la
+ * firma 2-arg del stub P7-2 — la conservamos como nombre canónico
+ * `withFallback` por compatibilidad con `wbs-generator.ts`.
  */
 export async function withFallback<T>(
   primary: () => Promise<T>,
   fallback: () => Promise<T>,
-): Promise<{ value: T; source: 'primary' | 'fallback'; primaryError?: string }> {
+): Promise<LegacyFallbackResult<T>> {
   try {
     const value = await primary()
     return { value, source: 'primary' }
@@ -121,16 +276,26 @@ export async function withFallback<T>(
   }
 }
 
-// ─────────────────────────── PII redaction ────────────────────────────
+// ─────────────────────────── Legacy redactPII ──────────────────────────
+//
+// La versión REAL de P7-1 vive en `./redact-pii` y usa placeholders
+// `[EMAIL]`/`[PHONE]`/`[RFC]`/`[TOKEN]`/etc. Ese módulo se importa por
+// subpath (`@/lib/ai/llm/redact-pii`) en los tests P7-1 y dentro de
+// `generate.ts`. Pero `wbs/prompt-templates.ts` y
+// `wbs-generate.test.ts` (NO TOUCH) esperan los placeholders del stub
+// P7-2: `[EMAIL_REDACTED]`/`[PHONE_REDACTED]`/`[ID_REDACTED]`. Para no
+// romperlos publicamos en el barrel esta versión legacy alineada con
+// esos placeholders. Así `wbs/prompt-templates.ts` sigue funcionando
+// sin cambios y los tests de P7-1 (subpath) tampoco se afectan.
 
-const EMAIL_RE = /([a-zA-Z0-9._%+-]+)@([a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/g
+const LEGACY_EMAIL_RE = /([a-zA-Z0-9._%+-]+)@([a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/g
 // Phone: secuencias 7-15 dígitos con separadores razonables, evita hits
 // en horas / fechas (3-6 dígitos no se redactan).
-const PHONE_RE = /(\+?\d[\d\s().-]{6,}\d)/g
+const LEGACY_PHONE_RE = /(\+?\d[\d\s().-]{6,}\d)/g
 // RFC mexicano (3-4 letras + 6 dígitos + 3 alfanuméricos).
-const RFC_RE = /\b([A-ZÑ&]{3,4})\d{6}[A-Z\d]{3}\b/g
+const LEGACY_RFC_RE = /\b([A-ZÑ&]{3,4})\d{6}[A-Z\d]{3}\b/g
 // CURP mexicano (18 caracteres específicos).
-const CURP_RE = /\b[A-Z]{4}\d{6}[HM][A-Z]{5}[A-Z\d]\d\b/g
+const LEGACY_CURP_RE = /\b[A-Z]{4}\d{6}[HM][A-Z]{5}[A-Z\d]\d\b/g
 
 /**
  * Redacta PII básica del texto antes de enviarlo a un LLM externo.
@@ -139,15 +304,18 @@ const CURP_RE = /\b[A-Z]{4}\d{6}[HM][A-Z]{5}[A-Z\d]\d\b/g
  *   - phones → [PHONE_REDACTED]
  *   - rfc/curp → [ID_REDACTED]
  *
- * Idempotente y determinístico. No recursivo (un solo pass por regex).
+ * Versión legacy (placeholders del stub P7-2). Mantenida para no romper
+ * `wbs/prompt-templates.ts` ni `wbs-generate.test.ts`. Los nuevos
+ * consumers que prefieran la cobertura amplia (tokens, bearers, URLs)
+ * deben importar `redactPII` desde `@/lib/ai/llm/redact-pii`.
  */
 export function redactPII(text: string): string {
   if (!text) return text
   let out = text
-  out = out.replace(CURP_RE, '[ID_REDACTED]')
-  out = out.replace(RFC_RE, '[ID_REDACTED]')
-  out = out.replace(EMAIL_RE, '[EMAIL_REDACTED]')
-  out = out.replace(PHONE_RE, (match) => {
+  out = out.replace(LEGACY_CURP_RE, '[ID_REDACTED]')
+  out = out.replace(LEGACY_RFC_RE, '[ID_REDACTED]')
+  out = out.replace(LEGACY_EMAIL_RE, '[EMAIL_REDACTED]')
+  out = out.replace(LEGACY_PHONE_RE, (match) => {
     // No tocamos cosas como "1-2 días" o "8:30" — chequeo de longitud digital.
     const digits = match.replace(/\D/g, '')
     return digits.length >= 7 ? '[PHONE_REDACTED]' : match
