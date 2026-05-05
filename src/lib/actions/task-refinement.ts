@@ -22,6 +22,7 @@ import { revalidatePath } from 'next/cache'
 import prisma from '@/lib/prisma'
 import { requireProjectAccess } from '@/lib/auth/check-project-access'
 import { getCurrentUser } from '@/lib/auth/get-current-user'
+import { applyAIChecklistSuggestion } from '@/lib/actions/checklist'
 import {
   improveDescription,
   type ImproveDescriptionInput,
@@ -253,24 +254,59 @@ export async function applyRefinementAction(
     })
     applied.push('description')
   } else if (kind === 'checklist') {
-    // Sin modelo dedicado: anexamos a la descripción como bloque.
-    const items = Array.isArray(payload.items) ? (payload.items as Array<{ text: string; optional?: boolean }>) : []
+    // Wave C-debt-1 · Equipo C-DEBT-1 — modelo relacional + back-compat.
+    //
+    // Hasta P7-5 esto anexaba el checklist como markdown a `description`.
+    // Ahora el flag `mode` decide:
+    //   - 'structured' (DEFAULT): crea filas Checklist + ChecklistItem via
+    //     `applyAIChecklistSuggestion`. La descripción no se toca.
+    //   - 'markdown': comportamiento anterior — útil para back-compat de
+    //     callers existentes que aún esperan ver el checklist en la
+    //     descripción.
+    const items = Array.isArray(payload.items)
+      ? (payload.items as Array<{ text: string; optional?: boolean }>)
+      : []
     if (items.length === 0) {
       return { ok: false, error: '[INVALID_INPUT] checklist vacío' }
     }
-    const block = [
-      '',
-      '## Checklist (sugerida por IA)',
-      ...items.map((it) => `- [ ] ${it.text}${it.optional ? ' (opcional)' : ''}`),
-    ].join('\n')
-    const newDesc = `${task.description ?? ''}${block}`
-    updates.description = newDesc
-    historyEntries.push({
-      field: 'description',
-      oldValue: task.description ?? '',
-      newValue: newDesc,
-    })
-    applied.push('checklist')
+    const mode = payload.mode === 'markdown' ? 'markdown' : 'structured'
+
+    if (mode === 'structured') {
+      // Delegamos en la acción dedicada. Crea Checklist + N items en una
+      // transacción atómica y revalida los paths relevantes. Devolvemos
+      // applied=['checklist'] sin tocar `updates`/`history` para que la
+      // transacción de abajo no incluya ningún update redundante a la task.
+      try {
+        await applyAIChecklistSuggestion({
+          taskId: task.id,
+          items: items.map((it) => ({
+            text: it.text,
+            optional: it.optional,
+          })),
+        })
+        applied.push('checklist')
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err)
+        return { ok: false, error: msg }
+      }
+    } else {
+      // Back-compat: anexa markdown a la descripción.
+      const block = [
+        '',
+        '## Checklist (sugerida por IA)',
+        ...items.map(
+          (it) => `- [ ] ${it.text}${it.optional ? ' (opcional)' : ''}`,
+        ),
+      ].join('\n')
+      const newDesc = `${task.description ?? ''}${block}`
+      updates.description = newDesc
+      historyEntries.push({
+        field: 'description',
+        oldValue: task.description ?? '',
+        newValue: newDesc,
+      })
+      applied.push('checklist')
+    }
   } else if (kind === 'tags') {
     const tags = Array.isArray(payload.tags) ? (payload.tags as string[]) : []
     const replace = Boolean(payload.replace)
@@ -349,12 +385,20 @@ export async function applyRefinementAction(
   }
 
   // Mutar BD en transacción con auditoría.
-  await prisma.$transaction([
-    prisma.task.update({
-      where: { id: task.id },
-      data: updates,
-      select: { id: true },
-    }),
+  // Wave C-debt-1: cuando `kind='checklist'` con `mode='structured'` no hay
+  // cambios en `Task` (los items viven en su propia tabla via
+  // `applyAIChecklistSuggestion`), así que omitimos el update vacío.
+  const hasTaskUpdates = Object.keys(updates).length > 0
+  const tx = [
+    ...(hasTaskUpdates
+      ? [
+          prisma.task.update({
+            where: { id: task.id },
+            data: updates,
+            select: { id: true },
+          }),
+        ]
+      : []),
     ...historyEntries.map((h) =>
       prisma.taskHistory.create({
         data: {
@@ -366,7 +410,10 @@ export async function applyRefinementAction(
         },
       }),
     ),
-  ])
+  ]
+  if (tx.length > 0) {
+    await prisma.$transaction(tx)
+  }
 
   revalidatePath('/list')
   revalidatePath('/gantt')

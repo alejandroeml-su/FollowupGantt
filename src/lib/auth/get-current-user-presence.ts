@@ -1,7 +1,7 @@
 /**
  * Helper · Identidad mínima del usuario actual para Realtime/Presence.
  *
- * Wave P6 · Equipo B1.
+ * Wave P6 · Equipo B1 · ampliado en Wave C-debt-1 (Equipo C-DEBT-1).
  *
  * Por qué un helper aparte de `getCurrentUser`:
  * - `getCurrentUser` retorna el `SessionUser` completo (id/email/name/roles).
@@ -16,11 +16,13 @@
  *   invocar Server Components / Server Actions. La importación transitiva
  *   de `getCurrentUser` arrastra `import 'server-only'`, lo que el bundler
  *   de Next 16 hará explotar si alguien lo importa desde un client.
- * - `avatarUrl` queda `undefined` en MVP: el modelo `User` aún no expone un
- *   campo de imagen. Cuando el backlog incluya avatares, basta con leer aquí
- *   `user.image` y propagar — el resto del wiring ya lo soporta como opcional.
+ * - Wave C-debt-1: `avatarUrl` ahora se hidrata leyendo `User.image` desde
+ *   prisma (nullable). Si la columna está vacía o el usuario aún no se
+ *   actualizó, devolvemos `undefined` y el wiring de presence lo trata como
+ *   "sin avatar" (degradación a iniciales).
  */
 import { getCurrentUser } from '@/lib/auth/get-current-user'
+import prisma from '@/lib/prisma'
 
 export type CurrentUserPresence = {
   userId: string
@@ -39,13 +41,25 @@ export type CurrentUserPresence = {
  *   return <ProjectHeaderPresence currentUser={currentUser} projectId={id} />
  * }
  * ```
+ *
+ * Hace una query extra a `User.image`. Si en el futuro `SessionUser`
+ * incluye `image` directamente, se puede eliminar.
  */
 export async function getCurrentUserPresence(): Promise<CurrentUserPresence | null> {
   const user = await getCurrentUser()
   if (!user) return null
+
+  // Lectura explícita de `image` — el `SessionUser` no la incluye por ser
+  // un campo cosmético no relacionado con auth/permisos. La query es barata
+  // (PK lookup, single column) y `User` está hot en pool.
+  const profile = await prisma.user.findUnique({
+    where: { id: user.id },
+    select: { image: true },
+  })
+
   return {
     userId: user.id,
     name: user.name,
-    // avatarUrl: futuro — `user.image` cuando se añada al schema.
+    avatarUrl: profile?.image ?? undefined,
   }
 }

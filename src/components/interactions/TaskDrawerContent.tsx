@@ -27,6 +27,7 @@ import { TaskTimeTrackingSection } from '@/components/time-tracking/TaskTimeTrac
 import { TaskCustomFieldsSection } from '@/components/custom-fields/TaskCustomFieldsSection'
 import { TaskGoalsSection } from '@/components/goals/TaskGoalsSection'
 import { TaskDocsSection } from '@/components/docs/TaskDocsSection'
+import { TaskChecklistSection } from '@/components/tasks/TaskChecklistSection'
 import { TaskAuditHistorySection } from '@/components/tasks/TaskAuditHistorySection'
 import { TaskInsightsSection } from '@/components/tasks/TaskInsightsSection'
 import { AITaskRefineMenu } from '@/components/tasks/AITaskRefineMenu'
@@ -274,6 +275,15 @@ export function TaskDrawerContent({
            */}
           <div className="border-t border-border bg-card/40 px-6 py-4">
             <TaskDocsSection taskId={task.id} />
+          </div>
+          {/*
+           * Wave C-debt-1 · Equipo C-DEBT-1 — Sección de Checklists relacional.
+           * Reemplaza el hack P7-5 que anexaba el checklist sugerido por IA
+           * a `description` como markdown. Ahora cada task puede tener N
+           * checklists con items toggleables, reordenables y borrables.
+           */}
+          <div className="border-t border-border bg-card/40 px-6 py-4">
+            <TaskChecklistSection taskId={task.id} />
           </div>
           {/*
            * Equipo D2 — Auditoría: últimos eventos del entityType "task" para

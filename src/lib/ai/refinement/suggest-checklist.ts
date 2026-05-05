@@ -5,6 +5,14 @@
  * accionables y verificables. Heurística de fallback cubre los casos
  * más comunes (DESIGN/BUG/RELEASE/DOCS) reusando palabras clave del
  * P5-4 categorize.
+ *
+ * Wave C-debt-1 · Equipo C-DEBT-1 — la rama de aplicación de la
+ * sugerencia (`applyRefinementAction(kind='checklist')` en
+ * `src/lib/actions/task-refinement.ts`) ahora soporta un flag
+ * `mode: 'markdown' | 'structured'` con default `'structured'`. En
+ * 'structured' delega en `applyAIChecklistSuggestion` para crear filas
+ * reales en `Checklist`/`ChecklistItem` en vez de anexar markdown a
+ * `task.description`. 'markdown' se mantiene como back-compat.
  */
 
 import {
