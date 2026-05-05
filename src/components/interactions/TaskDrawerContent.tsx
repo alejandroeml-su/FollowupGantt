@@ -28,6 +28,7 @@ import { TaskCustomFieldsSection } from '@/components/custom-fields/TaskCustomFi
 import { TaskGoalsSection } from '@/components/goals/TaskGoalsSection'
 import { TaskDocsSection } from '@/components/docs/TaskDocsSection'
 import { TaskChecklistSection } from '@/components/tasks/TaskChecklistSection'
+import { AttachmentList } from '@/components/attachments/AttachmentList'
 import { TaskAuditHistorySection } from '@/components/tasks/TaskAuditHistorySection'
 import { TaskInsightsSection } from '@/components/tasks/TaskInsightsSection'
 import { AITaskRefineMenu } from '@/components/tasks/AITaskRefineMenu'
@@ -284,6 +285,14 @@ export function TaskDrawerContent({
            */}
           <div className="border-t border-border bg-card/40 px-6 py-4">
             <TaskChecklistSection taskId={task.id} />
+          </div>
+          {/*
+           * Wave P8 · Equipo P8-4 — Lista de adjuntos con upload real a
+           * Supabase Storage. Drag-drop multi-file, preview de imágenes/PDFs
+           * inline, signed URLs con TTL 1h.
+           */}
+          <div className="border-t border-border bg-card/40 px-6 py-4">
+            <AttachmentList taskId={task.id} />
           </div>
           {/*
            * Equipo D2 — Auditoría: últimos eventos del entityType "task" para
