@@ -175,6 +175,13 @@ model User {
   name  String
   email String @unique
 
+  // Wave C-debt-1 · Avatar URL (o data-URI). Opcional porque la mayoría de
+  // usuarios no sube imagen al inicio. Se publica vía
+  // `getCurrentUserPresence` (Realtime/Presence — wave P6 · B1) y se usará
+  // a futuro en avatares del menú/comentarios. NUNCA exponer junto con
+  // PII como email/roles fuera del canal Presence.
+  image         String?
+
   // ── Auth (P1 MVP) ─────────────────────────────────────────────
   // Hash PBKDF2 + salt (formato `pbkdf2$<iter>$<saltB64>$<hashB64>`).
   // Nullable porque puede provenir de SSO en futuras iteraciones.
@@ -688,6 +695,13 @@ model Task {
   // Vínculos de la tarea a issues/PRs externos en GitHub. Una tarea puede
   // tener múltiples links (ej. issue de bug + PR que lo resuelve).
   githubLinks TaskGitHubLink[]
+
+  // Wave C-debt-1 · Equipo C-DEBT-1 — Checklists relacionales (deuda P7-5).
+  // Originalmente P7-5 anexaba el checklist sugerido por IA como markdown a
+  // `description`. Ahora cada Task puede tener N checklists (ej. "Definition
+  // of Done", "Validación QA") cada una con sus items. Cascade al borrar la
+  // tarea para no dejar checklists huérfanos.
+  checklists Checklist[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1947,4 +1961,48 @@ model TaskGitHubLink {
   @@unique([taskId, repoFullName, issueNumber])
   @@index([taskId])
   @@index([repoFullName, issueNumber])
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// Wave C-debt-1 · Equipo C-DEBT-1 — Checklists relacionales.
+//
+// Reemplaza el hack P7-5 (que anexaba el checklist sugerido por IA como
+// markdown al `task.description`). Modelo:
+//   - `Checklist` agrupa items bajo un `title` opcional y pertenece a una
+//     `Task`. Cascade al borrar la tarea.
+//   - `ChecklistItem` lleva el texto, flag `done` y metadatos de auditoría
+//     (`doneAt`, `doneById`) para reportes futuros (velocity, throughput).
+//     `position` es Float para soportar fractional indexing en reorder
+//     (ADR-001 · mismo patrón que `Task.position`).
+//
+// Errores tipados (server actions): `[CHECKLIST_NOT_FOUND]`,
+// `[ITEM_NOT_FOUND]`, `[INVALID_INPUT]`, `[FORBIDDEN]`.
+// ─────────────────────────────────────────────────────────────────────
+
+model Checklist {
+  id        String   @id @default(uuid())
+  taskId    String
+  task      Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  title     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  items     ChecklistItem[]
+
+  @@index([taskId])
+}
+
+model ChecklistItem {
+  id          String    @id @default(uuid())
+  checklistId String
+  checklist   Checklist @relation(fields: [checklistId], references: [id], onDelete: Cascade)
+  text        String
+  done        Boolean   @default(false)
+  position    Float     @default(1)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  doneAt      DateTime?
+  doneById    String?
+
+  @@index([checklistId, position])
+  @@index([done])
 }
