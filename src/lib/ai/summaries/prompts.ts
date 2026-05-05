@@ -4,10 +4,15 @@
  * Prompts compartidos + thin LLM adapter con `withFallback`.
  *
  * Decisiones:
- *   - El adapter aquí es minimal: lee `LLM_ENABLED` de env. Cuando esté
- *     disponible el adapter del Equipo P7-1 (`@/lib/ai/llm`), se podrá
- *     reemplazar la implementación interna sin cambiar el contrato
- *     `callLLM(args) -> Promise<string>`.
+ *   - El adapter unificado vive en `@/lib/ai/llm` (P7-1). Aquí
+ *     mantenemos un wrapper `callLLM(args) -> Promise<string>` que
+ *     enruta a `generateLLMText` y devuelve sólo el texto. Los
+ *     consumers del módulo (status-narrative, executive-briefing,
+ *     baseline-diff-summary, risks-narrative) siguen importando
+ *     `callLLM` y `withFallback` desde aquí — back-compat post Wave
+ *     C-DEBT-3.
+ *   - `injectLLMForTests` permite a los tests sustituir el call real
+ *     por una respuesta canned sin tocar `vi.mock('@/lib/ai/llm', ...)`.
  *   - El fallback heurístico recibe los mismos datos y devuelve markdown
  *     estático determinístico. Marcamos `source` ('llm' | 'heuristic')
  *     en el resultado para que la UI lo refleje.
@@ -19,6 +24,13 @@
 
 import 'server-only'
 import { z } from 'zod'
+
+import {
+  generateLLMText,
+  getLLMConfig,
+  LLMError,
+  LLM_ERROR_CODES,
+} from '@/lib/ai/llm'
 
 // ─────────────────────────── System prompt ────────────────────────────
 
@@ -71,24 +83,21 @@ export type Narrative = z.infer<typeof NarrativeSchema>
 // ─────────────────────────── Adapter LLM ──────────────────────────────
 
 /**
- * ¿Está activo el LLM? Lee `LLM_ENABLED=true` y la presencia de al menos
- * una API key. Si falta cualquiera, devolvemos `false` y forzamos
- * heurística.
+ * ¿Está activo el LLM? Wave C-DEBT-3: delegamos en `getLLMConfig()` del
+ * adapter unificado P7-1, que ya consolida `LLM_ENABLED` + presencia de
+ * API key. Mantenemos la función exportada para back-compat con
+ * cualquier consumer histórico que la importe.
  */
 export function isLLMEnabled(): boolean {
-  if (process.env.LLM_ENABLED !== 'true') return false
-  const hasKey =
-    !!process.env.ANTHROPIC_API_KEY || !!process.env.OPENAI_API_KEY
-  return hasKey
+  const cfg = getLLMConfig()
+  return cfg.enabled && cfg.provider !== 'disabled'
 }
 
 /**
- * Llamada al LLM (placeholder thin). Si `@/lib/ai/llm` (P7-1) está
- * disponible, este wrapper lo invocará; mientras tanto delegamos en una
- * implementación basada en `ai` SDK ligera. En tests siempre se mockea
- * vía `vi.mock` o `injectLLM`.
- *
- * Contrato: lanza si el LLM falla. Quien llame envuelve en `withFallback`.
+ * Argumentos del wrapper `callLLM` — la firma legacy de los summaries
+ * (`systemPrompt` + `userMessage` + `maxTokens` opcional). Internamente
+ * los traducimos a la forma `{ prompt, system, maxTokensOverride }`
+ * del adapter P7-1.
  */
 export type LLMCallArgs = {
   systemPrompt: string
@@ -103,30 +112,31 @@ let injected: LLMCallFn | null = null
 
 /**
  * Permite inyectar un cliente LLM mockeado en tests sin tocar env vars.
- * En producción no se usa.
+ * En producción no se usa. Mantiene el contrato existente para los
+ * tests `summaries-status`, `summaries-briefing`, `summaries-baseline-diff`.
  */
 export function injectLLMForTests(fn: LLMCallFn | null): void {
   injected = fn
 }
 
 /**
- * Implementación por defecto: requiere `LLM_ENABLED` y delega en `ai`
- * SDK (Anthropic primero, OpenAI fallback). Si `LLM_ENABLED=false`, lanza
- * inmediatamente para que `withFallback` decida.
+ * Llamada al LLM. Wave C-DEBT-3: bridge a `generateLLMText` del adapter
+ * unificado P7-1. El error tipado `LLMError` de P7-1 se mapea a un
+ * Error con prefijo `[LLM_*]` para preservar el formato que
+ * `withFallback` (abajo) parsea para sus warnings.
+ *
+ * Contrato: lanza si el LLM falla o si está deshabilitado. Quien llame
+ * envuelve en `withFallback`.
  */
 export async function callLLM(args: LLMCallArgs): Promise<string> {
   if (injected) return injected(args)
   if (!isLLMEnabled()) {
-    throw new Error('[LLM_DISABLED] LLM no habilitado o API keys faltan')
+    throw new LLMError(
+      LLM_ERROR_CODES.NO_CLIENT,
+      'LLM no habilitado o API keys faltan',
+    )
   }
-  // En este momento del proyecto el adapter `@/lib/ai/llm` (P7-1) aún no
-  // expone una función pública; cuando lo haga, se reemplaza esta rama
-  // por una llamada directa. Por ahora lanzamos un error tipado para
-  // forzar la rama heurística — esto evita acoplar P7-3 a una dependencia
-  // que aún no existe.
-  throw new Error(
-    '[LLM_NOT_WIRED] Adapter LLM real no enchufado todavía; usa heurística',
-  )
+  return generateLLMText(args.userMessage, args.systemPrompt)
 }
 
 // ─────────────────────────── withFallback ─────────────────────────────

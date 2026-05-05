@@ -16,9 +16,8 @@ import {
   callLLMObject,
   buildImproveDescriptionPrompt,
   SYSTEM_IMPROVE_DESCRIPTION,
-  LLMDisabledError,
-  LLMCallError,
 } from './prompts'
+import { LLMError, LLM_ERROR_CODES } from '@/lib/ai/llm'
 
 export interface ImproveDescriptionInput {
   title: string
@@ -86,14 +85,14 @@ export async function improveDescription(
     })
     return { source: 'llm', data }
   } catch (err) {
-    if (err instanceof LLMDisabledError) {
-      return {
-        source: 'heuristic',
-        data: improveDescriptionHeuristic({ ...input, title: safeTitle }),
-        fallbackReason: 'ANTHROPIC_API_KEY no configurada',
+    if (err instanceof LLMError) {
+      if (err.code === LLM_ERROR_CODES.NO_CLIENT) {
+        return {
+          source: 'heuristic',
+          data: improveDescriptionHeuristic({ ...input, title: safeTitle }),
+          fallbackReason: 'ANTHROPIC_API_KEY no configurada',
+        }
       }
-    }
-    if (err instanceof LLMCallError) {
       return {
         source: 'heuristic',
         data: improveDescriptionHeuristic({ ...input, title: safeTitle }),

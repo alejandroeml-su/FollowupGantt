@@ -2,16 +2,22 @@
  * Ola P7 · Equipo P7-4 · Daily Standup — Generador con LLM real.
  *
  * Convierte un `StandupContext` en un `Standup` validado por zod
- * usando Anthropic (`@ai-sdk/anthropic` + `generateObject`). Si la
- * key no está configurada o la llamada falla, cae a la heurística
+ * usando el adapter unificado P7-1 (`generateObject` de
+ * `@/lib/ai/llm`, alias de `generateLLM` con schema). Si la key no
+ * está configurada o la llamada falla, cae a la heurística
  * `buildHeuristicStandup` para no romper el cron.
  *
  * Diseño:
  *   - **Cache in-memory** por `${scope}:${id}:${date}:${tone}:${format}`
  *     con TTL 12h (auto-refresh diario, evita N llamadas concurrentes en
  *     el mismo render). Sin Redis: el server action puede invalidar con
- *     `force: true`.
- *   - **Inyección**: `generator?` permite inyectar un mock LLM en tests.
+ *     `force: true`. Es memoización a nivel feature (no duplica el
+ *     cache LLM de `withLLMCache`, que es process-local + revalidate).
+ *   - **Inyección**: `generator?` permite inyectar un mock LLM en tests
+ *     sin tocar el adapter.
+ *   - **Wave C-DEBT-3**: la llamada real ya no importa
+ *     `@ai-sdk/anthropic` directo; ahora pasa por `generateObject` del
+ *     adapter unificado.
  *   - **Determinismo en tests**: la heurística es determinista; el LLM
  *     real obviamente no, pero los tests sólo cubren el flujo cache +
  *     fallback con un `generator` stub.
@@ -20,8 +26,7 @@
  * `lang` queda reservado para futura internacionalización.
  */
 
-import { generateObject } from 'ai'
-import { anthropic } from '@ai-sdk/anthropic'
+import { generateObject } from '@/lib/ai/llm'
 import { standupSchema, type Standup } from './standup-schema'
 import {
   buildHeuristicStandup,
@@ -157,19 +162,25 @@ function buildUserPrompt(
   return lines.join('\n')
 }
 
-// ─────────────────────────── Generator real (Anthropic) ────────────────
+// ─────────────────────────── Generator real (adapter unificado) ────────
 
+/**
+ * Wave C-DEBT-3: llamamos al adapter unificado en vez de
+ * `@ai-sdk/anthropic` directo. `generateObject` de `@/lib/ai/llm` es
+ * alias de `generateLLM` con schema → devuelve `LLMResponse<Standup>`.
+ * Extraemos `.output` para preservar el contrato `Promise<unknown>` que
+ * espera `generateStandup`.
+ */
 async function callAnthropic(
   ctx: StandupContext,
   opts: { tone: 'formal' | 'casual'; format: 'standup' | 'briefing'; lang: 'es' | 'en' },
 ): Promise<unknown> {
-  const { object } = await generateObject({
-    model: anthropic('claude-sonnet-4-6'),
+  const result = await generateObject({
     schema: standupSchema,
     system: buildSystemPrompt(opts.format, opts.lang),
     prompt: buildUserPrompt(ctx, opts),
   })
-  return object
+  return result.output
 }
 
 // ─────────────────────────── Generator principal ───────────────────────
