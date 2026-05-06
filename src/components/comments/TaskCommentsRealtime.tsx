@@ -25,10 +25,16 @@ import { useTaskComments } from '@/lib/realtime-comments/use-task-comments'
 import { useTypingIndicator } from '@/lib/realtime-comments/use-typing-indicator'
 import type { SerializedComment } from '@/lib/types'
 import { TypingIndicator } from './TypingIndicator'
+import { MentionTextarea, type MentionUser } from '@/components/mentions/MentionTextarea'
 
 type Props = {
   taskId: string
   currentUser: { id: string; name: string } | null
+  /**
+   * Wave P9 — Lista de usuarios para autocompletado de menciones (`@user`).
+   * Si se omite, el composer cae a `<textarea>` plano sin menciones.
+   */
+  mentionableUsers?: MentionUser[]
 }
 
 /** Formatea un timestamp ISO como tiempo relativo en español. */
@@ -134,7 +140,7 @@ function CommentItem({ comment }: { comment: SerializedComment }) {
   )
 }
 
-export function TaskCommentsRealtime({ taskId, currentUser }: Props) {
+export function TaskCommentsRealtime({ taskId, currentUser, mentionableUsers }: Props) {
   const { comments, isLoading, error, addComment } = useTaskComments(
     taskId,
     currentUser,
@@ -261,16 +267,34 @@ export function TaskCommentsRealtime({ taskId, currentUser }: Props) {
         onSubmit={onSubmit}
         className="flex flex-col gap-2 border-t border-border pt-3"
       >
-        <textarea
-          data-testid="comments-textarea"
-          value={draft}
-          onChange={onChange}
-          onBlur={() => setTyping(false)}
-          placeholder="Escribe un comentario… Soporta **negrita**, *itálica* y [enlaces](https://…)."
-          disabled={submitting || !currentUser}
-          className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring resize-none h-20 disabled:opacity-50"
-          rows={3}
-        />
+        {mentionableUsers && mentionableUsers.length > 0 ? (
+          <MentionTextarea
+            data-testid="comments-textarea"
+            value={draft}
+            onChange={(next) => {
+              setDraft(next)
+              if (next.trim().length > 0) setTyping(true)
+              else setTyping(false)
+            }}
+            onBlur={() => setTyping(false)}
+            users={mentionableUsers}
+            placeholder="Escribe un comentario… Usa @ para mencionar y **negrita**, *itálica*, [enlaces](https://…)."
+            disabled={submitting || !currentUser}
+            className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring resize-none h-20 disabled:opacity-50"
+            rows={3}
+          />
+        ) : (
+          <textarea
+            data-testid="comments-textarea"
+            value={draft}
+            onChange={onChange}
+            onBlur={() => setTyping(false)}
+            placeholder="Escribe un comentario… Soporta **negrita**, *itálica* y [enlaces](https://…)."
+            disabled={submitting || !currentUser}
+            className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring resize-none h-20 disabled:opacity-50"
+            rows={3}
+          />
+        )}
         {submitError && (
           <span
             data-testid="comments-submit-error"

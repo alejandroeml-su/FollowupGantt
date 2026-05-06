@@ -346,6 +346,10 @@ export function TaskDrawerContent({
         <TaskCommentsRealtime
           taskId={task.id}
           currentUser={users[0] ?? null}
+          mentionableUsers={users.map((u) => ({
+            id: u.id,
+            name: u.name,
+          }))}
         />
       </div>
     </div>

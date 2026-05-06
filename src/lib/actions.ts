@@ -7,6 +7,7 @@ import { sendMentionNotification } from '@/lib/email/mention-notification'
 import { invalidateCpmCache } from '@/lib/scheduling/invalidate'
 import { createNotificationsBatch } from '@/lib/actions/notifications'
 import { recomputeKeyResultsForTask } from '@/lib/actions/goals'
+import { notifyMentions } from '@/lib/mentions/notify'
 import type {
   TaskType,
   ProjectStatus,
@@ -327,6 +328,36 @@ export async function updateTask(formData: FormData) {
       await recomputeKeyResultsForTask(id)
     } catch (err) {
       console.error('[goals] recomputeKeyResultsForTask falló desde updateTask', err)
+    }
+  }
+
+  // Menciones globales — detecta @user nuevos en title/description y
+  // dispara notificaciones in-app + email a los mencionados. Best-effort:
+  // se ejecuta en `after()` así que un fallo aquí no rompe el update.
+  if (description !== undefined && description !== oldTask.description) {
+    try {
+      await notifyMentions({
+        text: description,
+        previousText: oldTask.description,
+        taskId: id,
+        authorId: userId ?? null,
+        source: 'description',
+      })
+    } catch (err) {
+      console.error('[mentions] notifyMentions(description) falló', err)
+    }
+  }
+  if (title && title !== oldTask.title) {
+    try {
+      await notifyMentions({
+        text: title,
+        previousText: oldTask.title,
+        taskId: id,
+        authorId: userId ?? null,
+        source: 'title',
+      })
+    } catch (err) {
+      console.error('[mentions] notifyMentions(title) falló', err)
     }
   }
 
