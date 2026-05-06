@@ -18,10 +18,10 @@ export const WriterImprovedDescriptionSchema = z.object({
     .describe(
       'Descripción reescrita en formato Markdown profesional. Usa el patrón "Como [rol], quiero [acción], para [beneficio]" cuando aplique.',
     ),
+  // NOTA: sin `.min(2).max(6)` — Anthropic structured output rechaza
+  // `minItems`/`maxItems`. El rango se enforced en el system prompt.
   acceptanceCriteria: z
     .array(z.string())
-    .min(2)
-    .max(6)
     .describe(
       'Entre 2 y 6 criterios de aceptación verificables (binarios: pasa o no pasa).',
     ),

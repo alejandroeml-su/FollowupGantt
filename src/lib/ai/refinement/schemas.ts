@@ -20,12 +20,14 @@ export const ImproveDescriptionSchema = z.object({
     .string()
     .min(10, 'La descripción mejorada debe tener al menos 10 caracteres')
     .max(4000, 'La descripción mejorada no debe exceder 4000 caracteres'),
+  // NOTA: arrays sin `.max()` — Anthropic structured output rechaza
+  // `maxItems`. Los límites se enforced via system prompt.
   acceptanceCriteria: z
     .array(z.string().min(1).max(280))
-    .max(8, 'Máximo 8 criterios de aceptación'),
+    .describe('Hasta 8 criterios de aceptación.'),
   risks: z
     .array(z.string().min(1).max(280))
-    .max(6, 'Máximo 6 riesgos identificados'),
+    .describe('Hasta 6 riesgos identificados.'),
 })
 export type ImproveDescriptionResult = z.infer<typeof ImproveDescriptionSchema>
 
@@ -40,7 +42,9 @@ export const ChecklistItemSchema = z.object({
   optional: z.boolean(),
 })
 export const SuggestChecklistSchema = z.object({
-  items: z.array(ChecklistItemSchema).min(3, 'Mínimo 3 items').max(7, 'Máximo 7 items'),
+  // 3..7 items se enforced via system prompt (Anthropic no soporta
+  // minItems/maxItems en structured output).
+  items: z.array(ChecklistItemSchema).describe('Entre 3 y 7 items.'),
 })
 export type ChecklistItem = z.infer<typeof ChecklistItemSchema>
 export type SuggestChecklistResult = z.infer<typeof SuggestChecklistSchema>
@@ -61,7 +65,8 @@ export const SuggestedTagSchema = z.object({
   reused: z.boolean(),
 })
 export const SuggestTagsSchema = z.object({
-  tags: z.array(SuggestedTagSchema).max(5),
+  // Máx 5 enforced via system prompt.
+  tags: z.array(SuggestedTagSchema).describe('Hasta 5 tags sugeridos.'),
 })
 export type SuggestedTag = z.infer<typeof SuggestedTagSchema>
 export type SuggestTagsResult = z.infer<typeof SuggestTagsSchema>
@@ -79,7 +84,8 @@ export const DuplicateCandidateSchema = z.object({
   reason: z.string().min(1).max(280),
 })
 export const DetectDuplicatesSchema = z.object({
-  candidates: z.array(DuplicateCandidateSchema).max(10),
+  // Máx 10 candidatos enforced via system prompt.
+  candidates: z.array(DuplicateCandidateSchema).describe('Hasta 10 candidatos.'),
 })
 export type DuplicateCandidate = z.infer<typeof DuplicateCandidateSchema>
 export type DetectDuplicatesResult = z.infer<typeof DetectDuplicatesSchema>
