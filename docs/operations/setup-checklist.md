@@ -27,8 +27,11 @@ deshabilitar features (OAuth, Resend) según convenga.
 - [ ] `NEXT_PUBLIC_SUPABASE_ANON_KEY`
 - [ ] `AUTH_SECRET` — `openssl rand -base64 32` (≥ 32 chars).
 - [ ] `NEXT_PUBLIC_APP_URL` — `https://gantt.complejoavante.com` (o dominio prod).
-- [ ] `RESEND_API_KEY` — ver [resend-domain.md](./resend-domain.md).
-- [ ] `EMAIL_FROM` — `FollowupGantt <notifications@complejoavante.com>`.
+- [ ] `EMAIL_FROM` — `FollowupGantt <proyecto@complejoavante.com>` (alinear con remitente real).
+- [ ] **Email provider** (un solo set; el primero disponible gana — ver [email-providers.md](./email-providers.md)):
+  - **SMTP M365 (recomendado)**: `SMTP_HOST=smtp.office365.com`, `SMTP_PORT=587`, `SMTP_SECURE=false`, `SMTP_USER=proyecto@complejoavante.com`, `SMTP_PASSWORD=<password>`.
+  - **SendGrid Single Sender (fallback)**: `SENDGRID_API_KEY=SG.xxx`.
+  - **Resend (legacy)**: `RESEND_API_KEY=re_xxx` — requiere dominio verificado, bloqueado sin DNS de iPower.
 - [ ] `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` — ver [oauth-providers.md](./oauth-providers.md).
 - [ ] `MICROSOFT_CLIENT_ID` / `MICROSOFT_CLIENT_SECRET` / `MICROSOFT_TENANT_ID`.
 - [ ] `CRON_SECRET` — `openssl rand -hex 32` (ver [vercel-cron.md](./vercel-cron.md)).

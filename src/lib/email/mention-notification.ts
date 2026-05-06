@@ -1,4 +1,4 @@
-import { getResendClient, EMAIL_FROM, APP_URL } from './resend'
+import { sendEmail, EMAIL_FROM, APP_URL } from './provider'
 
 export type MentionEmailPayload = {
   to: string
@@ -101,28 +101,24 @@ Este es un correo automático, no respondas a esta dirección.`
 }
 
 export async function sendMentionNotification(payload: MentionEmailPayload): Promise<{ sent: boolean; reason?: string }> {
-  const resend = getResendClient()
-  if (!resend) return { sent: false, reason: 'RESEND_API_KEY_MISSING' }
-
-  try {
-    const result = await resend.emails.send({
-      from: EMAIL_FROM,
+  const result = await sendEmail({
+    from: EMAIL_FROM,
+    to: payload.to,
+    subject: buildSubject(payload),
+    html: buildHtml(payload),
+    text: buildText(payload),
+    tags: [
+      { name: 'type', value: 'mention' },
+      { name: 'entity', value: payload.parentTaskTitle ? 'subtask' : 'task' },
+    ],
+  })
+  if (!result.sent) {
+    console.error('[email] Provider rechazó el envío', {
       to: payload.to,
-      subject: buildSubject(payload),
-      html: buildHtml(payload),
-      text: buildText(payload),
-      tags: [
-        { name: 'type', value: 'mention' },
-        { name: 'entity', value: payload.parentTaskTitle ? 'subtask' : 'task' },
-      ],
+      provider: result.provider,
+      reason: result.reason,
     })
-    if (result.error) {
-      console.error('[email] Resend rechazó el envío', { to: payload.to, error: result.error })
-      return { sent: false, reason: result.error.message }
-    }
-    return { sent: true }
-  } catch (err) {
-    console.error('[email] Fallo al enviar mención', { to: payload.to, err })
-    return { sent: false, reason: err instanceof Error ? err.message : 'UNKNOWN' }
+    return { sent: false, reason: result.reason }
   }
+  return { sent: true }
 }

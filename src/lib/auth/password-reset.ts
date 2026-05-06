@@ -2,7 +2,7 @@ import 'server-only'
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto'
 import prisma from '@/lib/prisma'
 import { hashPassword } from '@/lib/auth/password'
-import { getResendClient, EMAIL_FROM, APP_URL } from '@/lib/email/resend'
+import { sendEmail, EMAIL_FROM, APP_URL, getActiveEmailProvider } from '@/lib/email/provider'
 
 /**
  * Password reset flow (Ola P3 · Auth completo).
@@ -77,23 +77,28 @@ export async function requestReset(emailRaw: string): Promise<{ ok: true }> {
 
   const resetUrl = `${APP_URL}/auth/reset-password?token=${encodeURIComponent(rawToken)}`
 
-  const resend = getResendClient()
-  if (resend) {
-    try {
-      await resend.emails.send({
-        from: EMAIL_FROM,
-        to: user.email,
-        subject: 'Recuperar contraseña — FollowupGantt',
-        html: renderResetEmail({ name: user.name, resetUrl }),
-      })
-    } catch (err) {
-      // No propagar — el flujo del usuario no debe depender del proveedor
-      // de email. Log para que SRE detecte caída del provider.
-      console.warn('[password-reset] Resend send failed:', (err as Error).message)
-    }
-  } else {
-    // Modo dev sin RESEND_API_KEY: log del link para que el dev pruebe.
+  if (getActiveEmailProvider() === 'none') {
+    // Modo dev sin proveedor configurado: log del link para que el dev pruebe.
     console.info('[password-reset] (dev) reset link:', resetUrl)
+    return { ok: true }
+  }
+
+  const html = renderResetEmail({ name: user.name, resetUrl })
+  const result = await sendEmail({
+    from: EMAIL_FROM,
+    to: user.email,
+    subject: 'Recuperar contraseña — FollowupGantt',
+    html,
+    text: `Hola ${user.name},\n\nAbre el siguiente enlace para restablecer tu contraseña (expira en 1 hora):\n\n${resetUrl}\n`,
+    tags: [{ name: 'type', value: 'password-reset' }],
+  })
+  if (!result.sent) {
+    // No propagar — el flujo del usuario no debe depender del proveedor
+    // de email. Log para que SRE detecte caída del provider.
+    console.warn('[password-reset] email send failed:', {
+      provider: result.provider,
+      reason: result.reason,
+    })
   }
 
   return { ok: true }
