@@ -14,7 +14,12 @@
  * Sin deps externas (vanilla JS) — restricción del scope P4-3.
  */
 
-const VERSION = 'v1'
+// IMPORTANTE: bumpear VERSION en cada cambio del SW. El handler `activate`
+// borra cualquier cache cuyo nombre no coincida exactamente con los actuales,
+// forzando a clientes existentes a descartar bundles viejos. Esto desbloquea
+// el bug `Failed to find Server Action ... older or newer deployment` que
+// se producía cuando el SW servía chunks Next.js de un deploy previo.
+const VERSION = 'v2'
 const STATIC_CACHE = `fg-static-${VERSION}`
 const RUNTIME_CACHE = `fg-runtime-${VERSION}`
 const API_CACHE = `fg-api-${VERSION}`
@@ -57,6 +62,21 @@ function isStaticAsset(url) {
 
 function isApiRequest(url) {
   return url.pathname.startsWith('/api/')
+}
+
+/**
+ * `/_next/` aloja los bundles del cliente Next.js (chunks RSC, app-router,
+ * webpack-runtime). Cada deploy genera nuevos hashes y nuevos IDs de
+ * Server Actions; si el SW sirve un chunk de un deploy previo, el cliente
+ * envía un Server Action ID que el servidor nuevo no reconoce y obtenemos
+ * `Failed to find Server Action ... older or newer deployment`.
+ *
+ * Solución: pasar TODO `/_next/` directo a la red (sin tocar SW). Los
+ * chunks immutables de Next ya tienen `Cache-Control: public, max-age=...,
+ * immutable` y los maneja el HTTP cache del navegador correctamente.
+ */
+function isNextInternal(url) {
+  return url.pathname.startsWith('/_next/')
 }
 
 async function staleWhileRevalidate(request) {
@@ -107,6 +127,9 @@ self.addEventListener('fetch', (event) => {
 
   // No cacheamos el SW ni el manifest.json (siempre fresh).
   if (url.pathname === '/sw.js') return
+
+  // `/_next/` directo a la red — ver JSDoc de `isNextInternal` arriba.
+  if (isNextInternal(url)) return
 
   if (isApiRequest(url)) {
     event.respondWith(
