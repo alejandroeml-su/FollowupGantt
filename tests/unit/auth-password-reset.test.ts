@@ -44,12 +44,9 @@ vi.mock('@/lib/prisma', () => ({
   },
 }))
 
-vi.mock('@/lib/email/resend', () => ({
-  getResendClient: () => ({
-    emails: {
-      send: (...a: unknown[]) => sendEmail(...a),
-    },
-  }),
+vi.mock('@/lib/email/provider', () => ({
+  sendEmail: (...a: unknown[]) => sendEmail(...a),
+  getActiveEmailProvider: () => 'smtp',
   EMAIL_FROM: 'test@local',
   APP_URL: 'https://app.test',
 }))
@@ -62,7 +59,9 @@ beforeEach(() => {
   tokenUpdate.mockReset()
   sessionDeleteMany.mockReset()
   txnRunner.mockReset().mockResolvedValue([])
-  sendEmail.mockReset().mockResolvedValue({ id: 'em-1' })
+  sendEmail
+    .mockReset()
+    .mockResolvedValue({ sent: true, provider: 'smtp', messageId: 'em-1' })
 })
 
 describe('requestReset', () => {
