@@ -51,6 +51,7 @@ import { SavedViewsDropdown, type SavedViewSummary } from '@/components/views/Sa
 import { GroupBySelector } from '@/components/views/GroupBySelector'
 import { groupTasks, type GroupKey } from '@/lib/views/group-tasks'
 import type { CurrentUserPresence } from '@/lib/auth/get-current-user-presence'
+import { useTaskRealtimeRefresh } from '@/lib/realtime/use-task-realtime'
 
 type Props = {
   tasks: (SerializedTask & { subtasks?: SerializedTask[] })[]
@@ -96,6 +97,11 @@ export function ListBoardClient({
   savedViews = [],
   currentUser = null,
 }: Props) {
+  // Refresca la vista cuando cualquier tarea cambia en la BD (postgres CDC
+  // vía Supabase Realtime). Hace que los rollups y el progress se
+  // actualicen sin refresh manual cuando otro tab/usuario muta una tarea.
+  useTaskRealtimeRefresh()
+
   const [items, setItems] = useState(tasks)
   const [activeId, setActiveId] = useState<string | null>(null)
   const [focusedId, setFocusedId] = useState<string | null>(tasks[0]?.id ?? null)
