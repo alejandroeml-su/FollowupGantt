@@ -11,7 +11,7 @@
 import { useState } from 'react'
 import { ChevronDown, Eye, Plus, Settings2 } from 'lucide-react'
 import { clsx } from 'clsx'
-import type { ViewSurfaceLiteral } from '@/lib/actions/saved-views'
+import type { ViewSurfaceLiteral } from '@/lib/views/saved-view-types'
 import { useUIStore, type SavedViewSurface } from '@/lib/stores/ui'
 import { SaveViewDialog } from './SaveViewDialog'
 import { ManageViewsDialog } from './ManageViewsDialog'

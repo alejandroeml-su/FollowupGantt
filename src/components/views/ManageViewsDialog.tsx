@@ -16,8 +16,8 @@ import {
   deleteView,
   setDefaultView,
   updateView,
-  type ViewSurfaceLiteral,
 } from '@/lib/actions/saved-views'
+import type { ViewSurfaceLiteral } from '@/lib/views/saved-view-types'
 
 type ViewItem = {
   id: string
