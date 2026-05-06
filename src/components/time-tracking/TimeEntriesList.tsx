@@ -5,7 +5,7 @@
  * Permite borrar entries individuales (delete con confirmación nativa).
  */
 
-import { useState, useTransition } from 'react'
+import { useEffect, useState, useTransition } from 'react'
 import { Trash2, User as UserIcon } from 'lucide-react'
 import { toast } from '@/components/interactions/Toaster'
 import {
@@ -61,6 +61,15 @@ export function TimeEntriesList({
   const [entries, setEntries] = useState(initialEntries)
   const [pending, startTx] = useTransition()
   void taskId
+
+  // Sincroniza state local con la prop cuando el padre re-fetcha tras
+  // start/stop/manual create/delete. Sin esto, el componente usa el
+  // initialEntries del primer render y nunca refleja entries nuevos
+  // (bug visible al detener un timer y no ver la entry persistida).
+  // eslint-disable-next-line react-hooks/set-state-in-effect
+  useEffect(() => {
+    setEntries(initialEntries)
+  }, [initialEntries])
 
   const totalMinutes = entries
     .filter((e) => e.endedAt)
