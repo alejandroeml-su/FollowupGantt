@@ -14,9 +14,7 @@ import { Save, X as CloseIcon } from 'lucide-react'
 import { clsx } from 'clsx'
 import { toast } from '@/components/interactions/Toaster'
 import { createView } from '@/lib/actions/saved-views'
-import type {
-  ViewSurfaceLiteral,
-} from '@/lib/actions/saved-views'
+import type { ViewSurfaceLiteral } from '@/lib/views/saved-view-types'
 
 type Props = {
   open: boolean

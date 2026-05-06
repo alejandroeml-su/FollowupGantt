@@ -50,10 +50,10 @@ import {
   type ViewSurfaceLiteral,
 } from '@/lib/views/saved-view-types'
 
-// Re-export types only (un archivo `'use server'` puede re-exportar tipos pero
-// no valores/funciones sincrónicas — los consumidores que necesiten constantes
-// o `isValidGrouping` deben importar desde `@/lib/views/saved-view-types`).
-export type { SavedViewErrorCode, ViewSurfaceLiteral }
+// Nota: NO re-exportamos types desde aquí. En archivos `'use server'`,
+// Turbopack ocasionalmente rompe el `export type {}` re-export en runtime
+// (ReferenceError: X is not defined). Los consumidores deben importar tipos
+// directamente desde `@/lib/views/saved-view-types`.
 
 function actionError(code: SavedViewErrorCode, detail: string): never {
   throw new Error(`[${code}] ${detail}`)
