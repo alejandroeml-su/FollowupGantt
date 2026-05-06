@@ -10,6 +10,7 @@ import { NewTaskButton } from './NewTaskButton'
 import { TaskFiltersBar } from './TaskFiltersBar'
 import { EMPTY_TASK_FILTERS, filterTasks, type TaskFilters } from '@/lib/taskFilters'
 import type { CurrentUserPresence } from '@/lib/auth/get-current-user-presence'
+import { computeProgressWithSource } from '@/lib/progress/rollup'
 
 type ParentOption = Pick<SerializedTask, 'id' | 'title' | 'mnemonic'> & {
   project?: { id: string; name: string } | null
@@ -161,15 +162,35 @@ export function TableBoardClient({
                       </div>
                     </td>
                     <td className="px-4 py-3">
-                      <div className="flex items-center gap-2 min-w-[100px]">
-                        <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-secondary">
-                          <div 
-                            className="h-full bg-indigo-500 transition-all duration-500" 
-                            style={{ width: `${task.progress}%` }}
-                          />
-                        </div>
-                        <span className="text-[10px] text-muted-foreground w-6">{task.progress}%</span>
-                      </div>
+                      {(() => {
+                        const info = computeProgressWithSource(task)
+                        return (
+                          <div
+                            className="flex items-center gap-2 min-w-[100px]"
+                            title={
+                              info.derived
+                                ? `${info.percent}% (promedio de ${info.childCount} subtarea${info.childCount === 1 ? '' : 's'})`
+                                : `${info.percent}%`
+                            }
+                          >
+                            <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-secondary">
+                              <div
+                                className={
+                                  info.percent >= 100
+                                    ? 'h-full bg-emerald-500 transition-all duration-500'
+                                    : info.percent >= 50
+                                      ? 'h-full bg-indigo-500 transition-all duration-500'
+                                      : 'h-full bg-amber-500 transition-all duration-500'
+                                }
+                                style={{ width: `${info.percent}%` }}
+                              />
+                            </div>
+                            <span className="text-[10px] text-muted-foreground w-6 tabular-nums">
+                              {info.percent}%
+                            </span>
+                          </div>
+                        )
+                      })()}
                     </td>
                     <td className="px-4 py-3 text-center">
                       {task.commentCount > 0 ? (

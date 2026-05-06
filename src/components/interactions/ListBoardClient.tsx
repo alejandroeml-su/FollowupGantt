@@ -39,6 +39,7 @@ import { reorderTask } from '@/lib/actions/reorder'
 import { deleteTask } from '@/lib/actions'
 import { useUIStore } from '@/lib/stores/ui'
 import { BulkActionsToolbar } from './BulkActionsToolbar'
+import { computeProgressWithSource } from '@/lib/progress/rollup'
 import { useTaskShortcuts } from '@/lib/hooks/useTaskShortcuts'
 import StatusSelector from '@/components/StatusSelector'
 import { TaskWithContextMenu } from './TaskContextMenuItems'
@@ -463,6 +464,10 @@ function Row({
       })()
     : 'Sin fecha'
 
+  // Avance rollup: si la task tiene subtareas, % derivado del promedio
+  // de subtareas (recursivo). Si es hoja, su `progress` directo.
+  const progressInfo = computeProgressWithSource(task)
+
   return (
     <>
       <TaskWithContextMenu ctx={{ taskId: task.id }}>
@@ -542,14 +547,57 @@ function Row({
             <span className={clsx('mr-2 h-4 w-4', statusColor)}>
               {STATUS_ICON[task.status] ?? <Circle className="h-4 w-4" />}
             </span>
-            <span className="truncate font-medium text-foreground group-hover:text-indigo-300">
-              {task.title}
-            </span>
-            {commentCount > 0 && (
-              <span className="ml-2 flex items-center gap-0.5 text-[10px] text-muted-foreground">
-                <MessageSquare className="h-3 w-3" /> {commentCount}
-              </span>
-            )}
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2">
+                <span className="truncate font-medium text-foreground group-hover:text-indigo-300">
+                  {task.title}
+                </span>
+                {commentCount > 0 && (
+                  <span className="flex shrink-0 items-center gap-0.5 text-[10px] text-muted-foreground">
+                    <MessageSquare className="h-3 w-3" /> {commentCount}
+                  </span>
+                )}
+              </div>
+              {/* Barra de avance con rollup (promedio de subtareas si es padre). */}
+              <div
+                className="mt-1 flex items-center gap-2"
+                title={
+                  progressInfo.derived
+                    ? `${progressInfo.percent}% (promedio de ${progressInfo.childCount} subtarea${progressInfo.childCount === 1 ? '' : 's'})`
+                    : `${progressInfo.percent}%`
+                }
+                data-testid={`task-row-progress-${task.id}`}
+              >
+                <div
+                  className="relative h-1 flex-1 overflow-hidden rounded-full bg-secondary/40"
+                  role="progressbar"
+                  aria-valuenow={progressInfo.percent}
+                  aria-valuemin={0}
+                  aria-valuemax={100}
+                  aria-label={`Avance: ${progressInfo.percent}%`}
+                >
+                  <div
+                    className={clsx(
+                      'absolute left-0 top-0 h-full rounded-full transition-all',
+                      progressInfo.percent >= 100
+                        ? 'bg-emerald-500'
+                        : progressInfo.percent >= 50
+                          ? 'bg-indigo-500'
+                          : 'bg-amber-500',
+                    )}
+                    style={{ width: `${progressInfo.percent}%` }}
+                  />
+                </div>
+                <span className="shrink-0 text-[10px] tabular-nums text-muted-foreground">
+                  {progressInfo.percent}%
+                  {progressInfo.derived && (
+                    <span className="ml-0.5 opacity-60" aria-hidden>
+                      ↻
+                    </span>
+                  )}
+                </span>
+              </div>
+            </div>
           </div>
 
           <div className="col-span-2 flex items-center">
