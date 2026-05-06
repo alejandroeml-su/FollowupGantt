@@ -14,8 +14,8 @@ import {
   improveTaskDescription,
   applyImprovedDescription,
   listTasksForWriter,
-  type WriterImprovedDescription,
 } from '@/lib/brain/writer-actions'
+import type { WriterImprovedDescription } from '@/lib/brain/writer-types'
 
 type TaskOption = { id: string; mnemonic: string | null; title: string; project: string | null }
 

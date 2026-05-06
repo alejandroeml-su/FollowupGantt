@@ -13,9 +13,8 @@ import {
 import {
   generateStandupReport,
   generateRiskAnalysis,
-  type StandupReport,
-  type RiskReport,
 } from '@/lib/brain/pm-actions'
+import type { StandupReport, RiskReport } from '@/lib/brain/pm-types'
 
 const STATUS_COLORS: Record<RiskReport['overallStatus'], { dot: string; label: string; text: string }> = {
   HEALTHY: { dot: 'bg-emerald-400', label: 'Saludable', text: 'text-emerald-400' },

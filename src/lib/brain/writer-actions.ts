@@ -2,30 +2,15 @@
 
 import { generateObject } from 'ai'
 import { anthropic } from '@ai-sdk/anthropic'
-import { z } from 'zod'
 import { revalidatePath } from 'next/cache'
 import prisma from '@/lib/prisma'
+import {
+  WriterImprovedDescriptionSchema,
+  type WriterImprovedDescription,
+} from './writer-types'
 
-// ─── Schema ───────────────────────────────────────────────────────
-
-export const WriterImprovedDescriptionSchema = z.object({
-  improvedTitle: z
-    .string()
-    .describe('Título mejorado de la tarea, claro y específico (máximo 80 chars). Usa verbo en infinitivo o imperativo.'),
-  improvedDescription: z
-    .string()
-    .describe('Descripción reescrita en formato Markdown profesional. Usa el patrón "Como [rol], quiero [acción], para [beneficio]" cuando aplique.'),
-  acceptanceCriteria: z
-    .array(z.string())
-    .min(2)
-    .max(6)
-    .describe('Entre 2 y 6 criterios de aceptación verificables (binarios: pasa o no pasa).'),
-  rationale: z
-    .string()
-    .describe('Nota corta de 1-2 frases explicando qué cambió respecto al texto original y por qué.'),
-})
-
-export type WriterImprovedDescription = z.infer<typeof WriterImprovedDescriptionSchema>
+// NOTA: Schema y type viven en writer-types.ts. NO re-exportar desde aquí —
+// Turbopack rompe `export const`/`export type {}` en archivos 'use server'.
 
 // ─── Server actions ───────────────────────────────────────────────
 

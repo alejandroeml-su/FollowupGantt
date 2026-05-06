@@ -2,59 +2,18 @@
 
 import { generateObject } from 'ai'
 import { anthropic } from '@ai-sdk/anthropic'
-import { z } from 'zod'
 import prisma from '@/lib/prisma'
+import {
+  StandupReportSchema,
+  RiskReportSchema,
+  type StandupReport,
+  type RiskReport,
+} from './pm-types'
 
-// ─── Schemas ──────────────────────────────────────────────────────
-
-export const StandupReportSchema = z.object({
-  date: z.string().describe('Fecha del stand-up en formato YYYY-MM-DD.'),
-  summary: z.string().describe('Resumen ejecutivo de 1-2 frases sobre la actividad de hoy.'),
-  byUser: z
-    .array(
-      z.object({
-        userName: z.string(),
-        completedToday: z.array(
-          z.object({
-            mnemonic: z.string().nullable(),
-            title: z.string(),
-            project: z.string().nullable(),
-          }),
-        ),
-        inProgress: z.array(
-          z.object({
-            mnemonic: z.string().nullable(),
-            title: z.string(),
-            progress: z.number(),
-            project: z.string().nullable(),
-          }),
-        ),
-      }),
-    )
-    .describe('Actividad agrupada por usuario.'),
-  blockers: z.array(z.string()).describe('Cuellos de botella o tareas detenidas que requieren atención.'),
-  globalProgressNote: z.string().describe('Nota corta sobre avance global o tendencia.'),
-})
-
-export type StandupReport = z.infer<typeof StandupReportSchema>
-
-export const RiskAlertSchema = z.object({
-  severity: z.enum(['LOW', 'MEDIUM', 'HIGH']),
-  type: z.enum(['OVERDUE', 'CRITICAL_TASK', 'EVM_DEVIATION', 'DEPENDENCY_VIOLATION', 'STALE']),
-  taskMnemonic: z.string().nullable(),
-  title: z.string().describe('Título corto del riesgo (5-10 palabras).'),
-  rationale: z.string().describe('Explicación de 1-2 frases del por qué es riesgo, con datos concretos.'),
-  suggestedAction: z.string().describe('Acción concreta y accionable.'),
-})
-
-export const RiskReportSchema = z.object({
-  date: z.string(),
-  overallStatus: z.enum(['HEALTHY', 'AT_RISK', 'CRITICAL']),
-  headline: z.string().describe('Frase de titular sobre el estado general.'),
-  alerts: z.array(RiskAlertSchema).max(5).describe('Top 5 alertas priorizadas por severidad.'),
-})
-
-export type RiskReport = z.infer<typeof RiskReportSchema>
+// NOTA: NO re-exportamos types/schemas desde aquí. En archivos `'use server'`
+// Turbopack rompe `export const` y `export type {}` con ReferenceError en
+// runtime. Los consumidores deben importar tipos directamente de
+// `@/lib/brain/pm-types`.
 
 // ─── Context gathering ────────────────────────────────────────────
 
