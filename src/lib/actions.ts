@@ -8,6 +8,7 @@ import { invalidateCpmCache } from '@/lib/scheduling/invalidate'
 import { createNotificationsBatch } from '@/lib/actions/notifications'
 import { recomputeKeyResultsForTask } from '@/lib/actions/goals'
 import { notifyMentions } from '@/lib/mentions/notify'
+import { recordAuditEventSafe } from '@/lib/audit/events'
 import type {
   TaskType,
   ProjectStatus,
@@ -210,7 +211,7 @@ export async function createTask(formData: FormData) {
   const count = await prisma.task.count({ where: { projectId } })
   const mnemonic = `${prefix}-${count + 1}`
 
-  await prisma.task.create({
+  const created = await prisma.task.create({
     data: {
       title,
       mnemonic,
@@ -226,7 +227,16 @@ export async function createTask(formData: FormData) {
       ...(tags.length > 0 ? { tags } : {}),
       ...(referenceUrl ? { referenceUrl } : {}),
       ...(storyPoints !== null ? { storyPoints } : {}),
-    }
+    },
+    select: { id: true, title: true, mnemonic: true, status: true },
+  })
+  await recordAuditEventSafe({
+    action: 'task.created',
+    entityType: 'task',
+    entityId: created.id,
+    actorId: (formData.get('userId') as string) || null,
+    after: created,
+    metadata: { projectId, parentId: parentId || null },
   })
   invalidateCpmCache(projectId)
   revalidatePath('/list')
@@ -315,6 +325,25 @@ export async function updateTask(formData: FormData) {
     })] : [])
   ])
 
+  // Audit log centralizado (sección "AUDITORÍA" del drawer). Solo
+  // registramos si hubo cambios reales para no inflar la auditoría con
+  // saves no-op. `recordAuditEventSafe` no rompe la action si falla.
+  if (historyEntries.length > 0) {
+    await recordAuditEventSafe({
+      action: 'task.updated',
+      entityType: 'task',
+      entityId: id,
+      actorId: userId || null,
+      before: Object.fromEntries(
+        historyEntries.map((h) => [h.field, h.oldValue]),
+      ),
+      after: Object.fromEntries(
+        historyEntries.map((h) => [h.field, h.newValue]),
+      ),
+      metadata: { fieldsChanged: historyEntries.map((h) => h.field) },
+    })
+  }
+
   // Invalidar cache CPM si la mutación afectó a campos relevantes
   // (fechas, hito). El resto de campos no afecta al grafo, pero el coste
   // de invalidar es trivial frente a la complejidad de discriminar.
@@ -374,13 +403,20 @@ export async function deleteTask(formData: FormData) {
   const id = formData.get('id') as string
   if (!id) throw new Error('ID es requerido')
 
-  // Capturar projectId antes del delete para invalidar el cache CPM.
+  // Capturar snapshot antes del delete para auditoría + cache CPM.
   const t = await prisma.task.findUnique({
     where: { id },
-    select: { projectId: true },
+    select: { id: true, projectId: true, title: true, mnemonic: true, status: true },
   })
 
   await prisma.task.delete({ where: { id } })
+  await recordAuditEventSafe({
+    action: 'task.deleted',
+    entityType: 'task',
+    entityId: id,
+    actorId: (formData.get('userId') as string) || null,
+    before: t ?? undefined,
+  })
   if (t) invalidateCpmCache(t.projectId)
   revalidatePath('/list')
   revalidatePath('/kanban')
@@ -429,10 +465,39 @@ export async function removeDependency(formData: FormData) {
 }
 
 export async function updateTaskStatus(id: string, status: string) {
+  // Snapshot antes para audit + history. Sin user context aquí (este action
+  // se llama desde drag&drop sin formData de userRoles), así que actorId=null.
+  const before = await prisma.task.findUnique({
+    where: { id },
+    select: { status: true },
+  })
   await prisma.task.update({
     where: { id },
     data: { status: status as TaskStatus }
   })
+  if (before && before.status !== (status as TaskStatus)) {
+    await recordAuditEventSafe({
+      action: 'task.status_changed',
+      entityType: 'task',
+      entityId: id,
+      before: { status: before.status },
+      after: { status },
+    })
+    // También TaskHistory para que el tab "Historial" lo refleje.
+    try {
+      await prisma.taskHistory.create({
+        data: {
+          taskId: id,
+          field: 'status',
+          oldValue: before.status,
+          newValue: status,
+          userId: null,
+        },
+      })
+    } catch (err) {
+      console.error('[history] taskHistory.create falló desde updateTaskStatus', err)
+    }
+  }
   // Ola P2 · Equipo P2-4 — Recompute KRs vinculados (idempotente, best-effort).
   try {
     await recomputeKeyResultsForTask(id)
@@ -980,6 +1045,15 @@ export async function createSubtaskInline(input: {
     },
   })
 
+  await recordAuditEventSafe({
+    action: 'task.created',
+    entityType: 'task',
+    entityId: created.id,
+    actorId: input.userId ?? null,
+    after: created,
+    metadata: { parentId: parent.id, projectId: parent.projectId },
+  })
+
   revalidateTaskViews()
   return created
 }
@@ -1024,6 +1098,15 @@ export async function toggleSubtaskDone(input: {
       },
     }),
   ])
+
+  await recordAuditEventSafe({
+    action: 'task.status_changed',
+    entityType: 'task',
+    entityId: input.id,
+    actorId: input.userId ?? null,
+    before: { status: current.status },
+    after: { status: nextStatus },
+  })
 
   revalidateTaskViews()
   return updated
