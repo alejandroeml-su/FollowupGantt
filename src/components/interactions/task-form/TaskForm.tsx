@@ -55,6 +55,7 @@ import {
   type TaskMetaState,
 } from './TaskMetaSidebar'
 import { TagChipInput } from './TagChipInput'
+import { MentionTextarea } from '@/components/mentions/MentionTextarea'
 import { ReferenceUrlField } from './ReferenceUrlField'
 import { TaskFormTabs, type TaskFormTab } from './TaskFormTabs'
 import { SubtasksTab } from './tabs/SubtasksTab'
@@ -517,12 +518,13 @@ export function TaskForm({
             {form.description || task?.description || 'Sin descripción.'}
           </p>
         ) : (
-          <textarea
+          <MentionTextarea
             id="task-description"
             value={form.description}
-            onChange={(e) => setFormField('description', e.target.value)}
+            onChange={(next) => setFormField('description', next)}
+            users={users}
             rows={4}
-            placeholder="Contexto, criterios de aceptación…"
+            placeholder="Contexto, criterios de aceptación… Usa @ para mencionar a alguien."
             className="w-full rounded-md border border-border bg-input py-2 px-3 text-sm text-input-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-ring resize-none"
           />
         )}
