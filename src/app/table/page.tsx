@@ -1,7 +1,12 @@
 import prisma from "@/lib/prisma";
-import { serializeTask } from "@/lib/types";
+import { serializeTask, type SerializedTask } from "@/lib/types";
 import { TableBoardClient } from "@/components/interactions/TableBoardClient";
 import { getCurrentUserPresence } from "@/lib/auth/get-current-user-presence";
+import {
+  buildTaskTreeInclude,
+  DEFAULT_TREE_DEPTH,
+  flattenTaskTree,
+} from "@/lib/tasks/load-tree";
 
 export const dynamic = "force-dynamic";
 
@@ -10,16 +15,14 @@ export default async function TableDBPage() {
   // drawer (presence + edit locks).
   const currentUser = await getCurrentUserPresence();
 
-  const [dbTasks, projects, users, allTasksRaw, gerencias, areas] = await Promise.all([
+  // Carga el árbol desde raíces (parentId=null) con N niveles. Tabla
+  // muestra todo flat con indentación por `depth`, así que aplanamos
+  // en DFS preservando el orden jerárquico (padre, hijos, nietos...).
+  const [dbRoots, projects, users, allTasksRaw, gerencias, areas] = await Promise.all([
     prisma.task.findMany({
-      include: {
-        project: { include: { area: { include: { gerencia: true } } } },
-        assignee: true,
-        comments: { include: { author: true }, orderBy: { createdAt: 'desc' } },
-        history: { include: { user: true }, orderBy: { createdAt: 'desc' } },
-        attachments: { include: { user: true }, orderBy: { createdAt: 'desc' } },
-      },
-      orderBy: { createdAt: 'desc' }
+      where: { parentId: null, archivedAt: null },
+      include: buildTaskTreeInclude({ depth: DEFAULT_TREE_DEPTH }),
+      orderBy: [{ position: 'asc' }, { createdAt: 'desc' }],
     }),
     prisma.project.findMany({ select: { id: true, name: true, areaId: true }, orderBy: { name: 'asc' } }),
     prisma.user.findMany({ orderBy: { name: 'asc' } }),
@@ -32,9 +35,16 @@ export default async function TableDBPage() {
     prisma.area.findMany({ select: { id: true, name: true, gerenciaId: true }, orderBy: { name: 'asc' } }),
   ]);
 
-  const tasks = dbTasks.map(t => ({
-    ...serializeTask(t),
-    commentCount: t.comments.length
+  // Serializa cada raíz (recursa por subtasks) y luego aplana en DFS
+  // para que el orden de filas sea: raíz1, hijo1, nieto1, hijo2, raíz2...
+  const serializedRoots: SerializedTask[] = dbRoots.map((r) =>
+    serializeTask(r as unknown as Record<string, unknown>),
+  )
+  const flat = flattenTaskTree(serializedRoots);
+
+  const tasks = flat.map((t) => ({
+    ...t,
+    commentCount: t.comments?.length ?? 0,
   }));
 
   return (

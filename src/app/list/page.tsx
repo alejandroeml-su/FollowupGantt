@@ -5,6 +5,7 @@ import { GlobalBreadcrumbs } from '@/components/interactions/GlobalBreadcrumbs'
 import { ViewSwitcher } from '@/components/interactions/ViewSwitcher'
 import { NewTaskButton } from '@/components/interactions/NewTaskButton'
 import { getCurrentUserPresence } from '@/lib/auth/get-current-user-presence'
+import { buildTaskTreeInclude, DEFAULT_TREE_DEPTH } from '@/lib/tasks/load-tree'
 
 export const dynamic = 'force-dynamic'
 
@@ -16,23 +17,7 @@ export default async function ListViewPage() {
 
   const dbTasks = await prisma.task.findMany({
     where: { parentId: null, archivedAt: null },
-    include: {
-      subtasks: {
-        include: {
-          assignee: true,
-          project: { include: { area: { include: { gerencia: true } } } },
-          comments: { include: { author: true }, orderBy: { createdAt: 'desc' } },
-          history: { include: { user: true }, orderBy: { createdAt: 'desc' } },
-          attachments: { include: { user: true }, orderBy: { createdAt: 'desc' } },
-        },
-        orderBy: [{ position: 'asc' }, { createdAt: 'asc' }],
-      },
-      assignee: true,
-      project: { include: { area: { include: { gerencia: true } } } },
-      comments: { include: { author: true }, orderBy: { createdAt: 'desc' } },
-      history: { include: { user: true }, orderBy: { createdAt: 'desc' } },
-      attachments: { include: { user: true }, orderBy: { createdAt: 'desc' } },
-    },
+    include: buildTaskTreeInclude({ depth: DEFAULT_TREE_DEPTH }),
     orderBy: [{ position: 'asc' }, { createdAt: 'desc' }],
   })
 
@@ -48,11 +33,11 @@ export default async function ListViewPage() {
     prisma.area.findMany({ select: { id: true, name: true, gerenciaId: true }, orderBy: { name: 'asc' } }),
   ])
 
-  const tasks: (SerializedTask & { subtasks: SerializedTask[] })[] = dbTasks.map(
-    (t) => ({
-      ...serializeTask(t),
-      subtasks: t.subtasks.map((s: Record<string, unknown>) => serializeTask(s)),
-    }),
+  // serializeTask es recursivo (ver lib/types.ts:227 — recurre por
+  // `t.subtasks`), así que con la query ya cargada en árbol, basta una
+  // llamada por raíz para obtener N niveles serializados.
+  const tasks: SerializedTask[] = dbTasks.map((t) =>
+    serializeTask(t as unknown as Record<string, unknown>),
   )
 
   return (

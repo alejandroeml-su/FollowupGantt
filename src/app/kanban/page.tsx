@@ -5,6 +5,10 @@ import { GlobalBreadcrumbs } from '@/components/interactions/GlobalBreadcrumbs'
 import { ViewSwitcher } from '@/components/interactions/ViewSwitcher'
 import { NewTaskButton } from '@/components/interactions/NewTaskButton'
 import { getCurrentUserPresence } from '@/lib/auth/get-current-user-presence'
+import {
+  buildTaskTreeInclude,
+  DEFAULT_TREE_DEPTH,
+} from '@/lib/tasks/load-tree'
 
 export const dynamic = 'force-dynamic'
 
@@ -20,22 +24,23 @@ export default async function KanbanBoard() {
   // drawer (presence + edit locks).
   const currentUser = await getCurrentUserPresence()
 
+  // Bug fix 2026-05-06: antes filtrabamos `parentId: null`, así que
+  // las subtareas (y más allá) nunca aparecían en Kanban aunque el
+  // drag&drop entre columnas debe poder moverlas. Ahora cargamos
+  // todas las activas + subtree completo para el rollup; cada tarea
+  // aparece en la columna que le corresponde según `status`.
   const tasks = await prisma.task.findMany({
-    where: { parentId: null, archivedAt: null },
-    include: {
-      assignee: true,
-      project: { include: { area: { include: { gerencia: true } } } },
-      comments: { include: { author: true }, orderBy: { createdAt: 'desc' } },
-      history: { include: { user: true }, orderBy: { createdAt: 'desc' } },
-      attachments: { include: { user: true }, orderBy: { createdAt: 'desc' } },
-    },
+    where: { archivedAt: null },
+    include: buildTaskTreeInclude({ depth: DEFAULT_TREE_DEPTH }),
     orderBy: [{ position: 'asc' }, { priority: 'desc' }],
   })
 
   const tasksByColumn = Object.fromEntries(
     COLUMNS.map((c) => [
       c.id,
-      tasks.filter((t) => t.status === c.id).map((t) => serializeTask(t)),
+      tasks
+        .filter((t) => t.status === c.id)
+        .map((t) => serializeTask(t as unknown as Record<string, unknown>)),
     ]),
   )
 

@@ -304,65 +304,30 @@ export function ListBoardClient({
                       </span>
                     </div>
                     {g.tasks.map((task) => (
-                      <SortableListRow
+                      <RootTaskTree
                         key={task.id}
                         task={task}
-                        level={0}
-                        focused={focusedId === task.id}
-                        selected={selectedIds.has(task.id)}
-                        expanded={expanded.has(task.id)}
-                        onFocus={() => setFocusedId(task.id)}
-                        onToggleExpand={() =>
-                          setExpanded((prev) => {
-                            const n = new Set(prev)
-                            if (n.has(task.id)) n.delete(task.id)
-                            else n.add(task.id)
-                            return n
-                          })
-                        }
-                        onToggleSelect={(additive) =>
-                          toggleSelection(task.id, additive)
-                        }
+                        focusedId={focusedId}
+                        selectedIds={selectedIds}
+                        expanded={expanded}
+                        setFocusedId={setFocusedId}
+                        setExpanded={setExpanded}
+                        toggleSelection={toggleSelection}
                       />
                     ))}
                   </div>
                 ))
               : visibleItems.map((task) => (
-                  <SortableListRow
+                  <RootTaskTree
                     key={task.id}
                     task={task}
-                    level={0}
-                    focused={focusedId === task.id}
-                    selected={selectedIds.has(task.id)}
-                    expanded={expanded.has(task.id)}
-                    onFocus={() => setFocusedId(task.id)}
-                    onToggleExpand={() =>
-                      setExpanded((prev) => {
-                        const n = new Set(prev)
-                        if (n.has(task.id)) n.delete(task.id)
-                        else n.add(task.id)
-                        return n
-                      })
-                    }
-                    onToggleSelect={(additive) =>
-                      toggleSelection(task.id, additive)
-                    }
-                  >
-                    {expanded.has(task.id) &&
-                      (task.subtasks ?? []).map((sub) => (
-                        <StaticListRow
-                          key={sub.id}
-                          task={sub}
-                          level={1}
-                          focused={focusedId === sub.id}
-                          selected={selectedIds.has(sub.id)}
-                          onFocus={() => setFocusedId(sub.id)}
-                          onToggleSelect={(additive) =>
-                            toggleSelection(sub.id, additive)
-                          }
-                        />
-                      ))}
-                  </SortableListRow>
+                    focusedId={focusedId}
+                    selectedIds={selectedIds}
+                    expanded={expanded}
+                    setFocusedId={setFocusedId}
+                    setExpanded={setExpanded}
+                    toggleSelection={toggleSelection}
+                  />
                 ))}
           </SortableContext>
 
@@ -669,4 +634,125 @@ function SortableListRow({
 function StaticListRow(props: Omit<RowProps, 'dragHandle'>) {
   // Subtareas: no se arrastran en Sprint 1 (se anidan con Shift+drag en Sprint 2)
   return <Row {...props} dragHandle={<div className="mr-1 w-5" />} />
+}
+
+type RecursiveTreeProps = {
+  task: SerializedTask
+  focusedId: string | null
+  selectedIds: Set<string>
+  expanded: Set<string>
+  setFocusedId: (id: string) => void
+  setExpanded: React.Dispatch<React.SetStateAction<Set<string>>>
+  toggleSelection: (id: string, additive: boolean) => void
+}
+
+/**
+ * Renderiza una tarea raíz con SortableListRow (drag&drop activo) y, de
+ * forma recursiva, todos sus descendientes con StaticListRow indentados
+ * por `level`. Resuelve el bug 2026-05-06: antes el JSX sólo iteraba
+ * un nivel y los nietos/bisnietos se perdían visualmente.
+ */
+function RootTaskTree({
+  task,
+  focusedId,
+  selectedIds,
+  expanded,
+  setFocusedId,
+  setExpanded,
+  toggleSelection,
+}: RecursiveTreeProps) {
+  const isExpanded = expanded.has(task.id)
+  const onToggleExpand = () =>
+    setExpanded((prev) => {
+      const n = new Set(prev)
+      if (n.has(task.id)) n.delete(task.id)
+      else n.add(task.id)
+      return n
+    })
+
+  return (
+    <SortableListRow
+      task={task}
+      level={0}
+      focused={focusedId === task.id}
+      selected={selectedIds.has(task.id)}
+      expanded={isExpanded}
+      onFocus={() => setFocusedId(task.id)}
+      onToggleExpand={onToggleExpand}
+      onToggleSelect={(additive) => toggleSelection(task.id, additive)}
+    >
+      {isExpanded &&
+        (task.subtasks ?? []).map((child) => (
+          <SubtaskBranch
+            key={child.id}
+            task={child}
+            level={1}
+            focusedId={focusedId}
+            selectedIds={selectedIds}
+            expanded={expanded}
+            setFocusedId={setFocusedId}
+            setExpanded={setExpanded}
+            toggleSelection={toggleSelection}
+          />
+        ))}
+    </SortableListRow>
+  )
+}
+
+/**
+ * Renderiza una subtarea (no raíz) con StaticListRow y recursa sobre
+ * sus hijos cuando está expandida. La indentación visual la maneja
+ * `Row` vía `level * 1.5rem` de padding-left.
+ */
+function SubtaskBranch({
+  task,
+  level,
+  focusedId,
+  selectedIds,
+  expanded,
+  setFocusedId,
+  setExpanded,
+  toggleSelection,
+}: RecursiveTreeProps & { level: number }) {
+  const hasChildren = (task.subtasks?.length ?? 0) > 0
+  const isExpanded = expanded.has(task.id)
+  const onToggleExpand = hasChildren
+    ? () =>
+        setExpanded((prev) => {
+          const n = new Set(prev)
+          if (n.has(task.id)) n.delete(task.id)
+          else n.add(task.id)
+          return n
+        })
+    : undefined
+
+  return (
+    <>
+      <StaticListRow
+        task={task}
+        level={level}
+        focused={focusedId === task.id}
+        selected={selectedIds.has(task.id)}
+        expanded={isExpanded}
+        onFocus={() => setFocusedId(task.id)}
+        onToggleExpand={onToggleExpand}
+        onToggleSelect={(additive) => toggleSelection(task.id, additive)}
+      />
+      {isExpanded && hasChildren
+        ? (task.subtasks ?? []).map((grand) => (
+            <SubtaskBranch
+              key={grand.id}
+              task={grand}
+              level={level + 1}
+              focusedId={focusedId}
+              selectedIds={selectedIds}
+              expanded={expanded}
+              setFocusedId={setFocusedId}
+              setExpanded={setExpanded}
+              toggleSelection={toggleSelection}
+            />
+          ))
+        : null}
+    </>
+  )
 }

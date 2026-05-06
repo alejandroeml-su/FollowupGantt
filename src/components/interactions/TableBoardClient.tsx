@@ -18,7 +18,13 @@ type ParentOption = Pick<SerializedTask, 'id' | 'title' | 'mnemonic'> & {
 }
 
 type Props = {
-  tasks: (SerializedTask & { commentCount: number })[]
+  tasks: (SerializedTask & {
+    commentCount: number
+    /** Profundidad en el árbol (0 = raíz). El page.tsx lo inyecta tras
+     * `flattenTaskTree`. Default 0 para callers legacy. */
+    depth?: number
+    ancestors?: string[]
+  })[]
   projects: { id: string; name: string; areaId?: string | null }[]
   users: { id: string; name: string }[]
   allTasks?: ParentOption[]
@@ -124,7 +130,21 @@ export function TableBoardClient({
                       {task.id.split('-')[0]}
                     </td>
                     <td className="px-4 py-3 font-medium text-foreground group-hover:text-indigo-300">
-                      {task.title}
+                      <span
+                        className="inline-flex items-center gap-2"
+                        style={{ paddingLeft: `${(task.depth ?? 0) * 1.25}rem` }}
+                      >
+                        {(task.depth ?? 0) > 0 && (
+                          <span
+                            className="text-muted-foreground/60"
+                            aria-hidden
+                            title={`Subtarea nivel ${task.depth}`}
+                          >
+                            └─
+                          </span>
+                        )}
+                        {task.title}
+                      </span>
                     </td>
                     <td className="px-4 py-3 text-muted-foreground">
                       {task.project?.name || '-'}
