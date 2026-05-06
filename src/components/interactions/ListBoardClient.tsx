@@ -38,6 +38,7 @@ import type { SerializedTask } from '@/lib/types'
 import { reorderTask } from '@/lib/actions/reorder'
 import { deleteTask } from '@/lib/actions'
 import { useUIStore } from '@/lib/stores/ui'
+import { BulkActionsToolbar } from './BulkActionsToolbar'
 import { useTaskShortcuts } from '@/lib/hooks/useTaskShortcuts'
 import StatusSelector from '@/components/StatusSelector'
 import { TaskWithContextMenu } from './TaskContextMenuItems'
@@ -112,6 +113,8 @@ export function ListBoardClient({
 
   const selectedIds = useUIStore((s) => s.selectedIds)
   const toggleSelection = useUIStore((s) => s.toggleSelection)
+  const selectRange = useUIStore((s) => s.selectRange)
+  const clearSelection = useUIStore((s) => s.clearSelection)
   const drawerTaskId = useUIStore((s) => s.drawerTaskId)
 
   // Re-sync cuando el server revalida la página (revalidatePath en actions).
@@ -220,20 +223,56 @@ export function ListBoardClient({
         <GroupBySelector value={groupBy} onChange={setGroupBy} />
       </div>
       <div className="divide-y divide-border/50">
-        <div className="flex items-center bg-secondary/20 px-4 py-2">
-          <ChevronDown className="mr-2 h-4 w-4 text-muted-foreground" />
-          <span className="rounded border border-indigo-500/20 bg-indigo-500/20 px-2 py-0.5 text-xs font-semibold text-indigo-400">
-            ALL TASKS
-          </span>
-          <span className="ml-2 text-xs text-muted-foreground">
-            {visibleItems.length} de {items.length} tareas
-            {showGroups && (
-              <span className="ml-1">· {groups.length} grupos</span>
-            )}
-          </span>
-          <span className="ml-auto text-[10px] text-muted-foreground">
-            Shift + / atajos · / buscar · T nueva tarea
-          </span>
+        {/* Bulk action toolbar (visible solo cuando hay selección) */}
+        {selectedIds.size > 0 ? (
+          <BulkActionsToolbar
+            count={selectedIds.size}
+            selectedIds={selectedIds}
+            onClear={clearSelection}
+            onSelectAllVisible={() =>
+              selectRange(visibleItems.map((t) => t.id))
+            }
+            visibleCount={visibleItems.length}
+          />
+        ) : (
+          <div className="flex items-center bg-secondary/20 px-4 py-1.5 text-[11px]">
+            <span className="rounded border border-indigo-500/20 bg-indigo-500/10 px-2 py-0.5 font-semibold text-indigo-400">
+              {visibleItems.length} de {items.length} tareas
+              {showGroups && ` · ${groups.length} grupos`}
+            </span>
+            <span className="ml-auto text-[10px] text-muted-foreground">
+              Shift + / atajos · / buscar · T nueva tarea
+            </span>
+          </div>
+        )}
+
+        {/* Column headers — sticky con grid alineado a las filas */}
+        <div className="sticky top-0 z-10 grid grid-cols-12 items-center gap-4 border-b border-border bg-muted/70 px-4 py-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground backdrop-blur">
+          <div className="col-span-4 flex items-center gap-2">
+            <input
+              type="checkbox"
+              checked={
+                visibleItems.length > 0 &&
+                visibleItems.every((t) => selectedIds.has(t.id))
+              }
+              onChange={(e) => {
+                if (e.target.checked) {
+                  selectRange(visibleItems.map((t) => t.id))
+                } else {
+                  clearSelection()
+                }
+              }}
+              aria-label="Seleccionar todas las tareas visibles"
+              className="h-4 w-4 cursor-pointer accent-indigo-500"
+              data-testid="task-list-select-all"
+            />
+            <span>Tarea</span>
+          </div>
+          <div className="col-span-2">Asignado</div>
+          <div className="col-span-2">Estado</div>
+          <div className="col-span-2">Fecha límite</div>
+          <div className="col-span-1 text-center">Prioridad</div>
+          <div className="col-span-1 text-center">ID</div>
         </div>
 
         {visibleItems.length === 0 && (
@@ -462,6 +501,22 @@ function Row({
             className="col-span-4 flex items-center"
             style={{ paddingLeft: `${level * 1.5}rem` }}
           >
+            {/* Checkbox de multi-selección. Click directo NO abre el drawer
+                (stopPropagation); para seleccionar varias usar también
+                Ctrl/Cmd+Click sobre la fila. */}
+            <input
+              type="checkbox"
+              checked={selected}
+              onClick={(e) => e.stopPropagation()}
+              onChange={(e) => {
+                e.stopPropagation()
+                onToggleSelect(true)
+              }}
+              aria-label={`Seleccionar tarea ${task.title}`}
+              className="mr-2 h-4 w-4 cursor-pointer accent-indigo-500"
+              data-testid={`task-row-checkbox-${task.id}`}
+            />
+
             {dragHandle}
 
             {hasSubs ? (

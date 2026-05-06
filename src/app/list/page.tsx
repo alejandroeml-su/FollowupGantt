@@ -61,7 +61,7 @@ export default async function ListViewPage() {
         <div>
           <GlobalBreadcrumbs />
           <h1 className="mt-1 text-2xl font-bold text-foreground">
-            List View · DnD, atajos y panel lateral
+            Vista de Lista
           </h1>
         </div>
         <div className="flex items-center gap-3">
@@ -72,15 +72,6 @@ export default async function ListViewPage() {
 
       <div className="flex-1 overflow-auto px-6 pb-6 custom-scrollbar">
         <div className="min-w-[900px] rounded-lg border border-border bg-card shadow-sm">
-          <div className="sticky top-0 z-10 grid grid-cols-12 gap-4 border-b border-border bg-muted/50 px-4 py-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-            <div className="col-span-4 pl-2">Tarea</div>
-            <div className="col-span-2">Asignado</div>
-            <div className="col-span-2">Estado</div>
-            <div className="col-span-2">Fecha Límite</div>
-            <div className="col-span-1 text-center">Prioridad</div>
-            <div className="col-span-1 text-center">ID</div>
-          </div>
-
           <ListBoardClient
             tasks={tasks}
             projects={projects}
