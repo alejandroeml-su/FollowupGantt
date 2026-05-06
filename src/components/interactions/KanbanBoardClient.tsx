@@ -36,6 +36,7 @@ import {
   bulkMoveTasksWithStatus,
 } from '@/lib/actions/reorder'
 import { TaskWithContextMenu } from './TaskContextMenuItems'
+import { computeProgressWithSource } from '@/lib/progress/rollup'
 import { ColumnContextMenu } from './ColumnContextMenu'
 import { TaskCreationModal } from './TaskCreationModal'
 import { TaskDrawer } from './TaskDrawer'
@@ -689,7 +690,47 @@ function SortableKanbanCard({
             {task.priority}
           </span>
         </div>
+        {/* Barra de avance (rollup desde subtareas si es padre). */}
+        <KanbanProgressBar task={task} />
       </div>
     </TaskWithContextMenu>
+  )
+}
+
+function KanbanProgressBar({ task }: { task: SerializedTask }) {
+  const info = computeProgressWithSource(task)
+  return (
+    <div
+      className="mt-2 flex items-center gap-2 pl-2"
+      title={
+        info.derived
+          ? `${info.percent}% (promedio de ${info.childCount} subtarea${info.childCount === 1 ? '' : 's'})`
+          : `${info.percent}%`
+      }
+      data-testid={`kanban-card-progress-${task.id}`}
+    >
+      <div
+        className="relative h-1 flex-1 overflow-hidden rounded-full bg-secondary/40"
+        role="progressbar"
+        aria-valuenow={info.percent}
+        aria-valuemin={0}
+        aria-valuemax={100}
+      >
+        <div
+          className={clsx(
+            'absolute left-0 top-0 h-full rounded-full transition-all',
+            info.percent >= 100
+              ? 'bg-emerald-500'
+              : info.percent >= 50
+                ? 'bg-indigo-500'
+                : 'bg-amber-500',
+          )}
+          style={{ width: `${info.percent}%` }}
+        />
+      </div>
+      <span className="shrink-0 text-[10px] tabular-nums text-muted-foreground">
+        {info.percent}%
+      </span>
+    </div>
   )
 }
