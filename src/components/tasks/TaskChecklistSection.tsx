@@ -27,7 +27,16 @@
  */
 
 import { useEffect, useRef, useState, useTransition } from 'react'
-import { CheckSquare, Plus, Trash2, ChevronUp, ChevronDown } from 'lucide-react'
+import {
+  CheckSquare,
+  Plus,
+  Trash2,
+  ChevronUp,
+  ChevronDown,
+  Pencil,
+  Check,
+  X,
+} from 'lucide-react'
 import {
   getChecklistsForTask,
   createChecklist,
@@ -35,6 +44,8 @@ import {
   toggleChecklistItem,
   deleteChecklistItem,
   reorderChecklistItems,
+  updateChecklist,
+  deleteChecklist,
   type ChecklistDTO,
   type ChecklistItemDTO,
 } from '@/lib/actions/checklist'
@@ -42,6 +53,15 @@ import {
 interface Props {
   taskId: string
 }
+
+/**
+ * Evento global que emiten otros componentes (ej: AITaskRefineMenu tras
+ * insertar una checklist sugerida) para forzar refresh de esta sección.
+ * El detail.taskId opcional permite filtrar; si no llega, refrescamos
+ * sin filtro (estamos montados solo para el task actual de cualquier
+ * modo).
+ */
+const CHECKLIST_REFRESH_EVENT = 'task-checklist:refresh'
 
 export function TaskChecklistSection({ taskId }: Props) {
   const [checklists, setChecklists] = useState<ChecklistDTO[] | null>(null)
@@ -70,6 +90,22 @@ export function TaskChecklistSection({ taskId }: Props) {
     reload(taskId)
   }, [taskId])
 
+  // Escucha eventos de refresh externos (ej: tras aplicar checklist IA
+  // desde el menú de refinamiento). Sin esto, una checklist creada
+  // server-side no aparecía hasta refresh manual del drawer.
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const handler = (ev: Event) => {
+      const detail = (ev as CustomEvent<{ taskId?: string }>).detail
+      if (!detail || !detail.taskId || detail.taskId === taskId) {
+        reload(taskId)
+      }
+    }
+    window.addEventListener(CHECKLIST_REFRESH_EVENT, handler)
+    return () => window.removeEventListener(CHECKLIST_REFRESH_EVENT, handler)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [taskId])
+
   async function handleCreateChecklist() {
     try {
       const created = await createChecklist({
@@ -79,6 +115,45 @@ export function TaskChecklistSection({ taskId }: Props) {
       setChecklists((prev) => (prev ? [...prev, created] : [created]))
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Error al crear checklist')
+    }
+  }
+
+  async function handleUpdateTitle(checklistId: string, title: string) {
+    const trimmed = title.trim()
+    // Optimistic.
+    const prevState = checklists
+    setChecklists((prev) =>
+      prev
+        ? prev.map((cl) =>
+            cl.id === checklistId
+              ? { ...cl, title: trimmed.length > 0 ? trimmed : null }
+              : cl,
+          )
+        : prev,
+    )
+    try {
+      await updateChecklist({
+        checklistId,
+        title: trimmed.length > 0 ? trimmed : null,
+      })
+    } catch (e) {
+      setChecklists(prevState)
+      setError(e instanceof Error ? e.message : 'Error al actualizar título')
+    }
+  }
+
+  async function handleDeleteChecklist(checklistId: string) {
+    const ok = typeof window !== 'undefined'
+      ? window.confirm('¿Eliminar este checklist completo?')
+      : true
+    if (!ok) return
+    const prevState = checklists
+    setChecklists((prev) => prev?.filter((cl) => cl.id !== checklistId) ?? prev)
+    try {
+      await deleteChecklist({ checklistId })
+    } catch (e) {
+      setChecklists(prevState)
+      setError(e instanceof Error ? e.message : 'Error al eliminar checklist')
     }
   }
 
@@ -272,6 +347,8 @@ export function TaskChecklistSection({ taskId }: Props) {
               onDelete={handleDelete}
               onMove={(itemId, delta) => handleMove(cl, itemId, delta)}
               onAddItem={(text) => handleAddItem(cl.id, text)}
+              onUpdateTitle={(title) => handleUpdateTitle(cl.id, title)}
+              onDeleteChecklist={() => handleDeleteChecklist(cl.id)}
             />
           ))}
         </div>
@@ -286,6 +363,8 @@ interface ChecklistBlockProps {
   onDelete: (item: ChecklistItemDTO) => void
   onMove: (itemId: string, delta: -1 | 1) => void
   onAddItem: (text: string) => void
+  onUpdateTitle: (title: string) => void
+  onDeleteChecklist: () => void
 }
 
 function ChecklistBlock({
@@ -294,12 +373,30 @@ function ChecklistBlock({
   onDelete,
   onMove,
   onAddItem,
+  onUpdateTitle,
+  onDeleteChecklist,
 }: ChecklistBlockProps) {
   const [draft, setDraft] = useState('')
   const [collapsed, setCollapsed] = useState(false)
+  const [editingTitle, setEditingTitle] = useState(false)
+  const [titleDraft, setTitleDraft] = useState(checklist.title ?? '')
 
   const total = checklist.items.length
   const done = checklist.items.filter((it) => it.done).length
+  const percent = total > 0 ? Math.round((done / total) * 100) : 0
+
+  function commitTitle() {
+    setEditingTitle(false)
+    const next = titleDraft.trim()
+    const current = (checklist.title ?? '').trim()
+    if (next === current) return
+    onUpdateTitle(next)
+  }
+
+  function cancelTitleEdit() {
+    setEditingTitle(false)
+    setTitleDraft(checklist.title ?? '')
+  }
 
   return (
     <div
@@ -307,23 +404,103 @@ function ChecklistBlock({
       data-testid={`task-checklist-block-${checklist.id}`}
     >
       <div className="mb-1.5 flex items-center justify-between gap-2">
-        <button
-          type="button"
-          onClick={() => setCollapsed((c) => !c)}
-          className="flex items-center gap-1 text-[11px] font-medium text-foreground hover:text-primary"
-          aria-expanded={!collapsed}
-          data-testid={`task-checklist-toggle-${checklist.id}`}
+        {editingTitle ? (
+          <div className="flex flex-1 items-center gap-1">
+            <input
+              type="text"
+              value={titleDraft}
+              autoFocus
+              onChange={(ev) => setTitleDraft(ev.target.value)}
+              onBlur={commitTitle}
+              onKeyDown={(ev) => {
+                if (ev.key === 'Enter') commitTitle()
+                if (ev.key === 'Escape') cancelTitleEdit()
+              }}
+              maxLength={200}
+              placeholder="Título del checklist"
+              className="flex-1 rounded border border-border bg-background px-2 py-0.5 text-[11px] font-medium"
+              aria-label="Editar título del checklist"
+              data-testid={`task-checklist-title-input-${checklist.id}`}
+            />
+            <button
+              type="button"
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={commitTitle}
+              className="rounded p-0.5 text-emerald-500 hover:bg-emerald-500/10"
+              aria-label="Guardar título"
+            >
+              <Check className="h-3 w-3" />
+            </button>
+            <button
+              type="button"
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={cancelTitleEdit}
+              className="rounded p-0.5 text-muted-foreground hover:bg-secondary"
+              aria-label="Cancelar"
+            >
+              <X className="h-3 w-3" />
+            </button>
+          </div>
+        ) : (
+          <div className="flex flex-1 items-center gap-1 min-w-0">
+            <button
+              type="button"
+              onClick={() => setCollapsed((c) => !c)}
+              className="flex items-center gap-1 text-[11px] font-medium text-foreground hover:text-primary truncate"
+              aria-expanded={!collapsed}
+              data-testid={`task-checklist-toggle-${checklist.id}`}
+            >
+              {collapsed ? (
+                <ChevronDown className="h-3 w-3 shrink-0" />
+              ) : (
+                <ChevronUp className="h-3 w-3 shrink-0" />
+              )}
+              <span className="truncate">{checklist.title ?? 'Checklist'}</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setTitleDraft(checklist.title ?? '')
+                setEditingTitle(true)
+              }}
+              className="rounded p-0.5 text-muted-foreground hover:text-foreground opacity-0 group-hover:opacity-100 focus:opacity-100"
+              aria-label="Editar título del checklist"
+              data-testid={`task-checklist-edit-title-${checklist.id}`}
+            >
+              <Pencil className="h-3 w-3" />
+            </button>
+            <button
+              type="button"
+              onClick={onDeleteChecklist}
+              className="rounded p-0.5 text-muted-foreground hover:text-red-500"
+              aria-label="Eliminar checklist completo"
+              data-testid={`task-checklist-delete-block-${checklist.id}`}
+            >
+              <Trash2 className="h-3 w-3" />
+            </button>
+          </div>
+        )}
+        <span
+          className="shrink-0 text-[10px] text-muted-foreground tabular-nums"
+          data-testid={`task-checklist-progress-${checklist.id}`}
         >
-          {collapsed ? (
-            <ChevronDown className="h-3 w-3" />
-          ) : (
-            <ChevronUp className="h-3 w-3" />
-          )}
-          {checklist.title ?? 'Checklist'}
-        </button>
-        <span className="text-[10px] text-muted-foreground">
-          {done}/{total}
+          {done}/{total} · {percent}%
         </span>
+      </div>
+
+      {/* Barra de progreso */}
+      <div
+        className="mb-2 h-1 w-full overflow-hidden rounded-full bg-secondary/40"
+        role="progressbar"
+        aria-valuenow={percent}
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-label={`Progreso del checklist: ${percent}%`}
+      >
+        <div
+          className="h-full rounded-full bg-emerald-500 transition-all"
+          style={{ width: `${percent}%` }}
+        />
       </div>
 
       {!collapsed ? (

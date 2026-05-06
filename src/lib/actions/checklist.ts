@@ -94,6 +94,15 @@ const ReorderChecklistItemsSchema = z.object({
   itemIds: z.array(z.string().min(1)).min(1, 'itemIds no puede estar vacío'),
 })
 
+const UpdateChecklistSchema = z.object({
+  checklistId: z.string().min(1, 'checklistId es obligatorio'),
+  title: TITLE_SCHEMA,
+})
+
+const DeleteChecklistSchema = z.object({
+  checklistId: z.string().min(1, 'checklistId es obligatorio'),
+})
+
 const ApplyAIChecklistSuggestionSchema = z.object({
   taskId: z.string().min(1, 'taskId es obligatorio'),
   items: z
@@ -451,6 +460,52 @@ export async function reorderChecklistItems(
 
   revalidateForTask(checklist.taskId)
   return { ok: true, checklistId: checklist.id, count: itemIds.length }
+}
+
+/**
+ * Actualiza el título de un checklist. `title` puede ser `null` para
+ * limpiar (la UI mostrará "Checklist" como label genérico).
+ */
+export async function updateChecklist(
+  rawInput: z.infer<typeof UpdateChecklistSchema>,
+): Promise<{ id: string; title: string | null; updatedAt: string }> {
+  const parsed = UpdateChecklistSchema.safeParse(rawInput)
+  if (!parsed.success) actionError('INVALID_INPUT', parsed.error.message)
+  const { checklistId, title } = parsed.data
+
+  const checklist = await loadChecklistOrFail(checklistId)
+  await requireProjectAccess(checklist.task.projectId)
+
+  const updated = await prisma.checklist.update({
+    where: { id: checklist.id },
+    data: { title: title ?? null },
+    select: { id: true, title: true, updatedAt: true },
+  })
+
+  revalidateForTask(checklist.taskId)
+  return {
+    id: updated.id,
+    title: updated.title,
+    updatedAt: updated.updatedAt.toISOString(),
+  }
+}
+
+/**
+ * Elimina un checklist completo (cascade en items).
+ */
+export async function deleteChecklist(
+  rawInput: z.infer<typeof DeleteChecklistSchema>,
+): Promise<{ ok: true }> {
+  const parsed = DeleteChecklistSchema.safeParse(rawInput)
+  if (!parsed.success) actionError('INVALID_INPUT', parsed.error.message)
+  const { checklistId } = parsed.data
+
+  const checklist = await loadChecklistOrFail(checklistId)
+  await requireProjectAccess(checklist.task.projectId)
+
+  await prisma.checklist.delete({ where: { id: checklist.id } })
+  revalidateForTask(checklist.taskId)
+  return { ok: true }
 }
 
 /**

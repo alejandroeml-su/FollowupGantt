@@ -135,6 +135,14 @@ export function AITaskRefineMenu({
     setDialogOpen(false)
     setSuggestion(null)
     onApplied?.()
+    // Notifica a TaskChecklistSection (y futuras secciones) para que
+    // refresque sin esperar a un re-mount del drawer. Sin esto, una
+    // checklist sugerida por IA no aparecía hasta refresh manual.
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(
+        new CustomEvent('task-checklist:refresh', { detail: { taskId } }),
+      )
+    }
   }
 
   return (
