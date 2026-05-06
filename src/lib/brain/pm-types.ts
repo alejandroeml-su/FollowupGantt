@@ -74,10 +74,13 @@ export const RiskReportSchema = z.object({
   date: z.string(),
   overallStatus: z.enum(['HEALTHY', 'AT_RISK', 'CRITICAL']),
   headline: z.string().describe('Frase de titular sobre el estado general.'),
+  // NOTA: NO usar `.max(N)` aquí — Anthropic structured output rechaza
+  // `maxItems` con: "output_config.format.schema: For 'array' type,
+  // property 'maxItems' is not supported". El límite (top 5) se enforced
+  // vía system prompt.
   alerts: z
     .array(RiskAlertSchema)
-    .max(5)
-    .describe('Top 5 alertas priorizadas por severidad.'),
+    .describe('Top 5 alertas priorizadas por severidad (máx 5).'),
 })
 
 export type RiskReport = z.infer<typeof RiskReportSchema>

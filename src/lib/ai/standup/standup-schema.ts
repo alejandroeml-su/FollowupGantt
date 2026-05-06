@@ -33,10 +33,9 @@ const userBlockSchema = z.object({
     .string()
     .min(1, 'user requerido')
     .max(120, 'user demasiado largo'),
-  items: z
-    .array(z.string().min(1).max(280))
-    .min(1, 'al menos un item por usuario')
-    .max(10, 'máximo 10 items por usuario'),
+  // NOTA: arrays sin .min/.max — Anthropic structured output no soporta
+  // minItems/maxItems. Límites (1..10) enforced en system prompt.
+  items: z.array(z.string().min(1).max(280)),
 })
 
 const blockerSchema = z.object({
@@ -63,15 +62,16 @@ export const standupSchema = z.object({
    * Lista de displayName / email de los participantes considerados.
    * Vacío si el scope es individual (`generateUserStandup`).
    */
-  participants: z.array(z.string().min(1).max(120)).max(60),
+  // Límite 60 enforced en system prompt (Anthropic rechaza maxItems).
+  participants: z.array(z.string().min(1).max(120)),
   /** Tareas DONE en últimas 24h, agrupadas por usuario. */
-  yesterday: z.array(userBlockSchema).max(60),
+  yesterday: z.array(userBlockSchema),
   /**
    * Tareas IN_PROGRESS asignadas + hitos próximos, agrupadas por usuario.
    */
-  today: z.array(userBlockSchema).max(60),
+  today: z.array(userBlockSchema),
   /** Bloqueos detectados (DELAYED/sin assignee/dependencias rotas). */
-  blockers: z.array(blockerSchema).max(60),
+  blockers: z.array(blockerSchema),
   /**
    * Resumen de 1 línea (<= 240 chars). Útil para push notifications,
    * mensajes Slack DM y banner del dashboard.

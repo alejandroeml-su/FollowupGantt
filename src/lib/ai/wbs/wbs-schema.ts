@@ -30,11 +30,13 @@ const baseTaskShape = {
   type: taskTypeSchema.default('PMI_TASK'),
   estimatedDays: z.number().int().min(1).max(90),
   priority: prioritySchema.default('MEDIUM'),
-  tags: z.array(z.string().min(1).max(40)).max(10).optional(),
+  // NOTA: arrays sin `.max()` — Anthropic rechaza maxItems. Límites
+  // (10) se enforced en system prompt.
+  tags: z.array(z.string().min(1).max(40)).optional(),
   /** Títulos de otras tasks de las que depende (FS implícito). */
-  dependsOn: z.array(z.string().min(1).max(120)).max(10).optional(),
+  dependsOn: z.array(z.string().min(1).max(120)).optional(),
   /** Habilidades sugeridas (para sugerir assignee). */
-  suggestedSkills: z.array(z.string().min(1).max(40)).max(10).optional(),
+  suggestedSkills: z.array(z.string().min(1).max(40)).optional(),
 }
 
 export type WBSTask = {
@@ -52,14 +54,15 @@ export type WBSTask = {
 export const wbsTaskSchema: z.ZodType<WBSTask> = z.lazy(() =>
   z.object({
     ...baseTaskShape,
-    children: z.array(wbsTaskSchema).max(50).optional(),
+    children: z.array(wbsTaskSchema).optional(),
   }),
 )
 
 const wbsPhaseSchema = z.object({
   name: z.string().min(1).max(80),
   order: z.number().int().min(0).max(50),
-  tasks: z.array(wbsTaskSchema).min(1).max(50),
+  // Límite 1..50 enforced en system prompt.
+  tasks: z.array(wbsTaskSchema),
 })
 
 export type WBSPhase = z.infer<typeof wbsPhaseSchema>
@@ -73,8 +76,9 @@ export const wbsSchema = z.object({
   projectName: z.string().min(1).max(100),
   description: z.string().min(1).max(500),
   estimatedDurationDays: z.number().int().min(1).max(730),
-  phases: z.array(wbsPhaseSchema).min(1).max(20),
-  risks: z.array(wbsRiskSchema).max(20).optional(),
+  // 1..20 fases y máx 20 risks enforced en system prompt.
+  phases: z.array(wbsPhaseSchema),
+  risks: z.array(wbsRiskSchema).optional(),
 })
 
 export type WBSGenerated = z.infer<typeof wbsSchema>
