@@ -8,6 +8,7 @@ import { invalidateCpmCache } from '@/lib/scheduling/invalidate'
 import { createNotificationsBatch } from '@/lib/actions/notifications'
 import { recomputeKeyResultsForTask } from '@/lib/actions/goals'
 import { notifyMentions } from '@/lib/mentions/notify'
+import { resolveHandlesToUsers } from '@/lib/mentions/resolve'
 import { recordAuditEventSafe } from '@/lib/audit/events'
 import { nextProgressForStatus } from '@/lib/tasks/status-progress'
 import type {
@@ -802,12 +803,7 @@ export async function createComment(formData: FormData) {
 
     const [mentionedUsers, task, author] = await Promise.all([
       explicitHandles.length > 0
-        ? prisma.user.findMany({
-            where: {
-              OR: [{ email: { in: explicitHandles } }, { name: { in: explicitHandles } }],
-            },
-            select: { id: true, email: true, name: true },
-          })
+        ? resolveHandlesToUsers(explicitHandles)
         : Promise.resolve([] as { id: string; email: string; name: string }[]),
       prisma.task.findUnique({
         where: { id: taskId },
