@@ -3,6 +3,7 @@ import type { SerializedTask } from '@/lib/types'
 import {
   EMPTY_TASK_FILTERS,
   UNASSIGNED_VALUE,
+  NO_EPIC_VALUE,
   countActiveFilters,
   filterTasks,
   filterTasksWithSubtasks,
@@ -67,6 +68,26 @@ describe('taskFilters · matchesFilters', () => {
   it('filtro de assignee específico', () => {
     expect(matchesFilters(make({ assigneeId: 'u1' }), { assigneeId: 'u1' })).toBe(true)
     expect(matchesFilters(make({ assigneeId: 'u1' }), { assigneeId: 'u2' })).toBe(false)
+  })
+
+  // Wave P9 · Agile Maturity — filtro por Epic.
+  it('NO_EPIC_VALUE matchea tareas sin Epic asignada', () => {
+    expect(matchesFilters(make({ epicId: null }), { epicId: NO_EPIC_VALUE })).toBe(true)
+    expect(matchesFilters(make({ epicId: undefined }), { epicId: NO_EPIC_VALUE })).toBe(true)
+    expect(matchesFilters(make({ epicId: 'e1' }), { epicId: NO_EPIC_VALUE })).toBe(false)
+  })
+
+  it('filtro de epic específica', () => {
+    expect(matchesFilters(make({ epicId: 'e1' }), { epicId: 'e1' })).toBe(true)
+    expect(matchesFilters(make({ epicId: 'e1' }), { epicId: 'e2' })).toBe(false)
+    expect(matchesFilters(make({ epicId: null }), { epicId: 'e1' })).toBe(false)
+  })
+
+  it('combinación epic + status', () => {
+    const t = make({ epicId: 'e1', status: 'IN_PROGRESS' })
+    expect(matchesFilters(t, { epicId: 'e1', status: 'IN_PROGRESS' })).toBe(true)
+    expect(matchesFilters(t, { epicId: 'e1', status: 'DONE' })).toBe(false)
+    expect(matchesFilters(t, { epicId: 'e2', status: 'IN_PROGRESS' })).toBe(false)
   })
 })
 

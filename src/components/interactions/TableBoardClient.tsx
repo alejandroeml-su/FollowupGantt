@@ -35,6 +35,8 @@ type Props = {
   allTasks?: ParentOption[]
   gerencias?: { id: string; name: string }[]
   areas?: { id: string; name: string; gerenciaId?: string | null }[]
+  /** Wave P9 — Epics activas para filtro. */
+  epics?: { id: string; name: string; color: string; projectId: string }[]
   /**
    * Wave P7 · C-DEBT-2 — Identidad del usuario actual para el drawer
    * (presence + edit locks). Forwardeada a `<TaskDrawerContent>`.
@@ -49,6 +51,7 @@ export function TableBoardClient({
   allTasks = [],
   gerencias = [],
   areas = [],
+  epics = [],
   currentUser = null,
 }: Props) {
   // Refresca la vista cuando cualquier tarea cambia en la BD (postgres CDC
@@ -162,6 +165,7 @@ export function TableBoardClient({
         areas={areas}
         projects={projects}
         users={users}
+        epics={epics}
       />
 
       <div className="flex-1 overflow-auto p-6">

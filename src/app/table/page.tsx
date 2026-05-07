@@ -18,7 +18,7 @@ export default async function TableDBPage() {
   // Carga el árbol desde raíces (parentId=null) con N niveles. Tabla
   // muestra todo flat con indentación por `depth`, así que aplanamos
   // en DFS preservando el orden jerárquico (padre, hijos, nietos...).
-  const [dbRoots, projects, users, allTasksRaw, gerencias, areas] = await Promise.all([
+  const [dbRoots, projects, users, allTasksRaw, gerencias, areas, epics] = await Promise.all([
     prisma.task.findMany({
       where: { parentId: null, archivedAt: null },
       include: buildTaskTreeInclude({ depth: DEFAULT_TREE_DEPTH }),
@@ -33,6 +33,12 @@ export default async function TableDBPage() {
     }),
     prisma.gerencia.findMany({ select: { id: true, name: true }, orderBy: { name: 'asc' } }),
     prisma.area.findMany({ select: { id: true, name: true, gerenciaId: true }, orderBy: { name: 'asc' } }),
+    // Wave P9 — Epics activas para selector + filtro.
+    prisma.epic.findMany({
+      where: { archivedAt: null },
+      select: { id: true, name: true, color: true, projectId: true },
+      orderBy: [{ projectId: 'asc' }, { position: 'asc' }],
+    }),
   ]);
 
   // Serializa cada raíz (recursa por subtasks) y luego aplana en DFS
@@ -56,6 +62,7 @@ export default async function TableDBPage() {
         allTasks={allTasksRaw}
         gerencias={gerencias}
         areas={areas}
+        epics={epics}
         currentUser={currentUser}
       />
     </div>

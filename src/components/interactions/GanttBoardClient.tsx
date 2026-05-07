@@ -86,6 +86,8 @@ type Props = {
   users: { id: string; name: string }[]
   gerencias?: { id: string; name: string }[]
   areas?: { id: string; name: string; gerenciaId?: string | null }[]
+  /** Wave P9 — Epics activas para filtro. */
+  epics?: { id: string; name: string; color: string; projectId: string }[]
   allTasks?: ParentOption[]
   /** Resultados CPM agregados de todos los proyectos visibles (HU-1.2). */
   cpmByTaskId?: Record<string, GanttCpmInfo>
@@ -192,6 +194,7 @@ function GanttBoardClientImpl({
   users,
   gerencias = [],
   areas = [],
+  epics = [],
   cpmByTaskId,
   dependencies,
   hasCpmCycle,
@@ -759,6 +762,7 @@ function GanttBoardClientImpl({
         areas={areas}
         projects={projects}
         users={users}
+        epics={epics}
         showCriticalOnly
         className="rounded-lg mb-4 border border-border"
       />
