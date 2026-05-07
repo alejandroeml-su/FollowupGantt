@@ -22,8 +22,9 @@ import prisma from '@/lib/prisma'
 import { sendMentionNotification } from '@/lib/email/mention-notification'
 import { createNotificationsBatch } from '@/lib/actions/notifications'
 import { extractMentions, isBroadcastHandle } from './parse'
+import { resolveHandlesToUsers, type ResolvedMentionUser } from './resolve'
 
-type ResolvedUser = { id: string; email: string; name: string }
+type ResolvedUser = ResolvedMentionUser
 
 export type MentionNotificationContext = {
   /** Texto donde se buscarán menciones. */
@@ -75,15 +76,7 @@ export async function notifyMentions(
 
   const [mentionedUsers, task, author] = await Promise.all([
     explicitHandles.length > 0
-      ? prisma.user.findMany({
-          where: {
-            OR: [
-              { email: { in: explicitHandles } },
-              { name: { in: explicitHandles } },
-            ],
-          },
-          select: { id: true, email: true, name: true },
-        })
+      ? resolveHandlesToUsers(explicitHandles)
       : Promise.resolve([] as ResolvedUser[]),
     prisma.task.findUnique({
       where: { id: ctx.taskId },
