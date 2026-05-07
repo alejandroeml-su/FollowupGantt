@@ -66,8 +66,8 @@ export function TimeEntriesList({
   // start/stop/manual create/delete. Sin esto, el componente usa el
   // initialEntries del primer render y nunca refleja entries nuevos
   // (bug visible al detener un timer y no ver la entry persistida).
-  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setEntries(initialEntries)
   }, [initialEntries])
 
