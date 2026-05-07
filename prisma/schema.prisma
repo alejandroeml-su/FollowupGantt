@@ -777,6 +777,29 @@ model Task {
   // futuros equipos que quieran extender la escala.
   storyPoints Int?
 
+  /// Wave P9 · Agile Maturity (HU-9.3) — Historia de Usuario formal.
+  ///
+  /// Aplica sólo a tasks con `type = AGILE_STORY`. JSON con shape:
+  ///   {
+  ///     asA: string,        // "Como un Project Owner..."
+  ///     iWant: string,      // "Quiero crear Epics..."
+  ///     soThat: string,     // "Para agrupar Stories..."
+  ///     criteria: Array<{
+  ///       id: string,       // uuid
+  ///       text: string,
+  ///       done: boolean,
+  ///       doneAt?: string   // ISO date
+  ///     }>
+  ///   }
+  ///
+  /// Decisión arquitectura: campo Json en lugar de tabla normalizada
+  /// `AcceptanceCriteria`. Razón: criterios viajan con templates, son
+  /// raros los queries cross-task ("dame todas las tasks con CA X").
+  /// Si crece la necesidad de query, normalizar en R2 (deuda registrada).
+  ///
+  /// El validador de shape vive en `src/lib/user-story/types.ts`.
+  userStory Json?
+
   // Enlace externo de referencia (Confluence, Figma, ticket externo, etc.)
   referenceUrl String?
 
