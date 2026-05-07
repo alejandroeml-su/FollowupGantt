@@ -464,24 +464,57 @@ export async function removeDependency(formData: FormData) {
   revalidatePath('/gantt')
 }
 
+/**
+ * Mapeo canónico status → progress %. Aplica a tareas y subtareas
+ * (request Edwin 2026-05-06): cambiar el status debe reflejar el
+ * avance esperado para que las barras y rollups no queden inconsistentes
+ * con el estado del trabajo.
+ *
+ * Convención discutida:
+ *   TODO        →   0%
+ *   IN_PROGRESS →  50%
+ *   REVIEW      →  75%
+ *   DONE        → 100%
+ */
+export const STATUS_PROGRESS_MAP: Record<TaskStatus, number> = {
+  TODO: 0,
+  IN_PROGRESS: 50,
+  REVIEW: 75,
+  DONE: 100,
+}
+
 export async function updateTaskStatus(id: string, status: string) {
+  const newStatus = status as TaskStatus
   // Snapshot antes para audit + history. Sin user context aquí (este action
   // se llama desde drag&drop sin formData de userRoles), así que actorId=null.
   const before = await prisma.task.findUnique({
     where: { id },
-    select: { status: true },
+    select: { status: true, progress: true },
   })
+
+  // Status driven progress: si el progress canónico del nuevo status
+  // es distinto al actual, lo sincronizamos. Caso especial: si el
+  // usuario ya tenía un progress manual entre umbrales (ej. 65% en
+  // IN_PROGRESS), respetar al SUBIR de status (no bajar el progress
+  // existente cuando el avance manual ya superó el canónico).
+  const targetProgress = STATUS_PROGRESS_MAP[newStatus] ?? 0
+  const currentProgress = before?.progress ?? 0
+  const nextProgress =
+    newStatus === 'DONE' || newStatus === 'TODO'
+      ? targetProgress // estados terminales: forzar 100/0 sin importar lo manual
+      : Math.max(currentProgress, targetProgress)
+
   await prisma.task.update({
     where: { id },
-    data: { status: status as TaskStatus }
+    data: { status: newStatus, progress: nextProgress },
   })
-  if (before && before.status !== (status as TaskStatus)) {
+  if (before && before.status !== newStatus) {
     await recordAuditEventSafe({
       action: 'task.status_changed',
       entityType: 'task',
       entityId: id,
-      before: { status: before.status },
-      after: { status },
+      before: { status: before.status, progress: before.progress },
+      after: { status, progress: nextProgress },
     })
     // También TaskHistory para que el tab "Historial" lo refleje.
     try {
@@ -494,6 +527,17 @@ export async function updateTaskStatus(id: string, status: string) {
           userId: null,
         },
       })
+      if (currentProgress !== nextProgress) {
+        await prisma.taskHistory.create({
+          data: {
+            taskId: id,
+            field: 'progress',
+            oldValue: String(currentProgress),
+            newValue: String(nextProgress),
+            userId: null,
+          },
+        })
+      }
     } catch (err) {
       console.error('[history] taskHistory.create falló desde updateTaskStatus', err)
     }
@@ -506,6 +550,8 @@ export async function updateTaskStatus(id: string, status: string) {
   }
   revalidatePath('/list')
   revalidatePath('/kanban')
+  revalidatePath('/table')
+  revalidatePath('/gantt')
   revalidatePath('/goals')
 }
 

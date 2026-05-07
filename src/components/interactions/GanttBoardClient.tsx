@@ -23,6 +23,7 @@ import { TaskDrawer } from './TaskDrawer'
 import { TaskDrawerContent } from './TaskDrawerContent'
 import { useUIStore } from '@/lib/stores/ui'
 import { useTaskShortcuts } from '@/lib/hooks/useTaskShortcuts'
+import { useTaskRealtimeRefresh } from '@/lib/realtime/use-task-realtime'
 import { toast } from './Toaster'
 import { TaskFiltersBar } from './TaskFiltersBar'
 import { EMPTY_TASK_FILTERS, filterTasks, type TaskFilters } from '@/lib/taskFilters'
@@ -208,6 +209,12 @@ function GanttBoardClientImpl({
       }),
     [start, rangeDays],
   )
+
+  // Refresca la vista cuando cualquier tarea cambia en la BD (postgres CDC
+  // vía Supabase Realtime). El Gantt es la vista más sensible a fechas y
+  // dependencias, así que reaccionar a cambios externos sin refresh manual
+  // evita que dos usuarios pisen movimientos de barras del otro.
+  useTaskRealtimeRefresh()
 
   const [local, setLocal] = useState(tasks)
   const [filters, setFilters] = useState<TaskFilters>(EMPTY_TASK_FILTERS)

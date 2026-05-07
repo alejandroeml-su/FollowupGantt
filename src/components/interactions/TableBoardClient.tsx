@@ -11,6 +11,7 @@ import { TaskFiltersBar } from './TaskFiltersBar'
 import { EMPTY_TASK_FILTERS, filterTasks, type TaskFilters } from '@/lib/taskFilters'
 import type { CurrentUserPresence } from '@/lib/auth/get-current-user-presence'
 import { computeProgressWithSource } from '@/lib/progress/rollup'
+import { useTaskRealtimeRefresh } from '@/lib/realtime/use-task-realtime'
 
 type ParentOption = Pick<SerializedTask, 'id' | 'title' | 'mnemonic'> & {
   project?: { id: string; name: string } | null
@@ -46,6 +47,11 @@ export function TableBoardClient({
   areas = [],
   currentUser = null,
 }: Props) {
+  // Refresca la vista cuando cualquier tarea cambia en la BD (postgres CDC
+  // vía Supabase Realtime). Mantiene los rollups de progress al día sin
+  // recargar la página cuando otro tab/usuario muta tareas.
+  useTaskRealtimeRefresh()
+
   const [search, setSearch] = useState('')
   const [filters, setFilters] = useState<TaskFilters>(EMPTY_TASK_FILTERS)
   const drawerTaskId = useUIStore((s) => s.drawerTaskId)

@@ -47,6 +47,7 @@ import type {
 } from './task-form/TaskMetaSidebar'
 import { useUIStore } from '@/lib/stores/ui'
 import { useTaskShortcuts } from '@/lib/hooks/useTaskShortcuts'
+import { useTaskRealtimeRefresh } from '@/lib/realtime/use-task-realtime'
 import { toast } from './Toaster'
 import { TaskFiltersBar } from './TaskFiltersBar'
 import { EMPTY_TASK_FILTERS, filterTasks, type TaskFilters } from '@/lib/taskFilters'
@@ -116,6 +117,11 @@ export function KanbanBoardClient({
   sprints = [],
   currentUser = null,
 }: Props) {
+  // Refresca la vista cuando cualquier tarea cambia en la BD (postgres CDC
+  // vía Supabase Realtime). Mantiene los rollups y el conteo de columnas
+  // sin requerir refresh manual en colaboración multi-tab/multi-usuario.
+  useTaskRealtimeRefresh()
+
   const [local, setLocal] = useState(tasksByColumn)
   const [activeId, setActiveId] = useState<string | null>(null)
   const [filters, setFilters] = useState<TaskFilters>(EMPTY_TASK_FILTERS)
