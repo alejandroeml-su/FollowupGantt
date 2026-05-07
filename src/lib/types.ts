@@ -81,6 +81,9 @@ export interface SerializedTask {
   plannedValue?: number | null;
   actualCost?: number | null;
   tags?: string[];
+  /** Wave P9 · Agile Maturity (HU-9.1) — Epic asignada (opcional). */
+  epicId?: string | null;
+  epic?: { id: string; name: string; color: string } | null;
   /** URL externa de referencia (Confluence, Figma, ticket, etc.). */
   referenceUrl?: string | null;
   /** Colaboradores adicionales además de `assignee` (Sprint 4). */
@@ -164,6 +167,9 @@ type RawTask = {
   actualCost?: number | null;
   tags?: string[];
   referenceUrl?: string | null;
+  /** Wave P9 — Epic relation. */
+  epicId?: string | null;
+  epic?: { id: string; name: string; color: string } | null;
   collaborators?: Array<{
     userId?: string;
     user?: RawPerson | null;
@@ -205,6 +211,10 @@ export function serializeTask(task: Record<string, unknown>): SerializedTask {
     actualCost: t.actualCost ?? null,
     tags: Array.isArray(t.tags) ? (t.tags as string[]) : [],
     referenceUrl: t.referenceUrl ?? null,
+    epicId: t.epicId ?? null,
+    epic: t.epic
+      ? { id: t.epic.id, name: t.epic.name, color: t.epic.color }
+      : null,
     collaborators: Array.isArray(t.collaborators)
       ? t.collaborators
           .map((c) =>

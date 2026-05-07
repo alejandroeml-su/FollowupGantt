@@ -28,6 +28,7 @@ export type TableColumnId =
   | 'id'
   | 'title'
   | 'project'
+  | 'epic'
   | 'type'
   | 'status'
   | 'priority'
@@ -56,6 +57,7 @@ export const TABLE_COLUMNS: TableColumn[] = [
   { id: 'id', label: 'ID', align: 'left' },
   { id: 'title', label: 'Título', align: 'left', alwaysVisible: true },
   { id: 'project', label: 'Proyecto', align: 'left' },
+  { id: 'epic', label: 'Epic', align: 'left' },
   { id: 'type', label: 'Tipo', align: 'left' },
   { id: 'status', label: 'Estado', align: 'center' },
   { id: 'priority', label: 'Prioridad', align: 'center' },
@@ -79,6 +81,7 @@ export const DEFAULT_VISIBLE_COLUMNS: TableColumnId[] = [
   'id',
   'title',
   'project',
+  'epic',
   'type',
   'status',
   'priority',

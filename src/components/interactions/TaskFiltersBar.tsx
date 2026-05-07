@@ -4,7 +4,7 @@ import { useMemo } from 'react'
 import { Filter, X, Zap } from 'lucide-react'
 import { clsx } from 'clsx'
 import type { TaskFilters } from '@/lib/taskFilters'
-import { countActiveFilters, EMPTY_TASK_FILTERS, UNASSIGNED_VALUE } from '@/lib/taskFilters'
+import { countActiveFilters, EMPTY_TASK_FILTERS, UNASSIGNED_VALUE, NO_EPIC_VALUE } from '@/lib/taskFilters'
 import { useUIStore } from '@/lib/stores/ui'
 import { useTranslation } from '@/lib/i18n/use-translation'
 
@@ -13,6 +13,8 @@ type Catalogs = {
   areas?: { id: string; name: string; gerenciaId?: string | null }[]
   projects?: { id: string; name: string; areaId?: string | null }[]
   users?: { id: string; name: string }[]
+  /** Wave P9 — Epics disponibles (filtrables por proyecto seleccionado si aplica). */
+  epics?: { id: string; name: string; color: string; projectId: string }[]
 }
 
 type Props = Catalogs & {
@@ -55,6 +57,7 @@ export function TaskFiltersBar({
   areas = [],
   projects = [],
   users = [],
+  epics = [],
   show,
   className,
   showCriticalOnly = false,
@@ -211,6 +214,26 @@ export function TaskFiltersBar({
           <option value={UNASSIGNED_VALUE}>{t('filters.unassigned')}</option>
           {users.map((u) => (
             <option key={u.id} value={u.id}>{u.name}</option>
+          ))}
+        </select>
+      )}
+
+      {/* Wave P9 · Agile Maturity — filtro por Epic.
+          Si hay projectId seleccionado, filtramos las epics a las del proyecto. */}
+      {visible('epicId') && epics.length > 0 && (
+        <select
+          value={value.epicId ?? ''}
+          onChange={(e) => set('epicId', e.target.value)}
+          className={selectClass}
+          aria-label="Filtrar por Epic"
+        >
+          <option value="">Epic</option>
+          <option value={NO_EPIC_VALUE}>Sin Epic</option>
+          {(value.projectId
+            ? epics.filter((ep) => ep.projectId === value.projectId)
+            : epics
+          ).map((ep) => (
+            <option key={ep.id} value={ep.id}>{ep.name}</option>
           ))}
         </select>
       )}

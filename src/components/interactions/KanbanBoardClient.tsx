@@ -48,6 +48,7 @@ import type {
 import { useUIStore } from '@/lib/stores/ui'
 import { useTaskShortcuts } from '@/lib/hooks/useTaskShortcuts'
 import { useTaskRealtimeRefresh } from '@/lib/realtime/use-task-realtime'
+import { EpicBadge } from '@/components/epics/EpicBadge'
 import { toast } from './Toaster'
 import { TaskFiltersBar } from './TaskFiltersBar'
 import { EMPTY_TASK_FILTERS, filterTasks, type TaskFilters } from '@/lib/taskFilters'
@@ -662,9 +663,21 @@ function SortableKanbanCard({
           )}
         />
         <div className="flex items-start justify-between pl-2">
-          <p className="text-sm font-medium leading-snug text-foreground">
-            {task.title}
-          </p>
+          <div className="min-w-0 flex-1">
+            {/* Wave P9 — badge Epic encima del título cuando aplica. */}
+            {task.epic && (
+              <div className="mb-1">
+                <EpicBadge
+                  name={task.epic.name}
+                  color={task.epic.color}
+                  size="xs"
+                />
+              </div>
+            )}
+            <p className="text-sm font-medium leading-snug text-foreground">
+              {task.title}
+            </p>
+          </div>
           <button
             type="button"
             {...(listeners as Record<string, unknown>)}

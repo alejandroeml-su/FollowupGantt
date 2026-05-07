@@ -16,7 +16,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import {
   ArrowLeft, Plus, Calendar as CalendarIcon, Link as LinkIcon,
-  GitCommit, ChevronDown, ListTree, Settings, X
+  GitCommit, ChevronDown, ListTree, Settings, X, Sparkles,
 } from 'lucide-react';
 import { ProjectDocsSection } from '@/components/docs/ProjectDocsSection';
 import { ExportProjectButton } from '@/components/backup/ExportProjectButton';
@@ -166,6 +166,13 @@ export default function ProjectDetailClient({ projectId, currentUser }: Props) {
             <button className="flex items-center gap-2 rounded-md bg-secondary px-4 py-2 text-sm font-medium text-foreground/90 hover:bg-secondary/80 border border-border">
               <Settings className="h-4 w-4" /> Línea Base
             </button>
+            {/* Wave P9 · Agile Maturity — acceso a Epics del proyecto. */}
+            <Link
+              href={`/projects/${projectId}/epics`}
+              className="flex items-center gap-2 rounded-md bg-secondary px-4 py-2 text-sm font-medium text-foreground/90 hover:bg-secondary/80 border border-border"
+            >
+              <Sparkles className="h-4 w-4" /> Epics
+            </Link>
             {/* P3-3 · Backup/Restore: export full + import nuevo proyecto. */}
             <ExportProjectButton projectId={projectId} />
             <ImportProjectDialog />

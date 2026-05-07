@@ -8,11 +8,16 @@ export type TaskFilters = {
   type?: string
   priority?: string
   assigneeId?: string // '__unassigned__' => tareas sin responsable
+  /** Wave P9 — filtro por Epic.
+   * '__no_epic__' = tareas sin Epic asignada. */
+  epicId?: string
   /** Fecha inicial del rango (YYYY-MM-DD, UTC). Filtra tareas con overlap. */
   dateFrom?: string
   /** Fecha final del rango (YYYY-MM-DD, UTC). Filtra tareas con overlap. */
   dateTo?: string
 }
+
+export const NO_EPIC_VALUE = '__no_epic__'
 
 export const EMPTY_TASK_FILTERS: TaskFilters = {}
 export const UNASSIGNED_VALUE = '__unassigned__'
@@ -63,6 +68,13 @@ export function matchesFilters(task: SerializedTask, f: TaskFilters): boolean {
     if (f.assigneeId === UNASSIGNED_VALUE) {
       if (task.assigneeId) return false
     } else if (task.assigneeId !== f.assigneeId) {
+      return false
+    }
+  }
+  if (f.epicId) {
+    if (f.epicId === NO_EPIC_VALUE) {
+      if (task.epicId) return false
+    } else if (task.epicId !== f.epicId) {
       return false
     }
   }
