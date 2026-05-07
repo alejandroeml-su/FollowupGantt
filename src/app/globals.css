@@ -152,10 +152,27 @@
   --warning-foreground: #451a03;
 
   --border: #475569;               /* slate-600 — 4.7:1 vs bg, separa filas claramente */
-  --input: #1f2a44;                /* fondo input — entre subtle y card (distinto de secondary) */
+  --input: #0f1828;                /* fondo input — más hundido que card para sensación de "campo" (era #1f2a44, muy claro) */
   --input-foreground: #ffffff;
   --placeholder: #94a3b8;          /* slate-400 — 5.6:1 (era slate-300, competía con value) */
   --ring: #818cf8;                 /* indigo-400 — focus vibrante 9.2:1 */
+}
+
+/* ───────────────────────────────────────────────────────────────
+   Text selection · personalizado para que NO use el highlight
+   default del OS (típicamente azul saturado) que pierde contraste
+   sobre fondos claros u oscuros.
+   Usa --ring (indigo-400) como background para coherencia con focus.
+   En light mode: indigo-700 con texto blanco.
+   En dark mode: indigo-400 con texto indigo-950 (alto contraste).
+   ─────────────────────────────────────────────────────────────── */
+::selection {
+  background: var(--primary);
+  color: var(--primary-foreground);
+}
+::-moz-selection {
+  background: var(--primary);
+  color: var(--primary-foreground);
 }
 
 body {
