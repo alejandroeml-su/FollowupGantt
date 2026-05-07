@@ -213,6 +213,8 @@ model User {
   ownedEpics         Epic[]             @relation("EpicOwner")
   // Wave P9 · Agile Maturity (HU-9.4) — Releases owned por este user.
   ownedReleases      Release[]          @relation("ReleaseOwner")
+  // Wave P9 R2 (HU-9.9) — Retrospectivas que este user facilitó.
+  facilitatedRetros  Retrospective[]    @relation("RetroFacilitator")
   tasks              Task[]             @relation("TaskAssignee")
   taskCollaborations TaskCollaborator[] @relation("TaskCollaborator")
   comments           Comment[]          @relation("CommentAuthor")
@@ -791,6 +793,12 @@ model Sprint {
   /// Wave P9 (HU-9.4) — Releases que incluyen este Sprint en su scope.
   releases ReleaseSprint[]
 
+  /// Wave P9 R2 (HU-9.9) — Retrospectivas del sprint. Un sprint puede
+  /// tener N retros (típico: 1 al cerrar; opcional re-abrir si surge
+  /// reflexión adicional). En la práctica la app se ancla a la última
+  /// activa.
+  retrospectives Retrospective[]
+
   // Ola P8 · Equipo P8-3 · Cost Management.
   // Presupuesto opcional por sprint (Agile). Útil para teams con T&M /
   // contratos por iteración. Independiente del budget de phase: ambos
@@ -800,6 +808,59 @@ model Sprint {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+/// Wave P9 R2 (HU-9.9) — Retrospectiva de Sprint.
+///
+/// Captura aprendizajes del equipo en un format estructurado. Items
+/// (notas, votos, action items) viven en Json para evitar tabla
+/// extra — el shape lo valida `lib/retrospective/types.ts`.
+///
+/// Lifecycle:
+///   - createdAt: cuando se inicia la retro (típicamente al cerrar el sprint).
+///   - completedAt: cuando se da por cerrada (acuerdo del equipo).
+///     Tras completedAt, los items quedan readonly (audit log).
+///
+/// Action items: cuando el equipo decide convertir un item en tarea
+/// concreta, se crea una `Task` separada con type=AGILE_STORY y se
+/// guarda el `taskId` en el item. Permite tracking sin re-implementar
+/// task management.
+model Retrospective {
+  id    String @id @default(uuid())
+  title String
+  /// Notas opcionales (markdown plano permitido).
+  notes String?
+
+  /// Format del retro (estructura de columnas/categorías).
+  format RetrospectiveFormat @default(FOUR_LS)
+
+  /// Items + categorías + votes + action items en Json. Shape:
+  /// { categories: { [categoryId]: { label, items: RetroItem[] } } }
+  /// Donde RetroItem = { id, text, votes: string[], authorId, taskId? }
+  /// El validador vive en `lib/retrospective/types.ts`.
+  data Json?
+
+  facilitatorId String?
+  facilitator   User?   @relation("RetroFacilitator", fields: [facilitatorId], references: [id])
+
+  sprintId String
+  sprint   Sprint @relation(fields: [sprintId], references: [id], onDelete: Cascade)
+
+  completedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([sprintId, completedAt])
+}
+
+enum RetrospectiveFormat {
+  /// 4 columnas: Liked / Lacked / Learned / Longed-for.
+  FOUR_LS
+  /// 3 columnas: Start / Stop / Continue.
+  START_STOP_CONTINUE
+  /// 3 columnas: Mad / Sad / Glad.
+  MAD_SAD_GLAD
 }
 
 model BoardColumn {
