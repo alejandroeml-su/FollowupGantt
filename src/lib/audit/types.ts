@@ -68,6 +68,18 @@ export const KNOWN_AUDIT_ACTIONS = [
   'retrospective.vote_removed',
   'retrospective.action_item_created',
   'retrospective.completed',
+  // Wave P10 (HU-10.2) — User availability
+  'user.availability_added',
+  'user.availability_updated',
+  'user.availability_removed',
+  // Wave P10 (HU-10.2) — Holiday bulk import sobre WorkCalendar P1.5
+  'calendar.holidays_imported',
+  // Wave P10 (HU-10.4) — Cross-project dependencies
+  'cross_dependency.created',
+  'cross_dependency.updated',
+  'cross_dependency.removed',
+  // Wave P10 (HU-10.7) — Resource allocation snapshot refresh
+  'allocation.snapshot_refreshed',
   // Usuario / sesión
   'user.login',
   'user.logout',
@@ -124,6 +136,14 @@ export const ACTION_LABELS: Record<AuditAction, string> = {
   'retrospective.vote_removed': 'Voto removido en retro',
   'retrospective.action_item_created': 'Action item creado desde retro',
   'retrospective.completed': 'Retrospectiva cerrada',
+  'user.availability_added': 'Disponibilidad de usuario agregada',
+  'user.availability_updated': 'Disponibilidad de usuario actualizada',
+  'user.availability_removed': 'Disponibilidad de usuario eliminada',
+  'calendar.holidays_imported': 'Holidays importados al calendario',
+  'cross_dependency.created': 'Dependencia cross-project creada',
+  'cross_dependency.updated': 'Dependencia cross-project actualizada',
+  'cross_dependency.removed': 'Dependencia cross-project eliminada',
+  'allocation.snapshot_refreshed': 'Snapshot de allocation refrescado',
   'user.login': 'Inicio de sesión',
   'user.logout': 'Cierre de sesión',
   'user.password_changed': 'Contraseña cambiada',
