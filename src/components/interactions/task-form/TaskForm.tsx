@@ -63,6 +63,7 @@ import { CommentsTab } from './tabs/CommentsTab'
 import { HistoryTab } from './tabs/HistoryTab'
 import { AttachmentsTab } from './tabs/AttachmentsTab'
 import { DependenciesTab } from './tabs/DependenciesTab'
+import { computeProgressWithSource } from '@/lib/progress/rollup'
 
 // ────────────────────────────────────────────────────────────────────────
 // Tipos públicos
@@ -596,8 +597,29 @@ export function TaskForm({
       )}
 
       {/* En drawer/edit: bloque "Tiempos e Indicadores" inline (Avance + Estimado/Invertido).
-          Persistencia: progress/actualCost por handleSaveAll global; plannedValue inline. */}
-      {isEdit && task && (
+          Persistencia: progress/actualCost por handleSaveAll global; plannedValue inline.
+
+          "Avance Real" se deriva del rollup recursivo de subtareas
+          (`computeProgressWithSource`). Si la tarea es hoja, refleja el
+          `progress` manual editable con el slider. Si tiene subtareas,
+          el slider queda deshabilitado y mostramos badge "↻ promedio
+          de N subtareas" para clarificar que el valor es derivado.
+
+          Bug Edwin 2026-05-06: antes el campo mostraba `progress` literal
+          aunque hubiera horas o subtareas — daba 0% en tareas TODO sin
+          reflejar el avance real del trabajo en el árbol. */}
+      {isEdit && task && (() => {
+        const progressInfo = computeProgressWithSource({
+          ...task,
+          progress,
+          subtasks: task.subtasks,
+        })
+        const displayPercent = progressInfo.derived ? progressInfo.percent : progress
+        const planned = Number(meta.plannedValue) || 0
+        const invested = Number(actualCost) || 0
+        const efficiencyPct =
+          planned > 0 ? Math.round((invested / planned) * 100) : null
+        return (
         <section className="space-y-6 pt-4">
           <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground border-b border-border pb-2">
             Tiempos e Indicadores
@@ -608,11 +630,20 @@ export function TaskForm({
                 <span className="text-xs text-muted-foreground font-semibold uppercase tracking-widest">
                   Avance Real
                 </span>
-                <span className="text-sm font-bold text-indigo-400">
-                  {progress}%
+                <span className="text-sm font-bold text-indigo-400 flex items-center gap-1">
+                  {displayPercent}%
+                  {progressInfo.derived && (
+                    <span
+                      className="text-[9px] text-muted-foreground"
+                      title={`Promedio de ${progressInfo.childCount} subtarea${progressInfo.childCount === 1 ? '' : 's'}`}
+                      aria-label="Calculado automáticamente"
+                    >
+                      ↻
+                    </span>
+                  )}
                 </span>
               </div>
-              {isEditing ? (
+              {isEditing && !progressInfo.derived ? (
                 <input
                   type="range"
                   min="0"
@@ -625,10 +656,27 @@ export function TaskForm({
               ) : (
                 <div className="h-2 w-full bg-secondary rounded-full overflow-hidden">
                   <div
-                    className={`h-full transition-all duration-500 ${progress === 100 ? 'bg-emerald-500' : 'bg-indigo-500'}`}
-                    style={{ width: `${progress}%` }}
+                    className={`h-full transition-all duration-500 ${displayPercent >= 100 ? 'bg-emerald-500' : displayPercent >= 50 ? 'bg-indigo-500' : 'bg-amber-500'}`}
+                    style={{ width: `${displayPercent}%` }}
                   />
                 </div>
+              )}
+              {progressInfo.derived && (
+                <p className="text-[10px] text-muted-foreground italic">
+                  Calculado automáticamente del promedio de {progressInfo.childCount} subtarea
+                  {progressInfo.childCount === 1 ? '' : 's'}.
+                </p>
+              )}
+              {!progressInfo.derived && efficiencyPct !== null && invested > 0 && (
+                <p
+                  className={`text-[10px] italic ${
+                    efficiencyPct > 100 ? 'text-amber-400' : 'text-muted-foreground'
+                  }`}
+                  title="Horas invertidas / horas estimadas"
+                >
+                  Eficiencia: {efficiencyPct}% ({invested}h/{planned}h)
+                  {efficiencyPct > 100 && ' · sobre estimado'}
+                </p>
               )}
             </div>
             <div className="grid grid-cols-2 gap-3">
@@ -675,7 +723,8 @@ export function TaskForm({
             </div>
           </div>
         </section>
-      )}
+        )
+      })()}
 
       {/* En drawer/edit: TaskMetaSidebar embebida como sección, alineada con el comportamiento
           actual donde algunos campos persisten inline. */}
