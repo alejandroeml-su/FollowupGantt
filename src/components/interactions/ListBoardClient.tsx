@@ -316,9 +316,9 @@ export function ListBoardClient({
             {showGroups
               ? groups.map((g) => (
                   <div key={g.key || '__none__'} data-testid={`task-group-${g.key || 'none'}`}>
-                    <div className="flex items-center bg-secondary/10 px-4 py-1.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                    <div className="flex items-center bg-subtle px-4 py-1.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground border-y border-border/40">
                       <span>{g.label}</span>
-                      <span className="ml-2 rounded bg-secondary/40 px-1.5 py-0.5 text-[10px] text-foreground">
+                      <span className="ml-2 rounded bg-secondary px-1.5 py-0.5 text-[10px] text-foreground">
                         {g.count}
                       </span>
                     </div>
@@ -478,12 +478,12 @@ function Row({
             }
           }}
           className={clsx(
-            'group grid cursor-pointer grid-cols-12 items-center gap-4 border-l-2 px-4 py-2.5 text-sm transition-all',
+            'group grid cursor-pointer grid-cols-12 items-center gap-4 border-l-2 border-b border-b-border/40 px-4 py-2.5 text-sm transition-all',
             focused
-              ? 'border-indigo-500 bg-secondary/60 outline-2 outline-indigo-500'
+              ? 'border-l-indigo-400 bg-secondary/80 outline-2 outline-indigo-400'
               : selected
-                ? 'border-indigo-500/50 bg-indigo-500/5'
-                : 'border-transparent hover:border-indigo-500 hover:bg-secondary/50',
+                ? 'border-l-indigo-500/60 bg-indigo-500/10'
+                : 'border-l-transparent hover:border-l-indigo-400 hover:bg-secondary/70',
           )}
         >
           <div
@@ -553,7 +553,7 @@ function Row({
                 data-testid={`task-row-progress-${task.id}`}
               >
                 <div
-                  className="relative h-1 flex-1 overflow-hidden rounded-full bg-secondary/40"
+                  className="relative h-1 flex-1 overflow-hidden rounded-full bg-secondary"
                   role="progressbar"
                   aria-valuenow={progressInfo.percent}
                   aria-valuemin={0}
