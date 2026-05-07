@@ -68,6 +68,10 @@ export const KNOWN_AUDIT_ACTIONS = [
   'retrospective.vote_removed',
   'retrospective.action_item_created',
   'retrospective.completed',
+  // Wave P10 (HU-10.4) — Cross-project dependencies
+  'cross_dependency.created',
+  'cross_dependency.updated',
+  'cross_dependency.removed',
   // Usuario / sesión
   'user.login',
   'user.logout',
@@ -124,6 +128,9 @@ export const ACTION_LABELS: Record<AuditAction, string> = {
   'retrospective.vote_removed': 'Voto removido en retro',
   'retrospective.action_item_created': 'Action item creado desde retro',
   'retrospective.completed': 'Retrospectiva cerrada',
+  'cross_dependency.created': 'Dependencia cross-project creada',
+  'cross_dependency.updated': 'Dependencia cross-project actualizada',
+  'cross_dependency.removed': 'Dependencia cross-project eliminada',
   'user.login': 'Inicio de sesión',
   'user.logout': 'Cierre de sesión',
   'user.password_changed': 'Contraseña cambiada',
