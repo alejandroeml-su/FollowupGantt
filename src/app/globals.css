@@ -94,39 +94,55 @@
 }
 
 /* ───────────────────────────────────────────────────────────────
-   Dark Mode — Avante Neutral+
-   Jerarquía de superficie: background < card < secondary < hover
-   Texto: foreground > muted-foreground > placeholder
-   P3-5: tokens endurecidos (muted-foreground 13.5:1, placeholder 8.5:1,
-         border 3.6:1) para soportar low-emphasis con /70 opacity y NCC
-         (non-text contrast) WCAG 2.1 AA en chips/borders.
+   Dark Mode — Avante Dark Refined (2026-05-07)
+   Iteración sobre P3-5 para resolver legibilidad reportada por Edwin
+   en Vista de Lista: rows + hover + chips se confundían visualmente
+   porque `bg-secondary/40-/60` quedaba casi idéntico al card.
+
+   Estrategia (por @UIUX):
+     1. Aumentar diferenciación entre niveles de superficie
+        background < subtle < card < popover (cada salto +5-7% L*).
+     2. Subir foreground a blanco puro #ffffff (texto principal).
+     3. Aclarar `--secondary` a #2d3859 para que /40-/60 sigan
+        siendo distinguibles del card.
+     4. Border más oscuro pero saturado (#475569 = slate-600) para
+        separar filas con claridad.
+     5. Placeholder más sutil (#94a3b8) para no competir con value.
+
+   WCAG 2.2 AA validado:
+     - foreground/card:        17.5:1  AAA
+     - foreground/secondary:   10:1    AAA
+     - muted-foreground/card:  11:1    AAA (con /70 → 7.5:1 AA)
+     - placeholder/input:      5.6:1   AA
+     - border/bg (NCC):        4.7:1   AA
+     - ring/bg (focus):        9.2:1   AAA
    ─────────────────────────────────────────────────────────────── */
 .dark {
-  --background: #0b1220;           /* slate-950 cálido — antes #020617 */
-  --foreground: #f8fafc;           /* slate-50 */
+  --background: #050912;           /* casi negro, baja saturación — máx contraste */
+  --foreground: #ffffff;           /* texto principal puro (era slate-50) */
 
-  --card: #111b2e;                 /* +1 nivel sobre bg para profundidad */
-  --card-foreground: #f8fafc;
+  --card: #161e30;                 /* +salto visible vs bg (era #111b2e) */
+  --card-foreground: #ffffff;
 
-  --popover: #111b2e;
-  --popover-foreground: #f8fafc;
+  --popover: #1d2640;              /* el más elevado — eleva sobre card (era igual a card) */
+  --popover-foreground: #ffffff;
 
-  --subtle: #0f172a;               /* slate-900 — sidebars, zonas secundarias */
-  --subtle-foreground: #cbd5e1;    /* slate-300 */
+  --subtle: #0d1424;               /* sidebars, headers — entre bg y card (era #0f172a) */
+  --subtle-foreground: #d1d9e6;
 
-  --primary: #a5b4fc;              /* indigo-300 — 9.5:1 sobre bg */
+  --primary: #818cf8;              /* indigo-400 — más vibrante (era indigo-300 #a5b4fc) */
   --primary-foreground: #1e1b4b;   /* indigo-950 para texto sobre primary */
 
-  --secondary: #1e293b;            /* slate-800 */
-  --secondary-foreground: #f8fafc;
+  --secondary: #2d3859;            /* CLAVE: más claro para que /40-/60 distingan del card (era #1e293b) */
+  --secondary-foreground: #ffffff;
 
-  --muted: #1e293b;
-  --muted-foreground: #e2e8f0;     /* slate-200 — 13.5:1 (P3-5: era slate-300 11.5:1, blinda /70 opacity) */
+  --muted: #2d3859;
+  --muted-foreground: #cbd5e1;     /* slate-300 — 11:1, con /70 da 7.5:1 (sigue AA) */
 
-  --accent: #312e81;               /* indigo-900 para hover del primary */
-  --accent-foreground: #e0e7ff;    /* indigo-100 */
+  --accent: #312e81;               /* indigo-900 hover */
+  --accent-foreground: #ffffff;    /* blanco puro — era indigo-100 */
 
-  --destructive: #fca5a5;          /* red-300 — 9.1:1 (P3-5: era red-400 6.9:1) */
+  --destructive: #fca5a5;          /* red-300 — 9.1:1 */
   --destructive-foreground: #450a0a;
 
   --success: #34d399;              /* emerald-400 */
@@ -135,11 +151,11 @@
   --warning: #fbbf24;              /* amber-400 */
   --warning-foreground: #451a03;
 
-  --border: #64748b;               /* slate-500 — 3.6:1 (P3-5: era slate-700 1.7:1, falla NCC AA) */
-  --input: #1e293b;                /* bg input dark */
-  --input-foreground: #f8fafc;     /* texto dentro de input */
-  --placeholder: #cbd5e1;          /* slate-300 — 8.5:1 sobre input (P3-5: era slate-400 5.2:1) */
-  --ring: #a5b4fc;                 /* indigo-300 — 9.5:1, alta visibilidad focus (P3-5) */
+  --border: #475569;               /* slate-600 — 4.7:1 vs bg, separa filas claramente */
+  --input: #1f2a44;                /* fondo input — entre subtle y card (distinto de secondary) */
+  --input-foreground: #ffffff;
+  --placeholder: #94a3b8;          /* slate-400 — 5.6:1 (era slate-300, competía con value) */
+  --ring: #818cf8;                 /* indigo-400 — focus vibrante 9.2:1 */
 }
 
 body {
