@@ -313,6 +313,13 @@ model User {
   submittedExpenses Expense[] @relation("ExpenseSubmitter")
   approvedExpenses  Expense[] @relation("ExpenseApprover")
 
+  // Wave P10 (HU-10.2) — Disponibilidad individual (vacaciones, días reducidos).
+  // Cascade al borrar usuario.
+  availabilities UserAvailability[]
+
+  // Wave P10 (HU-10.7) — Snapshots semanales de allocation cross-project.
+  allocationSnapshots ResourceAllocationSnapshot[]
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
@@ -1054,6 +1061,12 @@ model Task {
   // `SetNull` preserva el gasto si la task se elimina — el gasto sigue
   // perteneciendo al proyecto y reporting EVM.
   expenses Expense[]
+
+  // Wave P10 (HU-10.4) — Dependencias cross-project. La tabla
+  // `Dependency` clásica solo cubre intra-project; estas relaciones viven
+  // en `CrossProjectDependency` para no romper CPM/Gantt actual.
+  crossDepsAsSource CrossProjectDependency[] @relation("CrossDepSource")
+  crossDepsAsTarget CrossProjectDependency[] @relation("CrossDepTarget")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -2650,4 +2663,79 @@ model CurrencyRate {
 
   @@unique([base, quote, fetchedAt])
   @@index([base, quote, fetchedAt(sort: Desc)])
+}
+
+// ─────────────────────────────────────────────────────────────
+// Wave P10 · Enterprise Portfolio (kickoff sketch — sin migración aún)
+// ─────────────────────────────────────────────────────────────
+
+/// Wave P10 (HU-10.2) — Disponibilidad por usuario (vacaciones, días reducidos).
+/// Reutiliza `WorkCalendar`+`Holiday` existentes (Ola P1.5) como base; este
+/// modelo agrega excepciones individuales que el motor CPM y la capacity de
+/// sprint deben restar a la jornada estándar.
+model UserAvailability {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  startDate DateTime
+  endDate   DateTime
+  reason    AvailabilityReason
+  /// Si null → bloque completo (vacación). Si 0-100 → jornada reducida.
+  reducedHoursPercent Int?
+  notes     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId, startDate, endDate])
+}
+
+enum AvailabilityReason {
+  VACATION
+  SICK
+  TRAINING
+  REDUCED_HOURS
+  OTHER
+}
+
+/// Wave P10 (HU-10.4) — Dependencias entre tasks de proyectos distintos.
+/// El modelo `Dependency` actual (intra-project) NO se modifica para evitar
+/// regresión en CPM/Gantt. Esta tabla nueva es leída por el motor de
+/// portfolio para grafos cross-project + alertas de propagación.
+model CrossProjectDependency {
+  id            String   @id @default(uuid())
+  sourceTaskId  String
+  sourceTask    Task     @relation("CrossDepSource", fields: [sourceTaskId], references: [id], onDelete: Cascade)
+  targetTaskId  String
+  targetTask    Task     @relation("CrossDepTarget", fields: [targetTaskId], references: [id], onDelete: Cascade)
+  type          DependencyType
+  lagDays       Int      @default(0)
+  notes         String?
+  createdById   String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@unique([sourceTaskId, targetTaskId])
+  @@index([sourceTaskId])
+  @@index([targetTaskId])
+}
+
+/// Wave P10 (HU-10.7) — Snapshot semanal de allocation cross-project por
+/// usuario. Computado por cron Vercel `0 2 * * *` (HU-10.7 B2.1) para
+/// evitar N+1 al pintar el heatmap. Refresh on-demand via server action
+/// cuando un PM mueve assignments.
+model ResourceAllocationSnapshot {
+  id          String   @id @default(uuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// Lunes ISO de la semana (UTC midnight).
+  weekStart   DateTime
+  /// Total horas planeadas esa semana sumando todos los proyectos.
+  totalHours  Float
+  /// Detalle por proyecto: `[{projectId, projectName, hours, percent}]`.
+  /// JSON evita crear tabla join solo para snapshot read-only.
+  allocations Json
+  computedAt  DateTime @default(now())
+
+  @@unique([userId, weekStart])
+  @@index([weekStart])
 }
