@@ -26,6 +26,9 @@ export const KNOWN_AUDIT_ACTIONS = [
   'task.updated',
   'task.deleted',
   'task.status_changed',
+  // Wave P9 · Agile Maturity — asignación de Task a Epic
+  'task.epic_assigned',
+  'task.epic_unassigned',
   // Dependencias
   'dependency.created',
   'dependency.updated',
@@ -34,6 +37,11 @@ export const KNOWN_AUDIT_ACTIONS = [
   // Proyectos
   'project.created',
   'project.deleted',
+  // Wave P9 · Agile Maturity — Epic CRUD
+  'epic.created',
+  'epic.updated',
+  'epic.archived',
+  'epic.restored',
   // Usuario / sesión
   'user.login',
   'user.logout',
@@ -58,11 +66,17 @@ export const ACTION_LABELS: Record<AuditAction, string> = {
   'task.updated': 'Tarea actualizada',
   'task.deleted': 'Tarea eliminada',
   'task.status_changed': 'Estado de tarea cambiado',
+  'task.epic_assigned': 'Tarea asignada a Epic',
+  'task.epic_unassigned': 'Tarea desasignada de Epic',
   'dependency.created': 'Dependencia creada',
   'dependency.updated': 'Dependencia actualizada',
   'baseline.captured': 'Línea base capturada',
   'project.created': 'Proyecto creado',
   'project.deleted': 'Proyecto eliminado',
+  'epic.created': 'Epic creada',
+  'epic.updated': 'Epic actualizada',
+  'epic.archived': 'Epic archivada',
+  'epic.restored': 'Epic restaurada',
   'user.login': 'Inicio de sesión',
   'user.logout': 'Cierre de sesión',
   'user.password_changed': 'Contraseña cambiada',

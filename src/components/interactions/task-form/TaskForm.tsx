@@ -50,6 +50,7 @@ import type { SerializedTask } from '@/lib/types'
 import { PriorityPills, type PriorityValue } from './PriorityPills'
 import {
   TaskMetaSidebar,
+  type EpicOption,
   type PhaseOption,
   type SprintOption,
   type TaskMetaState,
@@ -85,6 +86,8 @@ export type TaskFormProps = {
   users: { id: string; name: string }[]
   phases?: PhaseOption[]
   sprints?: SprintOption[]
+  /** Wave P9 — Epics del workspace para el selector. */
+  epics?: EpicOption[]
   allTasks?: ParentOption[] | SerializedTask[]
   /** Defaults (sólo en mode='create'). */
   defaultParentId?: string
@@ -125,12 +128,18 @@ const INITIAL_FORM = {
   parentId: '',
 }
 
+/**
+ * Wave P9 · Agile Maturity — `epicId` opcional. Inicializa vacío;
+ * `assignTaskToEpic` server action persiste el cambio inline en
+ * modo edit y `createTask` lo recibe vía formData en modo create.
+ */
 const initialMeta = (defaultStatus?: TaskStatus): TaskMetaState => ({
   status: defaultStatus ?? 'TODO',
   assigneeId: '',
   projectId: '',
   phaseId: '',
   sprintId: '',
+  epicId: '',
   isMilestone: false,
   startDate: '',
   endDate: '',
@@ -156,6 +165,7 @@ export function TaskForm({
   users,
   phases = [],
   sprints = [],
+  epics = [],
   allTasks = [],
   defaultParentId,
   defaultStatus,
@@ -193,6 +203,9 @@ export function TaskForm({
         projectId: task.projectId ?? task.project?.id ?? '',
         phaseId: '',
         sprintId: '',
+        // Wave P9 — leer epicId persistido. SerializedTask aún no expone
+        // epic; usamos `(task as any).epicId` con fallback (compat).
+        epicId: ((task as unknown as { epicId?: string | null }).epicId ?? '') as string,
         isMilestone: !!task.isMilestone,
         startDate: task.startDate ? task.startDate.split('T')[0] : '',
         endDate: task.endDate ? task.endDate.split('T')[0] : '',
@@ -247,7 +260,7 @@ export function TaskForm({
     setForm((s) => ({ ...s, parentId }))
     const inferredProject = parent?.projectId || parent?.project?.id
     if (inferredProject) {
-      patchMeta({ projectId: inferredProject, phaseId: '', sprintId: '' })
+      patchMeta({ projectId: inferredProject, phaseId: '', sprintId: '', epicId: '' })
     }
   }
 
@@ -293,6 +306,7 @@ export function TaskForm({
         if (isSubtask && form.parentId) fd.set('parentId', form.parentId)
         if (meta.phaseId) fd.set('phaseId', meta.phaseId)
         if (meta.sprintId) fd.set('sprintId', meta.sprintId)
+        if (meta.epicId) fd.set('epicId', meta.epicId)
         if (meta.isMilestone) fd.set('isMilestone', '1')
         if (meta.plannedValue) fd.set('plannedValue', meta.plannedValue)
         if (tags.length > 0) fd.set('tags', JSON.stringify(tags))
@@ -328,6 +342,9 @@ export function TaskForm({
         fd.set('progress', String(progress))
         fd.set('plannedValue', meta.plannedValue || '0')
         fd.set('actualCost', String(actualCost))
+        // Wave P9 — epicId siempre se envía (incluso vacío) para permitir
+        // desasignar. updateTask debe interpretarlo como "set or null".
+        fd.set('epicId', meta.epicId || '')
         fd.set('userId', users[0]?.id || '')
         fd.set('userRoles', JSON.stringify(DEBUG_USER_ROLES))
         await updateTask(fd)
@@ -741,6 +758,7 @@ export function TaskForm({
             users={users}
             phases={phases}
             sprints={sprints}
+            epics={epics}
             taskId={task.id}
             collaborators={task.collaborators ?? []}
             projectRequired={false}

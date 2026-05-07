@@ -24,11 +24,22 @@ export type TaskMetaState = {
   projectId: string
   phaseId: string
   sprintId: string
+  /** Wave P9 · Agile Maturity (HU-9.2) — Epic asignada a la task.
+   * `''` = sin epic. La sub-tarea hereda del padre por defecto en createTask. */
+  epicId: string
   isMilestone: boolean
   startDate: string
   endDate: string
   /** Estimación en horas (campo `plannedValue` del schema). */
   plannedValue: string
+}
+
+/** Wave P9 — opción de Epic para selector. */
+export type EpicOption = {
+  id: string
+  name: string
+  color: string
+  projectId: string
 }
 
 type Props = {
@@ -46,6 +57,8 @@ type Props = {
   users: { id: string; name: string }[]
   phases?: PhaseOption[]
   sprints?: SprintOption[]
+  /** Wave P9 — Epics del proyecto seleccionado, para el selector. */
+  epics?: EpicOption[]
 
   /** Marca el campo Proyecto como required visualmente y para a11y. */
   projectRequired?: boolean
@@ -80,6 +93,7 @@ export function TaskMetaSidebar({
   users,
   phases = [],
   sprints = [],
+  epics = [],
   projectRequired = true,
   className,
   taskId,
@@ -92,6 +106,15 @@ export function TaskMetaSidebar({
   const sprintsForProject = useMemo(
     () => sprints.filter((s) => s.projectId === value.projectId),
     [sprints, value.projectId],
+  )
+  // Wave P9 · Agile Maturity — Epics filtradas por proyecto + lookup actual.
+  const epicsForProject = useMemo(
+    () => epics.filter((e) => e.projectId === value.projectId),
+    [epics, value.projectId],
+  )
+  const selectedEpic = useMemo(
+    () => (value.epicId ? epicsForProject.find((e) => e.id === value.epicId) : null) ?? null,
+    [epicsForProject, value.epicId],
   )
 
   return (
@@ -151,7 +174,7 @@ export function TaskMetaSidebar({
           value={value.projectId}
           onChange={(e) => {
             // Cambiar de proyecto invalida épica/sprint del proyecto anterior.
-            onChange({ projectId: e.target.value, phaseId: '', sprintId: '' })
+            onChange({ projectId: e.target.value, phaseId: '', sprintId: '', epicId: '' })
           }}
           required={projectRequired}
           aria-required={projectRequired}
@@ -217,6 +240,51 @@ export function TaskMetaSidebar({
             </option>
           ))}
         </select>
+      </div>
+
+      {/* Wave P9 · Agile Maturity (HU-9.2) — Selector de Epic.
+          Filtrado por projectId. Render con dot del color del Epic. */}
+      <div className="space-y-1.5">
+        <label htmlFor="task-meta-epic" className={FIELD_LABEL}>
+          Epic
+        </label>
+        <select
+          id="task-meta-epic"
+          value={value.epicId}
+          onChange={(e) => onChange({ epicId: e.target.value })}
+          disabled={!value.projectId || epicsForProject.length === 0}
+          className={clsx(SELECT_BASE, 'disabled:opacity-60')}
+        >
+          <option value="">
+            {!value.projectId
+              ? 'Selecciona un proyecto…'
+              : epicsForProject.length === 0
+                ? 'Sin Epics en este proyecto'
+                : 'Sin Epic asignada'}
+          </option>
+          {epicsForProject.map((e) => (
+            <option key={e.id} value={e.id}>
+              {e.name}
+            </option>
+          ))}
+        </select>
+        {selectedEpic && (
+          <div
+            className="mt-1 inline-flex items-center gap-1.5 rounded px-1.5 py-0.5 text-[10px]"
+            style={{
+              backgroundColor: `${selectedEpic.color}33`,
+              color: selectedEpic.color,
+              border: `1px solid ${selectedEpic.color}66`,
+            }}
+          >
+            <span
+              className="h-1.5 w-1.5 rounded-full"
+              style={{ backgroundColor: selectedEpic.color }}
+              aria-hidden
+            />
+            <span className="font-semibold">{selectedEpic.name}</span>
+          </div>
+        )}
       </div>
 
       <label className="flex items-center gap-2 text-xs text-foreground">

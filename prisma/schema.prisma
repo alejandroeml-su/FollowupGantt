@@ -209,6 +209,8 @@ model User {
 
   // Relaciones
   managedProjects    Project[]          @relation("ProjectManager")
+  // Wave P9 · Agile Maturity (HU-9.1) — Epics owned por este user.
+  ownedEpics         Epic[]             @relation("EpicOwner")
   tasks              Task[]             @relation("TaskAssignee")
   taskCollaborations TaskCollaborator[] @relation("TaskCollaborator")
   comments           Comment[]          @relation("CommentAuthor")
@@ -490,6 +492,10 @@ model Project {
   baselines       Baseline[]
   assignments     ProjectAssignment[]
   mindMaps        MindMap[]
+  // Wave P9 · Agile Maturity (HU-9.1, HU-9.2). Epic agrupa stories/tasks
+  // bajo iniciativas reconocibles visualmente sin abusar del nesting de
+  // subtask. Relación 1-N con Task vía `Task.epicId`.
+  epics           Epic[]
   // Custom Fields configurables por proyecto (Ola P1, Equipo 3).
   customFieldDefs CustomFieldDef[]
 
@@ -562,6 +568,73 @@ model Phase {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+/// Wave P9 · Agile Maturity (HU-9.1, HU-9.2)
+///
+/// Epic — contenedor de iniciativas grandes que agrupan múltiples
+/// User Stories / Tasks bajo un mismo paraguas semántico (sin abusar
+/// del nesting de subtask, que está diseñado para descomposición
+/// jerárquica de trabajo, no agrupación temática).
+///
+/// Diferencias clave con Phase y Sprint:
+///   - Phase = contenedor temporal/de fase PMBOK (Inicio/Plan/Exec/Close).
+///     Lifecycle: secuencial.
+///   - Sprint = contenedor de iteración Scrum (1-4 semanas).
+///     Lifecycle: time-boxed.
+///   - Epic = contenedor temático de feature/iniciativa.
+///     Lifecycle: cross-phase, cross-sprint.
+///
+/// Una Task puede tener simultáneamente phaseId + sprintId + epicId
+/// (los 3 son ejes ortogonales de organización).
+model Epic {
+  id          String  @id @default(uuid())
+  name        String
+  description String?
+
+  /// Color hexadecimal para el badge visual. Default azul indigo del
+  /// design system. Validado en server action a `^#[0-9a-fA-F]{6}$`.
+  color String @default("#818cf8")
+
+  /// Estado del Epic. Diferente de TaskStatus porque agrega valor
+  /// estratégico (un Epic IN_PROGRESS puede tener Tasks DONE y TODO
+  /// simultáneamente; el estado del Epic es manual).
+  status EpicStatus @default(PLANNED)
+
+  /// Owner del Epic (usualmente el Product Owner o líder técnico).
+  /// Distinto de `assignee` de cada Task individual.
+  ownerId String?
+  owner   User?   @relation("EpicOwner", fields: [ownerId], references: [id])
+
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  /// Posición para drag-drop reorder (lexorank-style).
+  position Int @default(0)
+
+  /// Tasks asignadas a este Epic. ON DELETE SET NULL en Task.epicId
+  /// para no perder Tasks si se borra el Epic.
+  tasks Task[]
+
+  /// Fechas opcionales de planificación. No afectan el cronograma del
+  /// proyecto (NO se usan en CPM); son sólo informativas para el UI.
+  plannedStartDate DateTime?
+  plannedEndDate   DateTime?
+
+  archivedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([projectId, archivedAt])
+  @@index([projectId, status])
+}
+
+enum EpicStatus {
+  PLANNED
+  IN_PROGRESS
+  DONE
+  CANCELLED
 }
 
 // Módulo Agile: Sprints y Columnas Kanban
@@ -654,6 +727,12 @@ model Task {
 
   sprintId String?
   sprint   Sprint? @relation(fields: [sprintId], references: [id])
+
+  // Wave P9 · Agile Maturity (HU-9.2): asignación de Task a Epic.
+  // Opcional — la subtask hereda del padre por defecto al crearse pero
+  // puede sobreescribirse. ON DELETE SET NULL: borrar Epic NO borra Tasks.
+  epicId String?
+  epic   Epic?   @relation(fields: [epicId], references: [id], onDelete: SetNull)
 
   columnId String?
   column   BoardColumn? @relation(fields: [columnId], references: [id])

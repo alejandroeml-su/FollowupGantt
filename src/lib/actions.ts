@@ -187,6 +187,9 @@ export async function createTask(formData: FormData) {
   const type = (formData.get('type') as string) || 'AGILE_STORY'
   const parentId = formData.get('parentId') as string || undefined
   const assigneeId = formData.get('assigneeId') as string || undefined
+  // Wave P9 · Agile Maturity (HU-9.2): epicId opcional. Si la subtask tiene
+  // parentId y no se envía epicId explícito, hereda el del padre.
+  let epicId = (formData.get('epicId') as string) || ''
   const endDateStr = formData.get('endDate') as string
   const description = formData.get('description') as string || undefined
   const tags = parseTagsFromFormData(formData)
@@ -206,6 +209,15 @@ export async function createTask(formData: FormData) {
   }
 
   if (!title || !projectId) throw new Error('Título y proyecto son requeridos')
+
+  // Wave P9 — herencia de Epic desde el padre si no se envió explícito.
+  if (!epicId && parentId) {
+    const parent = await prisma.task.findUnique({
+      where: { id: parentId },
+      select: { epicId: true },
+    })
+    if (parent?.epicId) epicId = parent.epicId
+  }
 
   // Generar mnemónico automático: PRIM-1, INFRA-1...
   const project = await prisma.project.findUnique({ where: { id: projectId } })
@@ -229,6 +241,7 @@ export async function createTask(formData: FormData) {
       ...(tags.length > 0 ? { tags } : {}),
       ...(referenceUrl ? { referenceUrl } : {}),
       ...(storyPoints !== null ? { storyPoints } : {}),
+      ...(epicId ? { epicId } : {}),
     },
     select: { id: true, title: true, mnemonic: true, status: true },
   })
@@ -319,6 +332,14 @@ export async function updateTask(formData: FormData) {
   if (progress !== undefined) checkChange('progress', progress, oldTask.progress)
   if (plannedValue !== undefined) checkChange('plannedValue', plannedValue, oldTask.plannedValue)
   if (actualCost !== undefined) checkChange('actualCost', actualCost, oldTask.actualCost)
+
+  // Wave P9 · Agile Maturity (HU-9.2) — epicId en update.
+  // formData siempre lo envía (incluso vacío) para permitir desasignar.
+  const epicIdRaw = formData.get('epicId')
+  if (epicIdRaw !== null) {
+    const newEpicId = (epicIdRaw as string) || null
+    checkChange('epicId', newEpicId, oldTask.epicId)
+  }
 
   await prisma.$transaction([
     prisma.task.update({ where: { id }, data }),
