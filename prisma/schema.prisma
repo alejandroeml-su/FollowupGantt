@@ -211,6 +211,8 @@ model User {
   managedProjects    Project[]          @relation("ProjectManager")
   // Wave P9 · Agile Maturity (HU-9.1) — Epics owned por este user.
   ownedEpics         Epic[]             @relation("EpicOwner")
+  // Wave P9 · Agile Maturity (HU-9.4) — Releases owned por este user.
+  ownedReleases      Release[]          @relation("ReleaseOwner")
   tasks              Task[]             @relation("TaskAssignee")
   taskCollaborations TaskCollaborator[] @relation("TaskCollaborator")
   comments           Comment[]          @relation("CommentAuthor")
@@ -496,6 +498,8 @@ model Project {
   // bajo iniciativas reconocibles visualmente sin abusar del nesting de
   // subtask. Relación 1-N con Task vía `Task.epicId`.
   epics           Epic[]
+  // Wave P9 (HU-9.4) — Releases versionadas del proyecto.
+  releases        Release[]
   // Custom Fields configurables por proyecto (Ola P1, Equipo 3).
   customFieldDefs CustomFieldDef[]
 
@@ -616,6 +620,9 @@ model Epic {
   /// para no perder Tasks si se borra el Epic.
   tasks Task[]
 
+  /// Wave P9 (HU-9.4) — Releases que incluyen este Epic en su scope.
+  releases ReleaseEpic[]
+
   /// Fechas opcionales de planificación. No afectan el cronograma del
   /// proyecto (NO se usan en CPM); son sólo informativas para el UI.
   plannedStartDate DateTime?
@@ -635,6 +642,103 @@ enum EpicStatus {
   IN_PROGRESS
   DONE
   CANCELLED
+}
+
+/// Wave P9 · Agile Maturity (HU-9.4, HU-9.5)
+///
+/// Release — agrupa Epics o Sprints bajo una versión entregable con
+/// fecha planeada. Permite comunicar a stakeholders "qué incluye v1.0
+/// y cuándo sale" sin que tengan que entender el nivel Task.
+///
+/// Decisión arquitectura: scopeMode es exclusivo (EPIC o SPRINT) —
+/// una Release agrupa N Epics O N Sprints, no mezcla. Razón: el
+/// rollup de progress se calcula sobre ese eje, mezclar produce
+/// ambigüedad de cómo "promediar" un Sprint y una Epic.
+///
+/// Lifecycle:
+///   PLANNED  → released=false, plannedDate futuro
+///   IN_PROGRESS → released=false, dentro de ventana scope
+///   RELEASED → released=true, releasedDate setteado
+///   DELAYED  → released=false, plannedDate pasado y no done
+///   CANCELLED → released=false, archivedAt setteado
+model Release {
+  id          String  @id @default(uuid())
+  name        String
+  /// Versión semántica visible (ej. "1.0", "v2.5", "Q3-2026"). Free-form.
+  version     String
+  description String?
+
+  /// Modo de scope. Determina qué tipo de relaciones agrupa:
+  /// EPIC → ReleaseEpic[]
+  /// SPRINT → ReleaseSprint[]
+  scopeMode ReleaseScopeMode @default(EPIC)
+
+  /// Fecha objetivo de release. Sirve para timeline y para calcular
+  /// estado on-track / delayed.
+  plannedDate DateTime
+
+  /// Fecha real de release. NULL hasta que se marque "Released".
+  releasedDate DateTime?
+
+  ownerId String?
+  owner   User?   @relation("ReleaseOwner", fields: [ownerId], references: [id])
+
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  /// M2M con Epics (sólo si scopeMode=EPIC).
+  epics ReleaseEpic[]
+
+  /// M2M con Sprints (sólo si scopeMode=SPRINT).
+  sprints ReleaseSprint[]
+
+  archivedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([projectId, archivedAt])
+  @@index([projectId, plannedDate])
+}
+
+enum ReleaseScopeMode {
+  EPIC
+  SPRINT
+}
+
+/// Tabla join Release ↔ Epic. Se usa cuando scopeMode=EPIC.
+model ReleaseEpic {
+  releaseId String
+  release   Release @relation(fields: [releaseId], references: [id], onDelete: Cascade)
+
+  epicId String
+  epic   Epic   @relation(fields: [epicId], references: [id], onDelete: Cascade)
+
+  /// Orden visual dentro del scope de la release (drag-drop).
+  position Int @default(0)
+
+  addedAt DateTime @default(now())
+
+  @@id([releaseId, epicId])
+  @@index([releaseId])
+  @@index([epicId])
+}
+
+/// Tabla join Release ↔ Sprint. Se usa cuando scopeMode=SPRINT.
+model ReleaseSprint {
+  releaseId String
+  release   Release @relation(fields: [releaseId], references: [id], onDelete: Cascade)
+
+  sprintId String
+  sprint   Sprint  @relation(fields: [sprintId], references: [id], onDelete: Cascade)
+
+  position Int @default(0)
+
+  addedAt DateTime @default(now())
+
+  @@id([releaseId, sprintId])
+  @@index([releaseId])
+  @@index([sprintId])
 }
 
 // Módulo Agile: Sprints y Columnas Kanban
@@ -676,6 +780,9 @@ model Sprint {
   capacityPerUser Json?
 
   tasks Task[]
+
+  /// Wave P9 (HU-9.4) — Releases que incluyen este Sprint en su scope.
+  releases ReleaseSprint[]
 
   // Ola P8 · Equipo P8-3 · Cost Management.
   // Presupuesto opcional por sprint (Agile). Útil para teams con T&M /

@@ -16,7 +16,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import {
   ArrowLeft, Plus, Calendar as CalendarIcon, Link as LinkIcon,
-  GitCommit, ChevronDown, ListTree, Settings, X, Sparkles,
+  GitCommit, ChevronDown, ListTree, Settings, X, Sparkles, Rocket,
 } from 'lucide-react';
 import { ProjectDocsSection } from '@/components/docs/ProjectDocsSection';
 import { ExportProjectButton } from '@/components/backup/ExportProjectButton';
@@ -179,6 +179,13 @@ export default function ProjectDetailClient({ projectId, currentUser }: Props) {
               className="flex items-center gap-2 rounded-md bg-secondary px-4 py-2 text-sm font-medium text-foreground/90 hover:bg-secondary/80 border border-border"
             >
               <ListTree className="h-4 w-4" /> Backlog
+            </Link>
+            {/* Wave P9 · Agile Maturity (HU-9.4 + HU-9.5) — Releases / Roadmap. */}
+            <Link
+              href={`/projects/${projectId}/releases`}
+              className="flex items-center gap-2 rounded-md bg-secondary px-4 py-2 text-sm font-medium text-foreground/90 hover:bg-secondary/80 border border-border"
+            >
+              <Rocket className="h-4 w-4" /> Releases
             </Link>
             {/* P3-3 · Backup/Restore: export full + import nuevo proyecto. */}
             <ExportProjectButton projectId={projectId} />
