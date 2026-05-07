@@ -132,25 +132,38 @@ export function ListBoardClient({
     setItems(tasks)
   }, [tasks])
 
-  // Lista plana ordenada (incluyendo subtareas visibles) para navegación J/K
+  // Lista plana ordenada (DFS, sólo nodos visibles según `expanded`).
+  // Recursiva para soportar N niveles — antes sólo 2 niveles eran
+  // navegables con J/K y los descendientes profundos quedaban
+  // huérfanos del foco.
   const orderedIds = useMemo(() => {
     const out: string[] = []
-    for (const t of items) {
+    const visit = (t: SerializedTask) => {
       out.push(t.id)
       if (expanded.has(t.id)) {
-        for (const s of t.subtasks ?? []) out.push(s.id)
+        for (const s of t.subtasks ?? []) visit(s)
       }
     }
+    for (const t of items) visit(t)
     return out
   }, [items, expanded])
 
+  // Búsqueda recursiva de la tarea del drawer en TODA la jerarquía.
+  // Antes la búsqueda paraba en nivel 1 (raíz + subtasks directas) y
+  // un click en una subtarea de nivel 3+ dejaba el drawer vacío
+  // aunque la fila se renderizaba correctamente.
   const drawerTask = useMemo(() => {
     if (!drawerTaskId) return null
-    for (const t of items) {
-      if (t.id === drawerTaskId) return t
-      for (const s of t.subtasks ?? []) if (s.id === drawerTaskId) return s
+    const find = (list: SerializedTask[] | undefined): SerializedTask | null => {
+      if (!list) return null
+      for (const t of list) {
+        if (t.id === drawerTaskId) return t
+        const inChild = find(t.subtasks)
+        if (inChild) return inChild
+      }
+      return null
     }
-    return null
+    return find(items)
   }, [drawerTaskId, items])
 
   // Shortcuts (↑↓, Enter, Esc, T, /, E, S, A, D, ⌘D, ⌘L, ⌘⌫, J/K)

@@ -76,20 +76,28 @@ export function filterTasks<T extends SerializedTask>(tasks: T[], f: TaskFilters
 }
 
 /**
- * Incluye el padre si pasa el filtro o si alguna subtarea pasa.
- * La lista de subtareas devuelta solo contiene las que pasan.
+ * Incluye el padre si pasa el filtro o si algún descendiente pasa.
+ * La lista de subtareas devuelta sólo conserva las ramas que aportan
+ * nodos coincidentes (recursivo a N niveles).
+ *
+ * Antes era 1-nivel: si un nieto coincidía con el filtro pero el
+ * padre intermedio no, la rama entera quedaba escondida. Ahora la
+ * rama se preserva mientras al menos un descendiente coincida.
  */
 export function filterTasksWithSubtasks<
   T extends SerializedTask & { subtasks?: SerializedTask[] },
 >(tasks: T[], f: TaskFilters): T[] {
   if (!hasActiveFilters(f)) return tasks
-  const out: T[] = []
-  for (const t of tasks) {
-    const matchedSubs = (t.subtasks ?? []).filter((s) => matchesFilters(s, f))
-    const selfMatches = matchesFilters(t, f)
-    if (selfMatches || matchedSubs.length > 0) {
-      out.push({ ...t, subtasks: matchedSubs } as T)
+  const visit = (list: T[]): T[] => {
+    const out: T[] = []
+    for (const t of list) {
+      const filteredSubs = visit((t.subtasks ?? []) as T[])
+      const selfMatches = matchesFilters(t, f)
+      if (selfMatches || filteredSubs.length > 0) {
+        out.push({ ...t, subtasks: filteredSubs } as T)
+      }
     }
+    return out
   }
-  return out
+  return visit(tasks)
 }
