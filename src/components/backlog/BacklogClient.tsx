@@ -26,7 +26,6 @@ import Link from 'next/link'
 import {
   ArrowLeft,
   GripVertical,
-  Sparkles,
   ChevronRight,
   CheckSquare,
   Square,
@@ -186,9 +185,33 @@ export default function BacklogClient({
             y selecciona varias para mover a un sprint en bloque.
           </p>
         </div>
-        <div className="flex items-center gap-2 text-xs text-muted-foreground">
-          {filtered.length} {filtered.length === 1 ? 'tarea' : 'tareas'}
-          {filtered.length !== items.length && ` (de ${items.length})`}
+        <div className="flex items-center gap-3">
+          {/* Wave P9 R2 (HU-9.7) — Sprint Planning UI dedicado para
+              Backlog Refinement formal. Aparece sólo si hay sprints
+              activos. */}
+          {sprints.length > 0 && (
+            <select
+              value=""
+              onChange={(e) => {
+                if (e.target.value) {
+                  window.location.href = `/projects/${project.id}/sprints/${e.target.value}/planning`
+                }
+              }}
+              aria-label="Abrir Sprint Planning"
+              className="rounded-md border border-indigo-500/40 bg-indigo-500/10 px-2 py-1.5 text-xs font-semibold text-indigo-300 focus:border-primary focus:outline-none"
+            >
+              <option value="">Planificar sprint…</option>
+              {sprints.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.name}
+                </option>
+              ))}
+            </select>
+          )}
+          <span className="text-xs text-muted-foreground">
+            {filtered.length} {filtered.length === 1 ? 'tarea' : 'tareas'}
+            {filtered.length !== items.length && ` (de ${items.length})`}
+          </span>
         </div>
       </header>
 
