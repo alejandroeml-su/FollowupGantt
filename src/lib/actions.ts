@@ -9,6 +9,7 @@ import { createNotificationsBatch } from '@/lib/actions/notifications'
 import { recomputeKeyResultsForTask } from '@/lib/actions/goals'
 import { notifyMentions } from '@/lib/mentions/notify'
 import { recordAuditEventSafe } from '@/lib/audit/events'
+import { nextProgressForStatus } from '@/lib/tasks/status-progress'
 import type {
   TaskType,
   ProjectStatus,
@@ -464,25 +465,6 @@ export async function removeDependency(formData: FormData) {
   revalidatePath('/gantt')
 }
 
-/**
- * Mapeo canónico status → progress %. Aplica a tareas y subtareas
- * (request Edwin 2026-05-06): cambiar el status debe reflejar el
- * avance esperado para que las barras y rollups no queden inconsistentes
- * con el estado del trabajo.
- *
- * Convención discutida:
- *   TODO        →   0%
- *   IN_PROGRESS →  50%
- *   REVIEW      →  75%
- *   DONE        → 100%
- */
-export const STATUS_PROGRESS_MAP: Record<TaskStatus, number> = {
-  TODO: 0,
-  IN_PROGRESS: 50,
-  REVIEW: 75,
-  DONE: 100,
-}
-
 export async function updateTaskStatus(id: string, status: string) {
   const newStatus = status as TaskStatus
   // Snapshot antes para audit + history. Sin user context aquí (este action
@@ -492,17 +474,11 @@ export async function updateTaskStatus(id: string, status: string) {
     select: { status: true, progress: true },
   })
 
-  // Status driven progress: si el progress canónico del nuevo status
-  // es distinto al actual, lo sincronizamos. Caso especial: si el
-  // usuario ya tenía un progress manual entre umbrales (ej. 65% en
-  // IN_PROGRESS), respetar al SUBIR de status (no bajar el progress
-  // existente cuando el avance manual ya superó el canónico).
-  const targetProgress = STATUS_PROGRESS_MAP[newStatus] ?? 0
+  // Status driven progress: ver `lib/tasks/status-progress.ts` para la
+  // política completa. Resumen: terminales (DONE/TODO) fuerzan 100/0;
+  // intermedios respetan progress manual mayor al canónico.
   const currentProgress = before?.progress ?? 0
-  const nextProgress =
-    newStatus === 'DONE' || newStatus === 'TODO'
-      ? targetProgress // estados terminales: forzar 100/0 sin importar lo manual
-      : Math.max(currentProgress, targetProgress)
+  const nextProgress = nextProgressForStatus(newStatus, currentProgress)
 
   await prisma.task.update({
     where: { id },
