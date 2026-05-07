@@ -3,6 +3,10 @@ import Link from 'next/link'
 import prisma from '@/lib/prisma'
 import { serializeTask } from '@/lib/types'
 import {
+  buildTaskTreeInclude,
+  DEFAULT_TREE_DEPTH,
+} from '@/lib/tasks/load-tree'
+import {
   GanttBoardClient,
   type GanttCpmInfo,
   type GanttDependencyDescriptor,
@@ -132,17 +136,18 @@ export default async function GanttTimeline({
         { AND: [{ startDate: null }, { endDate: null }] },
       ],
     },
-    include: {
-      assignee: true,
-      project: { include: { area: { include: { gerencia: true } } } },
-      comments: { include: { author: true }, orderBy: { createdAt: 'desc' } },
-      history: { include: { user: true }, orderBy: { createdAt: 'desc' } },
-      attachments: { include: { user: true }, orderBy: { createdAt: 'desc' } },
-    },
+    // Cargamos subtree completo (no sólo nivel 1) para que el rollup
+    // de progress en cada barra del Gantt refleje el avance real de
+    // sus descendientes. Las tareas que pasan el filtro de fechas
+    // aparecen como filas independientes; las anidadas viven en su
+    // `subtasks[]` para el cálculo del rollup.
+    include: buildTaskTreeInclude({ depth: DEFAULT_TREE_DEPTH }),
     orderBy: [{ startDate: 'asc' }, { createdAt: 'asc' }],
   })
 
-  const tasks = dbTasks.map((t) => serializeTask(t))
+  const tasks = dbTasks.map((t) =>
+    serializeTask(t as unknown as Record<string, unknown>),
+  )
 
   const [projects, users, allTasksRaw, gerencias, areas, taskCountsRaw, baselineCountsRaw] =
     await Promise.all([
