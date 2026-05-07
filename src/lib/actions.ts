@@ -9,6 +9,8 @@ import { createNotificationsBatch } from '@/lib/actions/notifications'
 import { recomputeKeyResultsForTask } from '@/lib/actions/goals'
 import { notifyMentions } from '@/lib/mentions/notify'
 import { resolveHandlesToUsers } from '@/lib/mentions/resolve'
+import { normalizeUserStory } from '@/lib/user-story/types'
+import { countPendingCriteria } from '@/lib/user-story/types'
 import { recordAuditEventSafe } from '@/lib/audit/events'
 import { nextProgressForStatus } from '@/lib/tasks/status-progress'
 import type {
@@ -219,6 +221,20 @@ export async function createTask(formData: FormData) {
     if (parent?.epicId) epicId = parent.epicId
   }
 
+  // Wave P9 (HU-9.3) — User Story formal opcional. Solo se persiste si
+  // type=AGILE_STORY y el JSON es bien-formado tras `normalizeUserStory`.
+  let userStoryToPersist: ReturnType<typeof normalizeUserStory> = null
+  if (type === 'AGILE_STORY') {
+    const rawUserStory = formData.get('userStory')
+    if (typeof rawUserStory === 'string' && rawUserStory.trim()) {
+      try {
+        userStoryToPersist = normalizeUserStory(JSON.parse(rawUserStory))
+      } catch {
+        userStoryToPersist = null
+      }
+    }
+  }
+
   // Generar mnemónico automático: PRIM-1, INFRA-1...
   const project = await prisma.project.findUnique({ where: { id: projectId } })
   const prefix = project?.name.split(' ').map(w => w[0]).join('').substring(0, 4).toUpperCase() || 'TASK'
@@ -242,6 +258,7 @@ export async function createTask(formData: FormData) {
       ...(referenceUrl ? { referenceUrl } : {}),
       ...(storyPoints !== null ? { storyPoints } : {}),
       ...(epicId ? { epicId } : {}),
+      ...(userStoryToPersist ? { userStory: userStoryToPersist } : {}),
     },
     select: { id: true, title: true, mnemonic: true, status: true },
   })
@@ -487,14 +504,38 @@ export async function removeDependency(formData: FormData) {
   revalidatePath('/gantt')
 }
 
-export async function updateTaskStatus(id: string, status: string) {
+/**
+ * Wave P9 (HU-9.3) — Excepción tipada cuando se intenta mover una task
+ * AGILE_STORY a DONE con CAs sin marcar. La UI cliente la captura por
+ * código `[ACCEPTANCE_CRITERIA_PENDING]` y muestra un confirm-override.
+ *
+ * El opt-in para forzar el cambio sin marcar todos los CAs es el
+ * argumento `force=true` de `updateTaskStatus`.
+ */
+export async function updateTaskStatus(
+  id: string,
+  status: string,
+  options?: { force?: boolean },
+) {
   const newStatus = status as TaskStatus
   // Snapshot antes para audit + history. Sin user context aquí (este action
   // se llama desde drag&drop sin formData de userRoles), así que actorId=null.
   const before = await prisma.task.findUnique({
     where: { id },
-    select: { status: true, progress: true },
+    select: { status: true, progress: true, type: true, userStory: true },
   })
+
+  // Wave P9 (HU-9.3) — guard al mover Story a DONE con CAs pendientes.
+  // El cliente puede forzar con `options.force=true` tras confirmación.
+  if (newStatus === 'DONE' && before?.type === 'AGILE_STORY' && !options?.force) {
+    const story = normalizeUserStory(before.userStory)
+    const pending = countPendingCriteria(story)
+    if (pending > 0) {
+      throw new Error(
+        `[ACCEPTANCE_CRITERIA_PENDING] La historia tiene ${pending} criterio${pending === 1 ? '' : 's'} de aceptación sin marcar. Confirma para mover a Done.`,
+      )
+    }
+  }
 
   // Status driven progress: ver `lib/tasks/status-progress.ts` para la
   // política completa. Resumen: terminales (DONE/TODO) fuerzan 100/0;

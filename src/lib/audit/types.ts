@@ -32,6 +32,12 @@ export const KNOWN_AUDIT_ACTIONS = [
   // Wave P9 · Agile Maturity (HU-9.6) — asignación bulk a Sprint
   'task.sprint_assigned',
   'task.sprint_unassigned',
+  // Wave P9 · Agile Maturity (HU-9.3) — User Story formal + CAs
+  'task.user_story_updated',
+  'task.acceptance_criterion_added',
+  'task.acceptance_criterion_removed',
+  'task.acceptance_criterion_done',
+  'task.acceptance_criterion_undone',
   // Dependencias
   'dependency.created',
   'dependency.updated',
@@ -73,6 +79,11 @@ export const ACTION_LABELS: Record<AuditAction, string> = {
   'task.epic_unassigned': 'Tarea desasignada de Epic',
   'task.sprint_assigned': 'Tarea asignada a Sprint',
   'task.sprint_unassigned': 'Tarea movida al backlog',
+  'task.user_story_updated': 'Historia de usuario actualizada',
+  'task.acceptance_criterion_added': 'Criterio de aceptación agregado',
+  'task.acceptance_criterion_removed': 'Criterio de aceptación eliminado',
+  'task.acceptance_criterion_done': 'Criterio de aceptación marcado',
+  'task.acceptance_criterion_undone': 'Criterio de aceptación desmarcado',
   'dependency.created': 'Dependencia creada',
   'dependency.updated': 'Dependencia actualizada',
   'baseline.captured': 'Línea base capturada',

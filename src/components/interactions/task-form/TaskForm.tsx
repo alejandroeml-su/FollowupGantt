@@ -65,6 +65,8 @@ import { HistoryTab } from './tabs/HistoryTab'
 import { AttachmentsTab } from './tabs/AttachmentsTab'
 import { DependenciesTab } from './tabs/DependenciesTab'
 import { computeProgressWithSource } from '@/lib/progress/rollup'
+import { UserStorySection } from '@/components/user-story/UserStorySection'
+import { normalizeUserStory, type UserStory } from '@/lib/user-story/types'
 
 // ────────────────────────────────────────────────────────────────────────
 // Tipos públicos
@@ -224,6 +226,10 @@ export function TaskForm({
   // En edit: progreso/coste sólo afectan al `Guardar` global.
   const [progress, setProgress] = useState(task?.progress ?? 0)
   const [actualCost, setActualCost] = useState(task?.actualCost ?? 0)
+  // Wave P9 · Agile Maturity (HU-9.3) — User Story pendiente en mode='create'.
+  // Se persiste como JSON en `userStory` formData y la action createTask
+  // lo asigna después de crear la task (cuando ya hay id).
+  const [pendingUserStory, setPendingUserStory] = useState<UserStory | null>(null)
 
   // ─── Sugerencias de tags por proyecto ──────────────────────────────
   useEffect(() => {
@@ -308,6 +314,19 @@ export function TaskForm({
         if (meta.sprintId) fd.set('sprintId', meta.sprintId)
         if (meta.epicId) fd.set('epicId', meta.epicId)
         if (meta.isMilestone) fd.set('isMilestone', '1')
+        // Wave P9 — Si la task es AGILE_STORY y el usuario llenó la US,
+        // serializamos el JSON. createTask lo persiste atómicamente con
+        // la task nueva.
+        if (form.type === 'AGILE_STORY' && pendingUserStory) {
+          const hasContent =
+            pendingUserStory.asA.trim() ||
+            pendingUserStory.iWant.trim() ||
+            pendingUserStory.soThat.trim() ||
+            pendingUserStory.criteria.length > 0
+          if (hasContent) {
+            fd.set('userStory', JSON.stringify(pendingUserStory))
+          }
+        }
         if (meta.plannedValue) fd.set('plannedValue', meta.plannedValue)
         if (tags.length > 0) fd.set('tags', JSON.stringify(tags))
         if (referenceUrl.trim()) fd.set('referenceUrl', referenceUrl.trim())
@@ -611,6 +630,25 @@ export function TaskForm({
             <option value="ITIL_TICKET">ITIL Ticket</option>
           </select>
         </div>
+      )}
+
+      {/* Wave P9 · Agile Maturity (HU-9.3) — Historia de Usuario formal.
+          Sólo aplica si type=AGILE_STORY. En mode='edit' persiste vía
+          server actions inline; en mode='create' acumula en pendingUserStory
+          y se persiste tras crear la task (handled abajo). */}
+      {form.type === 'AGILE_STORY' && (
+        <UserStorySection
+          mode={isCreate ? 'create' : 'edit'}
+          taskId={task?.id}
+          initial={
+            isCreate
+              ? pendingUserStory
+              : normalizeUserStory(
+                  (task as unknown as { userStory?: unknown })?.userStory,
+                )
+          }
+          onChange={isCreate ? setPendingUserStory : undefined}
+        />
       )}
 
       {/* En drawer/edit: bloque "Tiempos e Indicadores" inline (Avance + Estimado/Invertido).
