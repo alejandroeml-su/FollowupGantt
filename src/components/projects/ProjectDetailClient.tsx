@@ -16,7 +16,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import {
   ArrowLeft, Plus, Calendar as CalendarIcon, Link as LinkIcon,
-  GitCommit, ChevronDown, ListTree, Settings, X, Sparkles, Rocket,
+  GitCommit, ChevronDown, ListTree, Settings, X, Sparkles, Rocket, CheckSquare,
 } from 'lucide-react';
 import { ProjectDocsSection } from '@/components/docs/ProjectDocsSection';
 import { ExportProjectButton } from '@/components/backup/ExportProjectButton';
@@ -186,6 +186,14 @@ export default function ProjectDetailClient({ projectId, currentUser }: Props) {
               className="flex items-center gap-2 rounded-md bg-secondary px-4 py-2 text-sm font-medium text-foreground/90 hover:bg-secondary/80 border border-border"
             >
               <Rocket className="h-4 w-4" /> Releases
+            </Link>
+            {/* Wave P9 R2 (HU-9.8) — Definitions of Ready & Done. */}
+            <Link
+              href={`/projects/${projectId}/definitions`}
+              className="flex items-center gap-2 rounded-md bg-secondary px-4 py-2 text-sm font-medium text-foreground/90 hover:bg-secondary/80 border border-border"
+              title="Definitions of Ready & Done"
+            >
+              <CheckSquare className="h-4 w-4" /> DoR/DoD
             </Link>
             {/* P3-3 · Backup/Restore: export full + import nuevo proyecto. */}
             <ExportProjectButton projectId={projectId} />

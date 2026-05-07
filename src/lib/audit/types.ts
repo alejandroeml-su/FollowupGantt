@@ -57,6 +57,9 @@ export const KNOWN_AUDIT_ACTIONS = [
   'release.released',
   'release.archived',
   'release.scope_updated',
+  // Wave P9 R2 (HU-9.8) — DoR/DoD por proyecto
+  'project.dor_updated',
+  'project.dod_updated',
   // Usuario / sesión
   'user.login',
   'user.logout',
@@ -104,6 +107,8 @@ export const ACTION_LABELS: Record<AuditAction, string> = {
   'release.released': 'Release liberada',
   'release.archived': 'Release archivada',
   'release.scope_updated': 'Scope de Release actualizado',
+  'project.dor_updated': 'Definition of Ready actualizada',
+  'project.dod_updated': 'Definition of Done actualizada',
   'user.login': 'Inicio de sesión',
   'user.logout': 'Cierre de sesión',
   'user.password_changed': 'Contraseña cambiada',

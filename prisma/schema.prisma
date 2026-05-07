@@ -486,6 +486,13 @@ model Project {
   calendarId String?
   calendar   WorkCalendar? @relation(fields: [calendarId], references: [id])
 
+  /// Wave P9 R2 (HU-9.8) — Definition of Ready & Done por proyecto.
+  /// Shape: `string[]` (lista ordenada). Validación SOFT al mover
+  /// status (toast informativo, no bloqueante; distinto del guard
+  /// HARD de CAs HU-9.3).
+  dorTemplate Json?
+  dodTemplate Json?
+
   // Relaciones
   phases          Phase[]
   sprints         Sprint[]
