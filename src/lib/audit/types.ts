@@ -60,6 +60,14 @@ export const KNOWN_AUDIT_ACTIONS = [
   // Wave P9 R2 (HU-9.8) — DoR/DoD por proyecto
   'project.dor_updated',
   'project.dod_updated',
+  // Wave P9 R2 (HU-9.9) — Sprint Retrospective
+  'retrospective.created',
+  'retrospective.item_added',
+  'retrospective.item_removed',
+  'retrospective.vote_added',
+  'retrospective.vote_removed',
+  'retrospective.action_item_created',
+  'retrospective.completed',
   // Usuario / sesión
   'user.login',
   'user.logout',
@@ -109,6 +117,13 @@ export const ACTION_LABELS: Record<AuditAction, string> = {
   'release.scope_updated': 'Scope de Release actualizado',
   'project.dor_updated': 'Definition of Ready actualizada',
   'project.dod_updated': 'Definition of Done actualizada',
+  'retrospective.created': 'Retrospectiva creada',
+  'retrospective.item_added': 'Item agregado a retro',
+  'retrospective.item_removed': 'Item eliminado de retro',
+  'retrospective.vote_added': 'Voto agregado en retro',
+  'retrospective.vote_removed': 'Voto removido en retro',
+  'retrospective.action_item_created': 'Action item creado desde retro',
+  'retrospective.completed': 'Retrospectiva cerrada',
   'user.login': 'Inicio de sesión',
   'user.logout': 'Cierre de sesión',
   'user.password_changed': 'Contraseña cambiada',

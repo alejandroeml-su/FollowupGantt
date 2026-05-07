@@ -246,6 +246,13 @@ export default function SprintPlanningClient({
             {new Date(sprint.startDate).toLocaleDateString()} →{' '}
             {new Date(sprint.endDate).toLocaleDateString()}
           </p>
+          {/* Wave P9 R2 (HU-9.9) — acceso a retrospectiva del sprint. */}
+          <Link
+            href={`/projects/${project.id}/sprints/${sprint.id}/retrospective`}
+            className="mt-2 inline-flex items-center gap-1 text-[11px] font-semibold text-indigo-300 hover:text-indigo-200"
+          >
+            🪞 Retrospectiva del sprint →
+          </Link>
         </div>
 
         {/* Widget capacity */}
