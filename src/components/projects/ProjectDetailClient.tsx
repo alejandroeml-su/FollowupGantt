@@ -173,6 +173,13 @@ export default function ProjectDetailClient({ projectId, currentUser }: Props) {
             >
               <Sparkles className="h-4 w-4" /> Epics
             </Link>
+            {/* Wave P9 · Agile Maturity (HU-9.6) — Backlog priorizable. */}
+            <Link
+              href={`/projects/${projectId}/backlog`}
+              className="flex items-center gap-2 rounded-md bg-secondary px-4 py-2 text-sm font-medium text-foreground/90 hover:bg-secondary/80 border border-border"
+            >
+              <ListTree className="h-4 w-4" /> Backlog
+            </Link>
             {/* P3-3 · Backup/Restore: export full + import nuevo proyecto. */}
             <ExportProjectButton projectId={projectId} />
             <ImportProjectDialog />
