@@ -44,7 +44,7 @@ export default async function KanbanBoard() {
     ]),
   )
 
-  const [projects, users, allTasksRaw, gerencias, areas, phases, sprints] = await Promise.all([
+  const [projects, users, allTasksRaw, gerencias, areas, phases, sprints, epics] = await Promise.all([
     prisma.project.findMany({ select: { id: true, name: true, areaId: true }, orderBy: { name: 'asc' } }),
     prisma.user.findMany({ orderBy: { name: 'asc' } }),
     prisma.task.findMany({
@@ -56,6 +56,12 @@ export default async function KanbanBoard() {
     prisma.area.findMany({ select: { id: true, name: true, gerenciaId: true }, orderBy: { name: 'asc' } }),
     prisma.phase.findMany({ select: { id: true, name: true, projectId: true }, orderBy: [{ project: { name: 'asc' } }, { order: 'asc' }] }),
     prisma.sprint.findMany({ select: { id: true, name: true, projectId: true }, orderBy: [{ project: { name: 'asc' } }, { startDate: 'asc' }] }),
+    // Wave P9 — Epics activas para selector + filtro.
+    prisma.epic.findMany({
+      where: { archivedAt: null },
+      select: { id: true, name: true, color: true, projectId: true },
+      orderBy: [{ projectId: 'asc' }, { position: 'asc' }],
+    }),
   ])
 
   return (
@@ -103,6 +109,7 @@ export default async function KanbanBoard() {
         users={users}
         gerencias={gerencias}
         areas={areas}
+        epics={epics}
         allTasks={allTasksRaw}
         phases={phases}
         sprints={sprints}

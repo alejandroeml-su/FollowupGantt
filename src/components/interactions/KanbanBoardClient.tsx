@@ -76,6 +76,8 @@ type Props = {
   users: { id: string; name: string }[]
   gerencias?: { id: string; name: string }[]
   areas?: { id: string; name: string; gerenciaId?: string | null }[]
+  /** Wave P9 — Epics activas para filtro. */
+  epics?: { id: string; name: string; color: string; projectId: string }[]
   allTasks?: ParentOption[]
   phases?: PhaseOption[]
   sprints?: SprintOption[]
@@ -113,6 +115,7 @@ export function KanbanBoardClient({
   users,
   gerencias = [],
   areas = [],
+  epics = [],
   allTasks = [],
   phases = [],
   sprints = [],
@@ -299,6 +302,7 @@ export function KanbanBoardClient({
         areas={areas}
         projects={projects}
         users={users}
+        epics={epics}
       />
       <DndContext
         sensors={sensors}

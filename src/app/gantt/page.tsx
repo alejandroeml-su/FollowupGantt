@@ -149,7 +149,7 @@ export default async function GanttTimeline({
     serializeTask(t as unknown as Record<string, unknown>),
   )
 
-  const [projects, users, allTasksRaw, gerencias, areas, taskCountsRaw, baselineCountsRaw] =
+  const [projects, users, allTasksRaw, gerencias, areas, epics, taskCountsRaw, baselineCountsRaw] =
     await Promise.all([
       prisma.project.findMany({ select: { id: true, name: true, areaId: true }, orderBy: { name: 'asc' } }),
       prisma.user.findMany({ orderBy: { name: 'asc' } }),
@@ -160,6 +160,12 @@ export default async function GanttTimeline({
       }),
       prisma.gerencia.findMany({ select: { id: true, name: true }, orderBy: { name: 'asc' } }),
       prisma.area.findMany({ select: { id: true, name: true, gerenciaId: true }, orderBy: { name: 'asc' } }),
+      // Wave P9 — Epics activas para selector + filtro.
+      prisma.epic.findMany({
+        where: { archivedAt: null },
+        select: { id: true, name: true, color: true, projectId: true },
+        orderBy: [{ projectId: 'asc' }, { position: 'asc' }],
+      }),
       // HU-3.1 · conteo de tareas no archivadas por proyecto, para habilitar
       // el botón de captura de línea base con el preview "se capturarán N
       // tareas". groupBy es un round-trip barato comparado con cargar todas
@@ -323,6 +329,7 @@ export default async function GanttTimeline({
           users={users}
           gerencias={gerencias}
           areas={areas}
+          epics={epics}
           allTasks={allTasksRaw}
           cpmByTaskId={cpmByTaskId}
           dependencies={dependencies}
