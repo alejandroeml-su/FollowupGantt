@@ -28,6 +28,8 @@ type TaskInclude = {
   comments: { include: { author: true }; orderBy: { createdAt: 'desc' } }
   history: { include: { user: true }; orderBy: { createdAt: 'desc' } }
   attachments: { include: { user: true }; orderBy: { createdAt: 'desc' } }
+  /** Wave P9 — Epic info para badges en surfaces. */
+  epic: { select: { id: true; name: true; color: true } }
   subtasks?: {
     where: { archivedAt: null }
     include: TaskInclude
@@ -53,6 +55,7 @@ export function buildTaskTreeInclude(options: { depth: number }): TaskInclude {
     comments: { include: { author: true }, orderBy: { createdAt: 'desc' } },
     history: { include: { user: true }, orderBy: { createdAt: 'desc' } },
     attachments: { include: { user: true }, orderBy: { createdAt: 'desc' } },
+    epic: { select: { id: true, name: true, color: true } },
   }
 
   if (depth === 0) {

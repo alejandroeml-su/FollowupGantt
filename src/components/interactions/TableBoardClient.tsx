@@ -12,6 +12,7 @@ import { EMPTY_TASK_FILTERS, filterTasks, type TaskFilters } from '@/lib/taskFil
 import type { CurrentUserPresence } from '@/lib/auth/get-current-user-presence'
 import { computeProgressWithSource } from '@/lib/progress/rollup'
 import { useTaskRealtimeRefresh } from '@/lib/realtime/use-task-realtime'
+import { EpicBadge } from '@/components/epics/EpicBadge'
 import { useTableColumnPrefs } from '@/lib/views/use-table-column-prefs'
 import { getColumnDef, type TableColumnId } from '@/lib/views/table-columns'
 import { TableColumnsConfigurator } from '@/components/views/TableColumnsConfigurator'
@@ -298,6 +299,12 @@ function renderCell(
         <span className="text-muted-foreground">
           {task.project?.name || '-'}
         </span>
+      )
+    case 'epic':
+      return task.epic ? (
+        <EpicBadge name={task.epic.name} color={task.epic.color} size="sm" />
+      ) : (
+        <span className="text-[10px] text-muted-foreground">—</span>
       )
     case 'type':
       return (

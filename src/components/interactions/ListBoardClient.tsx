@@ -40,6 +40,7 @@ import { deleteTask } from '@/lib/actions'
 import { useUIStore } from '@/lib/stores/ui'
 import { BulkActionsToolbar } from './BulkActionsToolbar'
 import { computeProgressWithSource } from '@/lib/progress/rollup'
+import { EpicBadge } from '@/components/epics/EpicBadge'
 import { useTaskShortcuts } from '@/lib/hooks/useTaskShortcuts'
 import StatusSelector from '@/components/StatusSelector'
 import { TaskWithContextMenu } from './TaskContextMenuItems'
@@ -59,6 +60,8 @@ type Props = {
   users: { id: string; name: string }[]
   gerencias?: { id: string; name: string }[]
   areas?: { id: string; name: string; gerenciaId?: string | null }[]
+  /** Wave P9 — Epics activas para filtro. */
+  epics?: { id: string; name: string; color: string; projectId: string }[]
   /** Ola P2 · Equipo P2-1 — vistas guardadas disponibles para LIST. */
   savedViews?: SavedViewSummary[]
   /**
@@ -94,6 +97,7 @@ export function ListBoardClient({
   users,
   gerencias = [],
   areas = [],
+  epics = [],
   savedViews = [],
   currentUser = null,
 }: Props) {
@@ -220,6 +224,7 @@ export function ListBoardClient({
         areas={areas}
         projects={projects}
         users={users}
+        epics={epics}
       />
       <div
         data-testid="saved-views-toolbar"
@@ -536,6 +541,15 @@ function Row({
                 <span className="truncate font-medium text-foreground group-hover:text-indigo-300">
                   {task.title}
                 </span>
+                {/* Wave P9 — badge Epic (si está asignada) en mismo flow del título. */}
+                {task.epic && (
+                  <EpicBadge
+                    name={task.epic.name}
+                    color={task.epic.color}
+                    size="xs"
+                    className="shrink-0"
+                  />
+                )}
                 {commentCount > 0 && (
                   <span className="flex shrink-0 items-center gap-0.5 text-[10px] text-muted-foreground">
                     <MessageSquare className="h-3 w-3" /> {commentCount}

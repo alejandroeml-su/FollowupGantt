@@ -21,7 +21,7 @@ export default async function ListViewPage() {
     orderBy: [{ position: 'asc' }, { createdAt: 'desc' }],
   })
 
-  const [projects, users, allTasksRaw, gerencias, areas] = await Promise.all([
+  const [projects, users, allTasksRaw, gerencias, areas, epics] = await Promise.all([
     prisma.project.findMany({ select: { id: true, name: true, areaId: true }, orderBy: { name: 'asc' } }),
     prisma.user.findMany({ orderBy: { name: 'asc' } }),
     prisma.task.findMany({
@@ -31,6 +31,12 @@ export default async function ListViewPage() {
     }),
     prisma.gerencia.findMany({ select: { id: true, name: true }, orderBy: { name: 'asc' } }),
     prisma.area.findMany({ select: { id: true, name: true, gerenciaId: true }, orderBy: { name: 'asc' } }),
+    // Wave P9 — Epics activas para selector + filtro.
+    prisma.epic.findMany({
+      where: { archivedAt: null },
+      select: { id: true, name: true, color: true, projectId: true },
+      orderBy: [{ projectId: 'asc' }, { position: 'asc' }],
+    }),
   ])
 
   // serializeTask es recursivo (ver lib/types.ts:227 — recurre por
@@ -63,6 +69,7 @@ export default async function ListViewPage() {
             users={users}
             gerencias={gerencias}
             areas={areas}
+            epics={epics}
             currentUser={currentUser}
           />
         </div>
