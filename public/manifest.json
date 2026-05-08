@@ -1,7 +1,7 @@
 {
-  "name": "FollowupGantt — Avante Orq PRO",
-  "short_name": "Avante Orq",
-  "description": "Gestión de proyectos PMI + Agile + ITIL de la Unidad de Transformación Digital de Complejo Avante.",
+  "name": "Sync · Plataforma de gestión de proyectos",
+  "short_name": "Sync",
+  "description": "Sync · Plataforma de gestión PMI + Agile + ITIL de la Unidad de Transformación Digital de Complejo Avante.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
@@ -12,6 +12,12 @@
   "background_color": "#0f172a",
   "categories": ["productivity", "business"],
   "icons": [
+    {
+      "src": "/icon-sync.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    },
     {
       "src": "/icon-192.svg",
       "sizes": "192x192",

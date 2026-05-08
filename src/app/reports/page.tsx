@@ -19,7 +19,7 @@ export default async function ReportsIndexPage() {
     <div className="report-page" style={{ paddingTop: '2rem' }}>
       <header className="report-header">
         <div>
-          <div className="logo">FollowupGantt</div>
+          <div className="logo">Sync</div>
           <h1>Reportes</h1>
           <div style={{ color: '#4b5563', fontSize: '11pt' }}>
             Reportes ejecutivos imprimibles (PDF vía Imprimir del navegador)

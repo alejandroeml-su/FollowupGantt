@@ -13,22 +13,23 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "FollowupGantt — Avante Orq PRO",
+  title: "Sync · Plataforma de gestión de proyectos",
   description:
-    "Gestión de proyectos PMI + Agile + ITIL de la Unidad de Transformación Digital de Complejo Avante.",
-  applicationName: "Avante Orq",
+    "Sync · Plataforma de gestión PMI + Agile + ITIL de la Unidad de Transformación Digital de Complejo Avante.",
+  applicationName: "Sync",
   manifest: "/manifest.json",
   appleWebApp: {
     capable: true,
-    title: "Avante Orq",
+    title: "Sync",
     statusBarStyle: "black-translucent",
   },
   icons: {
     icon: [
+      { url: "/icon-sync.svg", type: "image/svg+xml" },
       { url: "/icon-192.svg", sizes: "192x192", type: "image/svg+xml" },
       { url: "/icon-512.svg", sizes: "512x512", type: "image/svg+xml" },
     ],
-    apple: [{ url: "/icon-192.svg" }],
+    apple: [{ url: "/icon-sync.svg" }],
   },
 };
 

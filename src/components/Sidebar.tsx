@@ -347,9 +347,14 @@ export default function Sidebar({
             "flex items-center overflow-hidden",
             collapsed && "lg:hidden"
           )}>
-            <Target className="h-6 w-6 text-primary flex-shrink-0 mr-3" />
-            <span className="text-lg font-bold text-foreground tracking-wide whitespace-nowrap">
-              Avante Orq PRO
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src="/icon-sync.svg"
+              alt="Sync"
+              className="h-7 w-7 flex-shrink-0 mr-3"
+            />
+            <span className="text-xl font-black text-foreground tracking-tight whitespace-nowrap">
+              Sync
             </span>
           </div>
 

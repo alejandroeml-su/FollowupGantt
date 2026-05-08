@@ -17,6 +17,6 @@ export default async function NotificationsPage() {
 }
 
 export const metadata = {
-  title: 'Notificaciones · FollowupGantt',
+  title: 'Notificaciones · Sync',
   description: 'Centro de notificaciones in-app',
 }

@@ -27,7 +27,7 @@ export default async function ApiTokensSettingsPage() {
         <div>
           <h1 className="text-xl font-semibold text-white">Tokens API</h1>
           <p className="mt-1 text-xs text-muted-foreground">
-            Gestiona credenciales para integrar FollowupGantt con scripts, CI o
+            Gestiona credenciales para integrar Sync con scripts, CI o
             servicios externos. Solo se muestran los tokens del usuario actual.
           </p>
         </div>

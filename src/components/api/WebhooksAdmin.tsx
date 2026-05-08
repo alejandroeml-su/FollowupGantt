@@ -136,7 +136,7 @@ export function WebhooksAdmin({ initialWebhooks }: Props) {
       <section className="rounded-lg border border-border bg-subtle/30 p-6">
         <h2 className="text-base font-semibold text-white">Crear webhook</h2>
         <p className="mt-1 text-xs text-muted-foreground">
-          FollowupGantt POSTea el evento JSON al endpoint que configures con
+          Sync POSTea el evento JSON al endpoint que configures con
           firma HMAC SHA-256 en <code>X-FollowupGantt-Signature</code>.
         </p>
         <form onSubmit={onSubmit} className="mt-4 space-y-4">

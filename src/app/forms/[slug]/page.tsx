@@ -49,7 +49,7 @@ export default async function PublicFormPage({ params }: PageProps) {
           fields={parsed.data}
         />
         <p className="mt-4 text-center text-xs text-muted-foreground/70">
-          Formulario público · FollowupGantt
+          Formulario público · Sync
         </p>
       </div>
     </main>

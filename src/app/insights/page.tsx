@@ -23,7 +23,7 @@ import {
 import type { NextActionItem } from '@/components/ai/NextActionsList'
 
 export const metadata = {
-  title: 'Insights · FollowupGantt',
+  title: 'Insights · Sync',
   description: 'AI insights heurísticos: categorización, riesgo y sugerencias.',
 }
 

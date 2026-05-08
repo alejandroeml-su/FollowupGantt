@@ -85,7 +85,7 @@ export async function POST(req: NextRequest) {
   const subject =
     typeof body.subject === 'string' && body.subject.trim()
       ? body.subject.trim()
-      : `[FollowupGantt] Smoke test ${new Date().toISOString()}`
+      : `[Sync] Smoke test ${new Date().toISOString()}`
 
   const result = await sendEmail({
     to,
@@ -94,9 +94,9 @@ export async function POST(req: NextRequest) {
       `Este es un correo de prueba enviado desde el endpoint diagnóstico.\n\n` +
       `Provider activo: ${getActiveEmailProvider()}\n` +
       `Si recibiste este mensaje, el envío SMTP/SendGrid/Resend funciona.\n` +
-      `\n— FollowupGantt`,
+      `\n— Sync`,
     html: `<!doctype html><html><body style="font-family:system-ui,sans-serif;padding:24px;color:#0f172a;">
-<h1 style="font-size:18px;margin:0 0 12px;">Smoke test FollowupGantt</h1>
+<h1 style="font-size:18px;margin:0 0 12px;">Smoke test Sync</h1>
 <p>Provider activo: <strong>${getActiveEmailProvider()}</strong></p>
 <p>Si recibiste este mensaje, el envío de correo está funcionando.</p>
 <p style="font-size:12px;color:#64748b;">Generado el ${new Date().toISOString()}</p>

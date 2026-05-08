@@ -59,7 +59,9 @@ export default async function HomePage() {
 function UnauthenticatedFallback() {
   return (
     <div className="flex h-full flex-col items-center justify-center bg-background p-12 text-center">
-      <h1 className="text-3xl font-black text-foreground">FollowupGantt</h1>
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src="/icon-sync.svg" alt="Sync" className="h-16 w-16 mb-3" />
+      <h1 className="text-4xl font-black text-foreground tracking-tight">Sync</h1>
       <p className="mt-2 max-w-md text-muted-foreground">
         Inicia sesión para ver tu resumen ejecutivo.
       </p>
