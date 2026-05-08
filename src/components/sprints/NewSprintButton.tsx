@@ -11,19 +11,25 @@
 import { useState } from 'react'
 import { Plus } from 'lucide-react'
 import { useRouter } from 'next/navigation'
-import { NewSprintModal } from './NewSprintModal'
+import { NewSprintModal, type ReleaseOption } from './NewSprintModal'
 
 type Props = {
   projectId: string
   /** Variante visual: solid (primary) | outline (secondary). Default solid. */
   variant?: 'solid' | 'outline'
   label?: string
+  /**
+   * Releases del proyecto (con scopeMode=SPRINT). Si se pasan, el modal
+   * mostrará selector "Asociar a Release" — regla ágil de trazabilidad.
+   */
+  releases?: ReleaseOption[]
 }
 
 export function NewSprintButton({
   projectId,
   variant = 'solid',
   label = 'Nuevo Sprint',
+  releases,
 }: Props) {
   const [open, setOpen] = useState(false)
   const router = useRouter()
@@ -47,6 +53,7 @@ export function NewSprintButton({
         open={open}
         onClose={() => setOpen(false)}
         projectId={projectId}
+        releases={releases}
         onSuccess={() => router.refresh()}
       />
     </>

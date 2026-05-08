@@ -60,6 +60,8 @@ export type CreateEpicInput = {
   ownerId?: string | null
   plannedStartDate?: string | null
   plannedEndDate?: string | null
+  /** Wave P9 follow-up — regla ágil "Épicas se asignan a un Release". */
+  releaseId?: string | null
 }
 
 export async function createEpic(input: CreateEpicInput) {
@@ -92,6 +94,39 @@ export async function createEpic(input: CreateEpicInput) {
       plannedEndDate: input.plannedEndDate ? new Date(input.plannedEndDate) : null,
     },
   })
+
+  // Asociación a Release (M2M ReleaseEpic) si se solicitó.
+  // La Release debe pertenecer al mismo proyecto y tener scopeMode=EPIC.
+  // Si falla la validación, se omite silenciosamente para no bloquear la
+  // creación de la Epic (regla ágil suave: la asociación es recomendada).
+  if (input.releaseId) {
+    try {
+      const release = await prisma.release.findUnique({
+        where: { id: input.releaseId },
+        select: { projectId: true, scopeMode: true },
+      })
+      if (
+        release &&
+        release.projectId === input.projectId &&
+        release.scopeMode === 'EPIC'
+      ) {
+        const last = await prisma.releaseEpic.findFirst({
+          where: { releaseId: input.releaseId },
+          orderBy: { position: 'desc' },
+          select: { position: true },
+        })
+        await prisma.releaseEpic.create({
+          data: {
+            releaseId: input.releaseId,
+            epicId: epic.id,
+            position: (last?.position ?? -1) + 1,
+          },
+        })
+      }
+    } catch {
+      // No bloqueamos la creación de la Epic por un fallo de asociación.
+    }
+  }
 
   await recordAuditEventSafe({
     action: 'epic.created',

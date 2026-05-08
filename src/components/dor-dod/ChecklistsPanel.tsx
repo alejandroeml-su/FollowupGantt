@@ -19,9 +19,11 @@ type Props = {
   projectId: string
   dor: string[]
   dod: string[]
+  /** Wave P9 follow-up — nombre del proyecto/producto para mostrar en el editor. */
+  projectName?: string
 }
 
-export function ChecklistsPanel({ projectId, dor, dod }: Props) {
+export function ChecklistsPanel({ projectId, dor, dod, projectName }: Props) {
   const [editing, setEditing] = useState<'DOR' | 'DOD' | null>(null)
 
   return (
@@ -52,6 +54,7 @@ export function ChecklistsPanel({ projectId, dor, dod }: Props) {
           projectId={projectId}
           mode="DOR"
           initial={dor}
+          projectName={projectName}
         />
       )}
       {editing === 'DOD' && (
@@ -61,6 +64,7 @@ export function ChecklistsPanel({ projectId, dor, dod }: Props) {
           projectId={projectId}
           mode="DOD"
           initial={dod}
+          projectName={projectName}
         />
       )}
     </>

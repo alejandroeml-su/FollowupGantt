@@ -47,6 +47,7 @@ export default async function ProjectDefinitionsPage({ params }: PageProps) {
       <div className="flex-1 overflow-auto p-6">
         <ChecklistsPanel
           projectId={project.id}
+          projectName={project.name}
           dor={checklists.dor}
           dod={checklists.dod}
         />

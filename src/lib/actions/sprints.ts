@@ -553,12 +553,19 @@ const sprintCreateSchema = z.object({
   startDate: z.union([z.string(), z.date()]),
   endDate: z.union([z.string(), z.date()]),
   capacity: z.number().int().min(0).max(10_000).optional().nullable(),
+  /** Wave P9 follow-up — regla ágil "Sprints viven dentro de un Release". */
+  releaseId: z.string().optional().nullable(),
 })
 
 /**
  * Crea un sprint (versión enriquecida de `actions.ts#createSprint` que
  * acepta `capacity` desde el modal de planeación). El `actions.ts` viejo
  * sigue disponible para formularios legacy.
+ *
+ * Si se pasa `releaseId`, asocia el sprint a esa Release vía `ReleaseSprint`
+ * (regla ágil de trazabilidad). La Release debe ser scopeMode=SPRINT y
+ * pertenecer al mismo proyecto, si no, se ignora silenciosamente para no
+ * bloquear la creación del sprint.
  */
 export async function createSprintWithCapacity(input: {
   name: string
@@ -567,6 +574,7 @@ export async function createSprintWithCapacity(input: {
   startDate: string | Date
   endDate: string | Date
   capacity?: number | null
+  releaseId?: string | null
 }): Promise<{ id: string }> {
   const parsed = sprintCreateSchema.safeParse(input)
   if (!parsed.success) {
@@ -593,6 +601,39 @@ export async function createSprintWithCapacity(input: {
       capacity: data.capacity ?? null,
     },
   })
+
+  // Asociación a Release (M2M ReleaseSprint) si se solicitó.
+  if (data.releaseId) {
+    try {
+      const release = await prisma.release.findUnique({
+        where: { id: data.releaseId },
+        select: { projectId: true, scopeMode: true },
+      })
+      if (
+        release &&
+        release.projectId === data.projectId &&
+        release.scopeMode === 'SPRINT'
+      ) {
+        // Position: append al final.
+        const last = await prisma.releaseSprint.findFirst({
+          where: { releaseId: data.releaseId },
+          orderBy: { position: 'desc' },
+          select: { position: true },
+        })
+        await prisma.releaseSprint.create({
+          data: {
+            releaseId: data.releaseId,
+            sprintId: created.id,
+            position: (last?.position ?? -1) + 1,
+          },
+        })
+      }
+      // Si el release no existe / no es del proyecto / no es SPRINT,
+      // se omite la asociación silenciosamente — el sprint se crea igual.
+    } catch {
+      // No bloqueamos la creación del sprint por un fallo de asociación.
+    }
+  }
 
   revalidateSprintViews()
   return { id: created.id }
