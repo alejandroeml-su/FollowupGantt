@@ -11,7 +11,7 @@ import {
   Bell, PenSquare, Brain, Scale, FileBarChart, Plug, FileSignature, Workflow,
   DatabaseBackup, UserPlus, Layers, ShieldAlert as ShieldAlertIcon,
   DollarSign, GitBranch, Users2, ListTree, Sparkles as SparklesIcon, CheckSquare,
-  LineChart,
+  LineChart, GitMerge,
   type LucideIcon
 } from 'lucide-react';
 import { clsx } from 'clsx';
@@ -106,6 +106,21 @@ const menuGroups: RouteGroup[] = [
       { name: 'sidebar.items.agileEpics', path: '/agile/epics', icon: SparklesIcon },
       { name: 'sidebar.items.agileSprints', path: '/sprints', icon: Rocket },
       { name: 'sidebar.items.agileBacklog', path: '/agile/backlog', icon: ListTree },
+    ],
+  },
+  // ── PMI (violet · Wave P11-PMI) ────────────────────────────────
+  // PMBOK 6/7 compliance · Charter, Stakeholders, Change Control,
+  // Procurement. Charter/Stakeholders/CCB son per-proyecto, redirect
+  // al activo. Procurement es global (catálogo de vendors+contracts+POs).
+  {
+    label: 'sidebar.groups.pmi',
+    icon: FileText,
+    color: 'text-violet-400',
+    routes: [
+      { name: 'sidebar.items.pmiCharter', path: '/pmi/charter', icon: FileText },
+      { name: 'sidebar.items.pmiStakeholders', path: '/pmi/stakeholders', icon: Users2 },
+      { name: 'sidebar.items.pmiChangeRequests', path: '/pmi/change-requests', icon: GitMerge },
+      { name: 'sidebar.items.pmiProcurement', path: '/procurement', icon: Briefcase },
     ],
   },
   // ── Estrategia (amber) ──────────────────────────────────────────

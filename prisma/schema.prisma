@@ -320,6 +320,10 @@ model User {
   // Wave P10 (HU-10.7) — Snapshots semanales de allocation cross-project.
   allocationSnapshots ResourceAllocationSnapshot[]
 
+  // Wave P11-PMI (HU-12.3) — Change Requests
+  changeRequestsRequested ChangeRequest[] @relation("ChangeRequestRequester")
+  changeRequestsApproved  ChangeRequest[] @relation("ChangeRequestApprover")
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
@@ -508,6 +512,20 @@ model Project {
   /// Commitment formal del Scrum Guide 2020 — define el "para qué"
   /// del Product Backlog. El Product Owner es responsable.
   productGoal Json?
+
+  /// Wave P11-PMI (HU-12.1) — Project Charter formal PMBOK.
+  /// Shape: `{ vision: string, businessJustification: string,
+  /// successCriteria: string[], milestones: [{name, targetDate}],
+  /// approvedAt: string|null, approvedBy: string|null,
+  /// version: number }`.
+  /// Artefacto que autoriza formalmente el inicio del proyecto.
+  charter Json?
+
+  /// Wave P11-PMI — Stakeholder Register + Change Request relations.
+  stakeholders   Stakeholder[]
+  changeRequests ChangeRequest[]
+  contracts      Contract[]
+  purchaseOrders PurchaseOrder[]
 
   // Relaciones
   phases          Phase[]
@@ -2005,6 +2023,9 @@ model Workspace {
   invitations WorkspaceInvitation[]
   projects    Project[]
 
+  // Wave P11-PMI (HU-12.4) — Procurement (Vendor catálogo del workspace)
+  vendors     Vendor[]
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -2754,4 +2775,200 @@ model ResourceAllocationSnapshot {
 
   @@unique([userId, weekStart])
   @@index([weekStart])
+}
+
+// ─────────────────────────────────────────────────────────────
+// Wave P11-PMI · PMBOK 6/7 compliance modules
+// ─────────────────────────────────────────────────────────────
+
+/// Wave P11-PMI (HU-12.2) — Stakeholder Register PMBOK.
+/// Mantiene el inventario de stakeholders del proyecto con su matriz
+/// de poder/interés/influencia para diseñar engagement strategies.
+model Stakeholder {
+  id            String           @id @default(uuid())
+  projectId     String
+  project       Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  name          String
+  organization  String?
+  email         String?
+  /// Rol PMBOK: Sponsor / Customer / Team / Vendor / Regulator / Other
+  role          String
+  /// Matriz poder/interés/influencia.
+  power         StakeholderLevel @default(MEDIUM)
+  interest      StakeholderLevel @default(MEDIUM)
+  influence     StakeholderInfluence @default(NEUTRAL)
+  expectations  String?
+  /// Estrategia de engagement: Manage Closely / Keep Satisfied /
+  /// Keep Informed / Monitor.
+  engagementStrategy String?
+  notes         String?
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+
+  @@index([projectId])
+  @@index([projectId, power, interest])
+}
+
+enum StakeholderLevel {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+enum StakeholderInfluence {
+  POSITIVE
+  NEUTRAL
+  NEGATIVE
+}
+
+/// Wave P11-PMI (HU-12.3) — Change Request workflow (CCB).
+/// PMBOK Integration Management · Perform Integrated Change Control.
+/// Captura solicitudes de cambio de scope/schedule/cost con análisis
+/// de impacto y workflow de aprobación.
+model ChangeRequest {
+  id              String              @id @default(uuid())
+  projectId       String
+  project         Project             @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  title           String
+  description     String
+  rationale       String?
+
+  requestedById   String
+  requestedBy     User                @relation("ChangeRequestRequester", fields: [requestedById], references: [id], onDelete: Restrict)
+
+  /// Análisis de impacto en las 4 dimensiones triple-restricción + calidad.
+  impactScope     ChangeImpactLevel   @default(NONE)
+  impactSchedule  ChangeImpactLevel   @default(NONE)
+  impactCost      ChangeImpactLevel   @default(NONE)
+  impactQuality   ChangeImpactLevel   @default(NONE)
+  estimatedCostDelta         Decimal? @db.Decimal(14, 2)
+  estimatedScheduleDeltaDays Int?
+
+  status          ChangeRequestStatus @default(SUBMITTED)
+  decidedAt       DateTime?
+  decidedById     String?
+  decidedBy       User?               @relation("ChangeRequestApprover", fields: [decidedById], references: [id], onDelete: SetNull)
+  decisionNotes   String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([projectId, status])
+  @@index([requestedById])
+}
+
+enum ChangeRequestStatus {
+  SUBMITTED
+  UNDER_REVIEW
+  APPROVED
+  REJECTED
+  DEFERRED
+  IMPLEMENTED
+}
+
+enum ChangeImpactLevel {
+  NONE
+  LOW
+  MEDIUM
+  HIGH
+}
+
+/// Wave P11-PMI (HU-12.4) — Procurement Management · Vendor.
+/// Catálogo de proveedores reusable cross-project.
+model Vendor {
+  id           String   @id @default(uuid())
+  workspaceId  String?
+  workspace    Workspace? @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
+  name         String
+  contactPerson String?
+  contactEmail String?
+  taxId        String?
+  notes        String?
+  isActive     Boolean  @default(true)
+
+  contracts      Contract[]
+  purchaseOrders PurchaseOrder[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([workspaceId, isActive])
+}
+
+/// Wave P11-PMI (HU-12.4) — Procurement Management · Contract.
+/// Tipos PMBOK: FFP, CPFF, T&M, CR.
+model Contract {
+  id            String         @id @default(uuid())
+  vendorId      String
+  vendor        Vendor         @relation(fields: [vendorId], references: [id], onDelete: Restrict)
+  projectId     String?
+  project       Project?       @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  title         String
+  contractType  ContractType   @default(FFP)
+  totalValue    Decimal?       @db.Decimal(14, 2)
+  currency      String         @default("USD")
+  startDate     DateTime?
+  endDate       DateTime?
+  status        ContractStatus @default(DRAFT)
+  description   String?
+  documentUrl   String?
+
+  purchaseOrders PurchaseOrder[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([vendorId, status])
+  @@index([projectId])
+}
+
+enum ContractType {
+  FFP    // Firm Fixed Price
+  CPFF   // Cost Plus Fixed Fee
+  TM     // Time and Materials
+  CR     // Cost Reimbursable
+}
+
+enum ContractStatus {
+  DRAFT
+  ACTIVE
+  COMPLETED
+  TERMINATED
+}
+
+/// Wave P11-PMI (HU-12.4) — Procurement Management · Purchase Order.
+/// Order placed against Vendor (con o sin Contract paraguas).
+model PurchaseOrder {
+  id              String     @id @default(uuid())
+  vendorId        String
+  vendor          Vendor     @relation(fields: [vendorId], references: [id], onDelete: Restrict)
+  contractId      String?
+  contract        Contract?  @relation(fields: [contractId], references: [id], onDelete: SetNull)
+  projectId       String?
+  project         Project?   @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  poNumber        String     @unique
+  description     String
+  amount          Decimal    @db.Decimal(14, 2)
+  currency        String     @default("USD")
+  issuedAt        DateTime   @default(now())
+  expectedDeliveryAt DateTime?
+  receivedAt      DateTime?
+  status          POStatus   @default(DRAFT)
+  notes           String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([vendorId, status])
+  @@index([projectId])
+  @@index([contractId])
+}
+
+enum POStatus {
+  DRAFT
+  ISSUED
+  PARTIALLY_RECEIVED
+  RECEIVED
+  CANCELLED
 }
