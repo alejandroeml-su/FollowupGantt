@@ -1,0 +1,194 @@
+'use server'
+
+/**
+ * Wave P12 (PMI 100%) — Lessons Learned repository.
+ */
+
+import { revalidatePath } from 'next/cache'
+import type { LessonCategory, LessonVisibility } from '@prisma/client'
+import prisma from '@/lib/prisma'
+import { recordAuditEventSafe } from '@/lib/audit/events'
+
+function revalidateScopes(projectId?: string) {
+  revalidatePath('/lessons-learned')
+  if (projectId) {
+    revalidatePath(`/projects/${projectId}`)
+    revalidatePath(`/projects/${projectId}/lessons-learned`)
+  }
+}
+
+export async function listLessons(input: {
+  projectId?: string
+  workspaceId?: string
+  category?: LessonCategory
+  search?: string
+  limit?: number
+}) {
+  return prisma.lessonLearned.findMany({
+    where: {
+      projectId: input.projectId,
+      project: input.workspaceId
+        ? { workspaceId: input.workspaceId }
+        : undefined,
+      category: input.category,
+      OR: input.search
+        ? [
+            { title: { contains: input.search, mode: 'insensitive' } },
+            { recommendation: { contains: input.search, mode: 'insensitive' } },
+            { whatHappened: { contains: input.search, mode: 'insensitive' } },
+            { appliesTo: { contains: input.search, mode: 'insensitive' } },
+          ]
+        : undefined,
+    },
+    include: {
+      project: { select: { id: true, name: true } },
+      capturedBy: { select: { id: true, name: true } },
+    },
+    orderBy: { createdAt: 'desc' },
+    take: input.limit ?? 100,
+  })
+}
+
+export async function getLesson(input: { id: string }) {
+  return prisma.lessonLearned.findUnique({
+    where: { id: input.id },
+    include: {
+      project: { select: { id: true, name: true } },
+      capturedBy: { select: { id: true, name: true } },
+    },
+  })
+}
+
+export async function createLesson(input: {
+  projectId: string
+  title: string
+  category: LessonCategory
+  context: string
+  whatHappened: string
+  rootCause?: string
+  recommendation: string
+  appliesTo?: string
+  visibility?: LessonVisibility
+  capturedById?: string
+}) {
+  if (!input.projectId) throw new Error('[INVALID_INPUT] projectId requerido')
+  if (!input.title?.trim()) throw new Error('[INVALID_INPUT] title requerido')
+  if (!input.context?.trim()) throw new Error('[INVALID_INPUT] context requerido')
+  if (!input.whatHappened?.trim())
+    throw new Error('[INVALID_INPUT] whatHappened requerido')
+  if (!input.recommendation?.trim())
+    throw new Error('[INVALID_INPUT] recommendation requerido')
+
+  const created = await prisma.lessonLearned.create({
+    data: {
+      projectId: input.projectId,
+      title: input.title.trim(),
+      category: input.category,
+      context: input.context.trim(),
+      whatHappened: input.whatHappened.trim(),
+      rootCause: input.rootCause?.trim() || null,
+      recommendation: input.recommendation.trim(),
+      appliesTo: input.appliesTo?.trim() || null,
+      visibility: input.visibility ?? 'WORKSPACE',
+      capturedById: input.capturedById || null,
+    },
+  })
+
+  await recordAuditEventSafe({
+    action: 'lesson.created',
+    entityType: 'lesson',
+    entityId: created.id,
+    actorId: input.capturedById,
+    after: { title: created.title, category: created.category },
+  })
+
+  revalidateScopes(input.projectId)
+  return created
+}
+
+export async function updateLesson(input: {
+  id: string
+  title?: string
+  category?: LessonCategory
+  context?: string
+  whatHappened?: string
+  rootCause?: string | null
+  recommendation?: string
+  appliesTo?: string | null
+  visibility?: LessonVisibility
+  actorId?: string
+}) {
+  const before = await prisma.lessonLearned.findUnique({
+    where: { id: input.id },
+  })
+  if (!before) throw new Error('[NOT_FOUND] lesson no existe')
+
+  const updated = await prisma.lessonLearned.update({
+    where: { id: input.id },
+    data: {
+      title: input.title?.trim() ?? before.title,
+      category: input.category ?? before.category,
+      context: input.context?.trim() ?? before.context,
+      whatHappened: input.whatHappened?.trim() ?? before.whatHappened,
+      rootCause:
+        input.rootCause === undefined
+          ? before.rootCause
+          : input.rootCause?.trim() || null,
+      recommendation: input.recommendation?.trim() ?? before.recommendation,
+      appliesTo:
+        input.appliesTo === undefined
+          ? before.appliesTo
+          : input.appliesTo?.trim() || null,
+      visibility: input.visibility ?? before.visibility,
+    },
+  })
+
+  await recordAuditEventSafe({
+    action: 'lesson.updated',
+    entityType: 'lesson',
+    entityId: input.id,
+    actorId: input.actorId,
+  })
+
+  revalidateScopes(before.projectId)
+  return updated
+}
+
+export async function deleteLesson(input: { id: string; actorId?: string }) {
+  const before = await prisma.lessonLearned.findUnique({
+    where: { id: input.id },
+  })
+  if (!before) return { ok: true }
+  await prisma.lessonLearned.delete({ where: { id: input.id } })
+
+  await recordAuditEventSafe({
+    action: 'lesson.deleted',
+    entityType: 'lesson',
+    entityId: input.id,
+    actorId: input.actorId,
+    before: { title: before.title },
+  })
+
+  revalidateScopes(before.projectId)
+  return { ok: true }
+}
+
+export async function getLessonCategoryStats(input: {
+  workspaceId?: string
+  projectId?: string
+}) {
+  const lessons = await prisma.lessonLearned.findMany({
+    where: {
+      projectId: input.projectId,
+      project: input.workspaceId
+        ? { workspaceId: input.workspaceId }
+        : undefined,
+    },
+    select: { category: true },
+  })
+  const stats: Record<string, number> = {}
+  for (const l of lessons) {
+    stats[l.category] = (stats[l.category] || 0) + 1
+  }
+  return { total: lessons.length, byCategory: stats }
+}

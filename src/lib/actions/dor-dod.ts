@@ -92,15 +92,59 @@ export async function setProjectDoD(input: {
 export async function loadProjectChecklists(projectId: string): Promise<{
   dor: ChecklistTemplate
   dod: ChecklistTemplate
+  dodHardEnforce: boolean
 }> {
-  if (!projectId) return { dor: [], dod: [] }
+  if (!projectId) return { dor: [], dod: [], dodHardEnforce: false }
   const project = await prisma.project.findUnique({
     where: { id: projectId },
-    select: { dorTemplate: true, dodTemplate: true },
+    select: { dorTemplate: true, dodTemplate: true, dodHardEnforce: true },
   })
-  if (!project) return { dor: [], dod: [] }
+  if (!project) return { dor: [], dod: [], dodHardEnforce: false }
   return {
     dor: normalizeChecklistTemplate(project.dorTemplate),
     dod: normalizeChecklistTemplate(project.dodTemplate),
+    dodHardEnforce: project.dodHardEnforce,
   }
+}
+
+/**
+ * Wave P12 (Scrum 100% · DoD HARD) — Toggle del flag de enforcement.
+ *
+ * Cuando `dodHardEnforce = true`, mover una tarea a DONE requiere
+ * checklist DoD completo (validación HARD bloqueante). Default
+ * `false` para no romper proyectos legacy (mantiene comportamiento
+ * SOFT toast informativo).
+ *
+ * El guard real vive en `lib/dor-dod/guards.ts` (validateDoDForDone)
+ * y se invoca desde `taskUpdateStatus` server action.
+ */
+export async function toggleDodHardEnforce(input: {
+  projectId: string
+  enabled: boolean
+  actorId?: string
+}): Promise<{ ok: true; dodHardEnforce: boolean }> {
+  if (!input.projectId) throw new Error('[INVALID_INPUT] projectId requerido')
+
+  const before = await prisma.project.findUnique({
+    where: { id: input.projectId },
+    select: { dodHardEnforce: true },
+  })
+  if (!before) throw new Error('[NOT_FOUND] proyecto no existe')
+
+  await prisma.project.update({
+    where: { id: input.projectId },
+    data: { dodHardEnforce: input.enabled },
+  })
+
+  await recordAuditEventSafe({
+    action: 'project.dod_hard_toggled',
+    entityType: 'project',
+    entityId: input.projectId,
+    actorId: input.actorId,
+    before: { dodHardEnforce: before.dodHardEnforce },
+    after: { dodHardEnforce: input.enabled },
+  })
+
+  revalidateProjectViews(input.projectId)
+  return { ok: true, dodHardEnforce: input.enabled }
 }

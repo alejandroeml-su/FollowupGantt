@@ -140,7 +140,13 @@
       "pmiCharter": "Project Charter",
       "pmiStakeholders": "Stakeholders",
       "pmiChangeRequests": "Change Control",
-      "pmiProcurement": "Procurement"
+      "pmiProcurement": "Procurement",
+      "pmiEvm": "EVM · Curva-S",
+      "pmiLessons": "Lessons Learned",
+      "pmiCommunications": "Plan de comunicaciones",
+      "scrumDaily": "Daily Scrum",
+      "scrumImpediments": "Impediments",
+      "scrumImprovements": "Improvement Items"
     },
     "menuClose": "Cerrar menú",
     "menuExpand": "Expandir menú",
