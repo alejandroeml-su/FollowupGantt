@@ -85,7 +85,8 @@
       "operations": "Operations",
       "workspace": "Workspace",
       "settings": "Settings",
-      "portfolio": "Portfolio"
+      "portfolio": "Portfolio",
+      "pmi": "PMI"
     },
     "items": {
       "list": "Tasks",
@@ -135,7 +136,11 @@
       "agileBacklog": "Backlog",
       "agileEpics": "Epics",
       "agileReleases": "Releases / Roadmap",
-      "agileDefinitions": "DoR & DoD"
+      "agileDefinitions": "DoR & DoD",
+      "pmiCharter": "Project Charter",
+      "pmiStakeholders": "Stakeholders",
+      "pmiChangeRequests": "Change Control",
+      "pmiProcurement": "Procurement"
     },
     "menuClose": "Close menu",
     "menuExpand": "Expand menu",
