@@ -180,7 +180,7 @@ model User {
   // `getCurrentUserPresence` (Realtime/Presence — wave P6 · B1) y se usará
   // a futuro en avatares del menú/comentarios. NUNCA exponer junto con
   // PII como email/roles fuera del canal Presence.
-  image         String?
+  image String?
 
   // ── Auth (P1 MVP) ─────────────────────────────────────────────
   // Hash PBKDF2 + salt (formato `pbkdf2$<iter>$<saltB64>$<hashB64>`).
@@ -208,23 +208,23 @@ model User {
   projectAssignments ProjectAssignment[]
 
   // Relaciones
-  managedProjects    Project[]          @relation("ProjectManager")
+  managedProjects     Project[]          @relation("ProjectManager")
   // Wave P9 · Agile Maturity (HU-9.1) — Epics owned por este user.
-  ownedEpics         Epic[]             @relation("EpicOwner")
+  ownedEpics          Epic[]             @relation("EpicOwner")
   // Wave P9 · Agile Maturity (HU-9.4) — Releases owned por este user.
-  ownedReleases      Release[]          @relation("ReleaseOwner")
+  ownedReleases       Release[]          @relation("ReleaseOwner")
   // Wave P9 R2 (HU-9.9) — Retrospectivas que este user facilitó.
-  facilitatedRetros  Retrospective[]    @relation("RetroFacilitator")
-  tasks              Task[]             @relation("TaskAssignee")
-  taskCollaborations TaskCollaborator[] @relation("TaskCollaborator")
-  comments           Comment[]          @relation("CommentAuthor")
-  history            TaskHistory[]
-  attachments        Attachment[]
+  facilitatedRetros   Retrospective[]    @relation("RetroFacilitator")
+  tasks               Task[]             @relation("TaskAssignee")
+  taskCollaborations  TaskCollaborator[] @relation("TaskCollaborator")
+  comments            Comment[]          @relation("CommentAuthor")
+  history             TaskHistory[]
+  attachments         Attachment[]
   // Wave P8-4 — Relación explícita para `Attachment.uploadedById` (alias
   // semántico de `userId` durante migración). Inversa nombrada porque la
   // relación con `userId` ya ocupa la default.
-  uploadedAttachments Attachment[]      @relation("AttachmentUploadedBy")
-  mindMaps           MindMap[]          @relation("MindMapOwner")
+  uploadedAttachments Attachment[]       @relation("AttachmentUploadedBy")
+  mindMaps            MindMap[]          @relation("MindMapOwner")
 
   // Time Tracking (Ola P1, Equipo 4) — un usuario tiene múltiples entries
   // y un historial de tarifas horarias (efectivas por rango de fechas).
@@ -237,7 +237,7 @@ model User {
 
   // Wave P6 · Equipo A4 · Web Push API — suscripciones del navegador
   // (pushManager.subscribe) por device. CASCADE al borrar usuario.
-  pushSubscriptions      PushSubscription[]
+  pushSubscriptions PushSubscription[]
 
   // Ola P2 · Vistas guardadas (Equipo P2-1).
   savedViews SavedView[]
@@ -260,9 +260,9 @@ model User {
   // Un usuario puede ser dueño de varios workspaces (ej. personal + del
   // cliente A) y miembro de muchos. Las invitaciones que el usuario envía
   // se guardan en `WorkspaceInvitation.invitedById` para auditoría.
-  ownedWorkspaces      Workspace[]            @relation("WorkspaceOwner")
+  ownedWorkspaces      Workspace[]           @relation("WorkspaceOwner")
   workspaceMemberships WorkspaceMember[]
-  sentInvitations      WorkspaceInvitation[]  @relation("InvitationInviter")
+  sentInvitations      WorkspaceInvitation[] @relation("InvitationInviter")
 
   // Ola P4 · Equipo P4-2 · API REST pública + Webhooks.
   // Tokens y webhooks pertenecen al usuario que los creó; cascadean al borrar.
@@ -323,6 +323,15 @@ model User {
   // Wave P11-PMI (HU-12.3) — Change Requests
   changeRequestsRequested ChangeRequest[] @relation("ChangeRequestRequester")
   changeRequestsApproved  ChangeRequest[] @relation("ChangeRequestApprover")
+
+  // Wave P12 (Scrum 100%) — Impediments & Daily Scrum & Improvements
+  impedimentsRaised  Impediment[]      @relation("ImpedimentRaiser")
+  impedimentsOwned   Impediment[]      @relation("ImpedimentOwner")
+  facilitatedDailies DailyScrum[]      @relation("DailyScrumFacilitator")
+  ownedImprovements  ImprovementItem[] @relation("ImprovementOwner")
+
+  // Wave P12 (PMI 100%) — Lessons Learned
+  capturedLessons LessonLearned[] @relation("LessonCapturer")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -527,6 +536,22 @@ model Project {
   contracts      Contract[]
   purchaseOrders PurchaseOrder[]
 
+  /// Wave P12 (Scrum 100% · DoD HARD) — Cuando true, mover una tarea a DONE
+  /// requiere checklist DoD completo (no warning). Default false (mantiene
+  /// comportamiento legacy SOFT toast informativo).
+  dodHardEnforce Boolean @default(false)
+
+  /// Wave P12 (PMI 100%) — Plan formal de comunicaciones del proyecto.
+  /// Shape: { items: [{ id, audience, frequency, channel, owner,
+  /// nextDelivery, notes }], updatedAt }
+  /// Validador en `lib/communications/types.ts`.
+  communicationsPlan Json?
+
+  /// Wave P12 — Lessons Learned + EVM snapshots + Improvement Items relations.
+  lessonsLearned   LessonLearned[]
+  evmSnapshots     EVMSnapshot[]
+  improvementItems ImprovementItem[]
+
   // Relaciones
   phases          Phase[]
   sprints         Sprint[]
@@ -584,7 +609,7 @@ model Project {
   // Presupuesto base del proyecto (BAC) y moneda. Si NULL, los reportes de
   // EAC/VAC fallan-back al sum(plannedValue) de tasks. La moneda canónica
   // para reporting es USD; las conversiones usan la última `CurrencyRate`.
-  budget         Decimal? @db.Decimal(14, 2)
+  budget         Decimal?  @db.Decimal(14, 2)
   budgetCurrency String?
   expenses       Expense[]
 
@@ -771,7 +796,7 @@ model ReleaseSprint {
   release   Release @relation(fields: [releaseId], references: [id], onDelete: Cascade)
 
   sprintId String
-  sprint   Sprint  @relation(fields: [sprintId], references: [id], onDelete: Cascade)
+  sprint   Sprint @relation(fields: [sprintId], references: [id], onDelete: Cascade)
 
   position Int @default(0)
 
@@ -814,11 +839,11 @@ model Sprint {
   // ── Sprint Review (Wave P11-Scrum · HU-11.2) ────────────────────
   /// Timestamp de cierre del Sprint Review event. Si NULL, el Review
   /// aún no se ha realizado (incluso si el sprint ya está endedAt).
-  reviewedAt   DateTime?
+  reviewedAt  DateTime?
   /// Notas/feedback del Review por stakeholders.
-  reviewNotes  String?
+  reviewNotes String?
   /// Link de demo del increment (Loom, video grabado, etc).
-  demoUrl      String?
+  demoUrl     String?
 
   // Ola P8 · Equipo P8-1 · Resource Management — overrides puntuales
   // de capacidad por usuario para este sprint (vacaciones, on-call,
@@ -839,6 +864,11 @@ model Sprint {
   /// reflexión adicional). En la práctica la app se ancla a la última
   /// activa.
   retrospectives Retrospective[]
+
+  /// Wave P12 (Scrum 100%) — Impediments levantados durante el sprint.
+  impediments Impediment[]
+  /// Wave P12 (Scrum 100%) — Sesiones de Daily Scrum (sync diaria).
+  dailyScrums DailyScrum[]
 
   // Ola P8 · Equipo P8-3 · Cost Management.
   // Presupuesto opcional por sprint (Agile). Útil para teams con T&M /
@@ -867,7 +897,7 @@ model Sprint {
 /// guarda el `taskId` en el item. Permite tracking sin re-implementar
 /// task management.
 model Retrospective {
-  id    String @id @default(uuid())
+  id    String  @id @default(uuid())
   title String
   /// Notas opcionales (markdown plano permitido).
   notes String?
@@ -888,6 +918,9 @@ model Retrospective {
   sprint   Sprint @relation(fields: [sprintId], references: [id], onDelete: Cascade)
 
   completedAt DateTime?
+
+  /// Wave P12 — Improvement items derivados de esta retro (cross-sprint).
+  improvementItems ImprovementItem[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1893,7 +1926,7 @@ model AutomationExecution {
 // ─────────────────────────────────────────────────────────────
 
 model Whiteboard {
-  id          String   @id @default(uuid())
+  id          String  @id @default(uuid())
   title       String
   description String?
 
@@ -2024,7 +2057,7 @@ model Workspace {
   projects    Project[]
 
   // Wave P11-PMI (HU-12.4) — Procurement (Vendor catálogo del workspace)
-  vendors     Vendor[]
+  vendors Vendor[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -2048,9 +2081,9 @@ model WorkspaceMember {
 }
 
 model WorkspaceInvitation {
-  id          String        @id @default(uuid())
+  id          String    @id @default(uuid())
   workspaceId String
-  workspace   Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 
   email     String
   // Token aleatorio (base64url, 32 bytes) que el invitee abre desde
@@ -2095,26 +2128,26 @@ model WorkspaceInvitation {
 // ─────────────────────────────────────────────────────────────
 
 model ApiToken {
-  id          String    @id @default(uuid())
+  id         String    @id @default(uuid())
   // Etiqueta human-readable elegida por el usuario (ej. "CI Vercel", "Script Edwin").
-  name        String
+  name       String
   // Hash SHA-256 (hex) del token completo. NUNCA almacenamos el token claro.
-  tokenHash   String    @unique
+  tokenHash  String    @unique
   // Primeros 12 chars del token (incluye prefijo `fg_`) para mostrar en lista
   // sin exponer el resto. Visual hint para que el usuario reconozca cuál revocar.
-  prefix      String
+  prefix     String
   // Array de scopes JSON: ["projects:read","tasks:write",…]. Validado contra
   // `KNOWN_SCOPES` en `src/lib/api/scopes.ts`.
-  scopes      Json
+  scopes     Json
   // Owner del token. Cascade: si se elimina el usuario, sus tokens se purgan.
-  userId      String
-  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId     String
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   // Opcional: null = no expira. Si está en el pasado el auth helper devuelve 401.
-  expiresAt   DateTime?
+  expiresAt  DateTime?
   // Timestamp del último uso (set on auth-success). Útil para auditoría +
   // detectar tokens dormidos. Best-effort: el update es fire-and-forget.
-  lastUsedAt  DateTime?
-  revokedAt   DateTime?
+  lastUsedAt DateTime?
+  revokedAt  DateTime?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -2124,19 +2157,19 @@ model ApiToken {
 }
 
 model Webhook {
-  id        String  @id @default(uuid())
+  id                 String    @id @default(uuid())
   // URL del receptor (https only se valida en server action). Hasta 2048 chars.
-  url       String
+  url                String
   // Secret hex (≥32 chars). Lo usa el dispatcher como key del HMAC.
-  secret    String
+  secret             String
   // Array de eventTypes suscritos: ["task.created","baseline.captured",…].
-  events    Json
+  events             Json
   // Permite pausar el webhook sin borrarlo (preserva secret + url).
-  active    Boolean @default(true)
+  active             Boolean   @default(true)
   // Owner: cascade al borrar el usuario. (No project-scoped: los webhooks son
   // globales por usuario; futura iteración puede agregar projectId nullable.)
-  userId    String
-  user      User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId             String
+  user               User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   // Estadísticas básicas para troubleshooting; el dispatcher las actualiza
   // best-effort tras cada delivery.
   lastDeliveryAt     DateTime?
@@ -2407,12 +2440,12 @@ model TaskGitHubLink {
 // ─────────────────────────────────────────────────────────────────────
 
 model Checklist {
-  id        String   @id @default(uuid())
+  id        String          @id @default(uuid())
   taskId    String
-  task      Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  task      Task            @relation(fields: [taskId], references: [id], onDelete: Cascade)
   title     String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
   items     ChecklistItem[]
 
   @@index([taskId])
@@ -2451,7 +2484,7 @@ model ChecklistItem {
 model Skill {
   id        String   @id @default(uuid())
   name      String   @unique
-  category  String?  // "frontend" | "backend" | "design" | "qa" | etc.
+  category  String? // "frontend" | "backend" | "design" | "qa" | etc.
   createdAt DateTime @default(now())
 
   userSkills UserSkill[]
@@ -2557,37 +2590,37 @@ enum CalendarProvider {
 }
 
 model CalendarConnection {
-  id             String           @id @default(uuid())
-  userId         String
-  user           User             @relation(fields: [userId], references: [id], onDelete: Cascade)
-  provider       CalendarProvider
+  id       String           @id @default(uuid())
+  userId   String
+  user     User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  provider CalendarProvider
 
   // OAuth credentials (raw en MVP — encrypt-at-rest queda como deuda P9).
   // ICS provider deja estos null y solo usa `icsToken`.
-  accessToken    String?
-  refreshToken   String?
-  expiresAt      DateTime?
+  accessToken  String?
+  refreshToken String?
+  expiresAt    DateTime?
 
   // Calendar id en el provider (Google "primary" / MS calendar GUID).
-  externalId     String?
+  externalId String?
 
   // Toggles granulares: el usuario puede sincronizar solo milestones,
   // o además sus deadlines, o también boundaries de sprints.
-  syncEnabled    Boolean          @default(true)
-  syncMilestones Boolean          @default(true)
-  syncDeadlines  Boolean          @default(true)
-  syncSprints    Boolean          @default(false)
+  syncEnabled    Boolean @default(true)
+  syncMilestones Boolean @default(true)
+  syncDeadlines  Boolean @default(true)
+  syncSprints    Boolean @default(false)
 
   // Token rotativo para feed ICS público. Único por seguridad: si el
   // usuario sospecha que el feed se filtró, regenera el token y el
   // anterior queda inutilizable.
-  icsToken       String?          @unique
+  icsToken String? @unique
 
-  lastSyncAt     DateTime?
-  createdAt      DateTime         @default(now())
-  updatedAt      DateTime         @updatedAt
+  lastSyncAt DateTime?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
 
-  events         CalendarEvent[]
+  events CalendarEvent[]
 
   // Un usuario solo puede tener una conexión por provider (multi-cuenta
   // Google se modelaría en una tabla separada en el futuro).
@@ -2596,9 +2629,9 @@ model CalendarConnection {
 }
 
 model CalendarEvent {
-  id              String              @id @default(uuid())
-  connectionId    String
-  connection      CalendarConnection  @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+  id           String             @id @default(uuid())
+  connectionId String
+  connection   CalendarConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
 
   // Id devuelto por Google/MS (null para ICS — el cliente externo arma
   // su propio uid desde el VEVENT). Permite upsert idempotente.
@@ -2608,13 +2641,13 @@ model CalendarEvent {
   // un Task.id; para sprints es un Sprint.id. NO es FK porque Task y
   // Sprint son entidades distintas y queremos audit-log aún si se borra
   // el origen.
-  taskId          String?
+  taskId String?
 
-  type            String              // "milestone" | "deadline" | "sprint"
-  title           String
-  startsAt        DateTime
-  endsAt          DateTime
-  syncedAt        DateTime            @default(now())
+  type     String // "milestone" | "deadline" | "sprint"
+  title    String
+  startsAt DateTime
+  endsAt   DateTime
+  syncedAt DateTime @default(now())
 
   @@index([connectionId, type])
   @@index([taskId])
@@ -2663,7 +2696,7 @@ model Expense {
 
   description String
   amount      Decimal @db.Decimal(12, 2)
-  currency    String  // ISO 4217: USD/MXN/EUR/...
+  currency    String // ISO 4217: USD/MXN/EUR/...
 
   // Snapshot de conversión a USD calculado al submit/approve usando la
   // `CurrencyRate` más reciente. Nullable porque al crear DRAFT la
@@ -2674,13 +2707,13 @@ model Expense {
   // URLs externas (Drive, S3 público) o queda NULL.
   receiptUrl String?
 
-  status        ExpenseStatus @default(DRAFT)
-  approvedById  String?
-  approvedBy    User?         @relation("ExpenseApprover", fields: [approvedById], references: [id], onDelete: SetNull)
-  approvedAt    DateTime?
-  reimbursedAt  DateTime?
+  status         ExpenseStatus @default(DRAFT)
+  approvedById   String?
+  approvedBy     User?         @relation("ExpenseApprover", fields: [approvedById], references: [id], onDelete: SetNull)
+  approvedAt     DateTime?
+  reimbursedAt   DateTime?
   rejectedReason String?
-  incurredAt    DateTime
+  incurredAt     DateTime
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -2692,10 +2725,10 @@ model Expense {
 
 model CurrencyRate {
   id        String   @id @default(uuid())
-  base      String   // "USD" — moneda canónica del repositorio
-  quote     String   // "MXN", "EUR", ... ISO 4217
+  base      String // "USD" — moneda canónica del repositorio
+  quote     String // "MXN", "EUR", ... ISO 4217
   rate      Decimal  @db.Decimal(18, 8)
-  source    String   // "ecb" | "exchangerate-api" | "manual"
+  source    String // "ecb" | "exchangerate-api" | "manual"
   fetchedAt DateTime @default(now())
 
   @@unique([base, quote, fetchedAt])
@@ -2711,17 +2744,17 @@ model CurrencyRate {
 /// modelo agrega excepciones individuales que el motor CPM y la capacity de
 /// sprint deben restar a la jornada estándar.
 model UserAvailability {
-  id        String   @id @default(uuid())
-  userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  startDate DateTime
-  endDate   DateTime
-  reason    AvailabilityReason
+  id                  String             @id @default(uuid())
+  userId              String
+  user                User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  startDate           DateTime
+  endDate             DateTime
+  reason              AvailabilityReason
   /// Si null → bloque completo (vacación). Si 0-100 → jornada reducida.
   reducedHoursPercent Int?
-  notes     String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  notes               String?
+  createdAt           DateTime           @default(now())
+  updatedAt           DateTime           @updatedAt
 
   @@index([userId, startDate, endDate])
 }
@@ -2739,17 +2772,17 @@ enum AvailabilityReason {
 /// regresión en CPM/Gantt. Esta tabla nueva es leída por el motor de
 /// portfolio para grafos cross-project + alertas de propagación.
 model CrossProjectDependency {
-  id            String   @id @default(uuid())
-  sourceTaskId  String
-  sourceTask    Task     @relation("CrossDepSource", fields: [sourceTaskId], references: [id], onDelete: Cascade)
-  targetTaskId  String
-  targetTask    Task     @relation("CrossDepTarget", fields: [targetTaskId], references: [id], onDelete: Cascade)
-  type          DependencyType
-  lagDays       Int      @default(0)
-  notes         String?
-  createdById   String?
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  id           String         @id @default(uuid())
+  sourceTaskId String
+  sourceTask   Task           @relation("CrossDepSource", fields: [sourceTaskId], references: [id], onDelete: Cascade)
+  targetTaskId String
+  targetTask   Task           @relation("CrossDepTarget", fields: [targetTaskId], references: [id], onDelete: Cascade)
+  type         DependencyType
+  lagDays      Int            @default(0)
+  notes        String?
+  createdById  String?
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
 
   @@unique([sourceTaskId, targetTaskId])
   @@index([sourceTaskId])
@@ -2785,25 +2818,25 @@ model ResourceAllocationSnapshot {
 /// Mantiene el inventario de stakeholders del proyecto con su matriz
 /// de poder/interés/influencia para diseñar engagement strategies.
 model Stakeholder {
-  id            String           @id @default(uuid())
-  projectId     String
-  project       Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  name          String
-  organization  String?
-  email         String?
+  id                 String               @id @default(uuid())
+  projectId          String
+  project            Project              @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  name               String
+  organization       String?
+  email              String?
   /// Rol PMBOK: Sponsor / Customer / Team / Vendor / Regulator / Other
-  role          String
+  role               String
   /// Matriz poder/interés/influencia.
-  power         StakeholderLevel @default(MEDIUM)
-  interest      StakeholderLevel @default(MEDIUM)
-  influence     StakeholderInfluence @default(NEUTRAL)
-  expectations  String?
+  power              StakeholderLevel     @default(MEDIUM)
+  interest           StakeholderLevel     @default(MEDIUM)
+  influence          StakeholderInfluence @default(NEUTRAL)
+  expectations       String?
   /// Estrategia de engagement: Manage Closely / Keep Satisfied /
   /// Keep Informed / Monitor.
   engagementStrategy String?
-  notes         String?
-  createdAt     DateTime         @default(now())
-  updatedAt     DateTime         @updatedAt
+  notes              String?
+  createdAt          DateTime             @default(now())
+  updatedAt          DateTime             @updatedAt
 
   @@index([projectId])
   @@index([projectId, power, interest])
@@ -2826,30 +2859,30 @@ enum StakeholderInfluence {
 /// Captura solicitudes de cambio de scope/schedule/cost con análisis
 /// de impacto y workflow de aprobación.
 model ChangeRequest {
-  id              String              @id @default(uuid())
-  projectId       String
-  project         Project             @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  id        String  @id @default(uuid())
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
-  title           String
-  description     String
-  rationale       String?
+  title       String
+  description String
+  rationale   String?
 
-  requestedById   String
-  requestedBy     User                @relation("ChangeRequestRequester", fields: [requestedById], references: [id], onDelete: Restrict)
+  requestedById String
+  requestedBy   User   @relation("ChangeRequestRequester", fields: [requestedById], references: [id], onDelete: Restrict)
 
   /// Análisis de impacto en las 4 dimensiones triple-restricción + calidad.
-  impactScope     ChangeImpactLevel   @default(NONE)
-  impactSchedule  ChangeImpactLevel   @default(NONE)
-  impactCost      ChangeImpactLevel   @default(NONE)
-  impactQuality   ChangeImpactLevel   @default(NONE)
-  estimatedCostDelta         Decimal? @db.Decimal(14, 2)
+  impactScope                ChangeImpactLevel @default(NONE)
+  impactSchedule             ChangeImpactLevel @default(NONE)
+  impactCost                 ChangeImpactLevel @default(NONE)
+  impactQuality              ChangeImpactLevel @default(NONE)
+  estimatedCostDelta         Decimal?          @db.Decimal(14, 2)
   estimatedScheduleDeltaDays Int?
 
-  status          ChangeRequestStatus @default(SUBMITTED)
-  decidedAt       DateTime?
-  decidedById     String?
-  decidedBy       User?               @relation("ChangeRequestApprover", fields: [decidedById], references: [id], onDelete: SetNull)
-  decisionNotes   String?
+  status        ChangeRequestStatus @default(SUBMITTED)
+  decidedAt     DateTime?
+  decidedById   String?
+  decidedBy     User?               @relation("ChangeRequestApprover", fields: [decidedById], references: [id], onDelete: SetNull)
+  decisionNotes String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -2877,15 +2910,15 @@ enum ChangeImpactLevel {
 /// Wave P11-PMI (HU-12.4) — Procurement Management · Vendor.
 /// Catálogo de proveedores reusable cross-project.
 model Vendor {
-  id           String   @id @default(uuid())
-  workspaceId  String?
-  workspace    Workspace? @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
-  name         String
+  id            String     @id @default(uuid())
+  workspaceId   String?
+  workspace     Workspace? @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
+  name          String
   contactPerson String?
-  contactEmail String?
-  taxId        String?
-  notes        String?
-  isActive     Boolean  @default(true)
+  contactEmail  String?
+  taxId         String?
+  notes         String?
+  isActive      Boolean    @default(true)
 
   contracts      Contract[]
   purchaseOrders PurchaseOrder[]
@@ -2899,20 +2932,20 @@ model Vendor {
 /// Wave P11-PMI (HU-12.4) — Procurement Management · Contract.
 /// Tipos PMBOK: FFP, CPFF, T&M, CR.
 model Contract {
-  id            String         @id @default(uuid())
-  vendorId      String
-  vendor        Vendor         @relation(fields: [vendorId], references: [id], onDelete: Restrict)
-  projectId     String?
-  project       Project?       @relation(fields: [projectId], references: [id], onDelete: SetNull)
-  title         String
-  contractType  ContractType   @default(FFP)
-  totalValue    Decimal?       @db.Decimal(14, 2)
-  currency      String         @default("USD")
-  startDate     DateTime?
-  endDate       DateTime?
-  status        ContractStatus @default(DRAFT)
-  description   String?
-  documentUrl   String?
+  id           String         @id @default(uuid())
+  vendorId     String
+  vendor       Vendor         @relation(fields: [vendorId], references: [id], onDelete: Restrict)
+  projectId    String?
+  project      Project?       @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  title        String
+  contractType ContractType   @default(FFP)
+  totalValue   Decimal?       @db.Decimal(14, 2)
+  currency     String         @default("USD")
+  startDate    DateTime?
+  endDate      DateTime?
+  status       ContractStatus @default(DRAFT)
+  description  String?
+  documentUrl  String?
 
   purchaseOrders PurchaseOrder[]
 
@@ -2924,10 +2957,10 @@ model Contract {
 }
 
 enum ContractType {
-  FFP    // Firm Fixed Price
-  CPFF   // Cost Plus Fixed Fee
-  TM     // Time and Materials
-  CR     // Cost Reimbursable
+  FFP // Firm Fixed Price
+  CPFF // Cost Plus Fixed Fee
+  TM // Time and Materials
+  CR // Cost Reimbursable
 }
 
 enum ContractStatus {
@@ -2940,22 +2973,22 @@ enum ContractStatus {
 /// Wave P11-PMI (HU-12.4) — Procurement Management · Purchase Order.
 /// Order placed against Vendor (con o sin Contract paraguas).
 model PurchaseOrder {
-  id              String     @id @default(uuid())
-  vendorId        String
-  vendor          Vendor     @relation(fields: [vendorId], references: [id], onDelete: Restrict)
-  contractId      String?
-  contract        Contract?  @relation(fields: [contractId], references: [id], onDelete: SetNull)
-  projectId       String?
-  project         Project?   @relation(fields: [projectId], references: [id], onDelete: SetNull)
-  poNumber        String     @unique
-  description     String
-  amount          Decimal    @db.Decimal(14, 2)
-  currency        String     @default("USD")
-  issuedAt        DateTime   @default(now())
+  id                 String    @id @default(uuid())
+  vendorId           String
+  vendor             Vendor    @relation(fields: [vendorId], references: [id], onDelete: Restrict)
+  contractId         String?
+  contract           Contract? @relation(fields: [contractId], references: [id], onDelete: SetNull)
+  projectId          String?
+  project            Project?  @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  poNumber           String    @unique
+  description        String
+  amount             Decimal   @db.Decimal(14, 2)
+  currency           String    @default("USD")
+  issuedAt           DateTime  @default(now())
   expectedDeliveryAt DateTime?
-  receivedAt      DateTime?
-  status          POStatus   @default(DRAFT)
-  notes           String?
+  receivedAt         DateTime?
+  status             POStatus  @default(DRAFT)
+  notes              String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -2971,4 +3004,187 @@ enum POStatus {
   PARTIALLY_RECEIVED
   RECEIVED
   CANCELLED
+}
+
+// ═════════════════════════════════════════════════════════════════════
+// Wave P12 · Final Compliance (Scrum 100% + PMI dashboards visibles)
+// ═════════════════════════════════════════════════════════════════════
+
+/// Wave P12 (Scrum 100%) — Impediments tracker.
+/// Bloqueos detectados en el Daily Scrum o cualquier ceremonia que
+/// impiden al equipo avanzar. Property del Scrum Master, escalables
+/// fuera del equipo cuando exceden su capacidad de resolución.
+model Impediment {
+  id       String @id @default(uuid())
+  sprintId String
+  sprint   Sprint @relation(fields: [sprintId], references: [id], onDelete: Cascade)
+
+  raisedById String?
+  raisedBy   User?   @relation("ImpedimentRaiser", fields: [raisedById], references: [id], onDelete: SetNull)
+  ownerId    String?
+  owner      User?   @relation("ImpedimentOwner", fields: [ownerId], references: [id], onDelete: SetNull)
+
+  title           String
+  description     String?
+  severity        ImpedimentSeverity @default(MEDIUM)
+  status          ImpedimentStatus   @default(OPEN)
+  raisedAt        DateTime           @default(now())
+  resolvedAt      DateTime?
+  resolutionNotes String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([sprintId, status])
+}
+
+enum ImpedimentSeverity {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum ImpedimentStatus {
+  OPEN
+  IN_PROGRESS
+  RESOLVED
+  ESCALATED
+}
+
+/// Wave P12 (Scrum 100%) — Daily Scrum session.
+/// Captura del sync diario en formato 3 preguntas (Did / Will do /
+/// Blockers). Permite al PO/SM revisar tendencias y picos de blockers.
+model DailyScrum {
+  id       String @id @default(uuid())
+  sprintId String
+  sprint   Sprint @relation(fields: [sprintId], references: [id], onDelete: Cascade)
+
+  facilitatorId String?
+  facilitator   User?   @relation("DailyScrumFacilitator", fields: [facilitatorId], references: [id], onDelete: SetNull)
+
+  scheduledFor DateTime @default(now())
+  /// Shape: { entries: [{ userId, did: string, willDo: string, blockers: string }] }
+  data         Json?
+  notes        String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([sprintId, scheduledFor])
+}
+
+/// Wave P12 (Scrum 100%) — Improvement Items (Retro Action Items
+/// con tracking cross-sprint). Permite saber si las acciones del
+/// retro de Sprint N realmente se cierran en N+1, N+2... métrica
+/// clave de madurez ágil.
+model ImprovementItem {
+  id        String  @id @default(uuid())
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  retrospectiveId String?
+  retrospective   Retrospective? @relation(fields: [retrospectiveId], references: [id], onDelete: SetNull)
+
+  ownerId String?
+  owner   User?   @relation("ImprovementOwner", fields: [ownerId], references: [id], onDelete: SetNull)
+
+  title       String
+  description String?
+  status      ImprovementStatus @default(OPEN)
+  dueDate     DateTime?
+  closedAt    DateTime?
+  closeNotes  String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([projectId, status])
+}
+
+enum ImprovementStatus {
+  OPEN
+  IN_PROGRESS
+  DONE
+  CANCELLED
+}
+
+/// Wave P12 (PMI 100%) — Lessons Learned repository.
+/// Repositorio centralizado de lecciones aprendidas para
+/// proceso de mejora continua organizacional (PMBOK 7 — Knowledge
+/// Management). Visibilidad escalable: PROJECT → WORKSPACE → ORG.
+model LessonLearned {
+  id        String  @id @default(uuid())
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  capturedById String?
+  capturedBy   User?   @relation("LessonCapturer", fields: [capturedById], references: [id], onDelete: SetNull)
+
+  title          String
+  category       LessonCategory   @default(PROCESS)
+  context        String
+  whatHappened   String
+  rootCause      String?
+  recommendation String
+  /// Tags / áreas / fases relevantes (string libre, separable por comas).
+  appliesTo      String?
+  visibility     LessonVisibility @default(WORKSPACE)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([projectId])
+  @@index([category])
+  @@index([visibility])
+}
+
+enum LessonCategory {
+  PROCESS
+  TECHNICAL
+  PEOPLE
+  TOOLS
+  RISK
+  QUALITY
+  COMMUNICATIONS
+  OTHER
+}
+
+enum LessonVisibility {
+  PROJECT
+  WORKSPACE
+  ORG
+}
+
+/// Wave P12 (PMI 100%) — EVM Snapshots para S-curve dashboard.
+/// Series temporales de PV/EV/AC permiten visualizar la evolución
+/// del proyecto vs baseline (curva S clásica de PMBOK · Earned
+/// Value Management).
+model EVMSnapshot {
+  id        String  @id @default(uuid())
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  snapshotDate         DateTime @default(now())
+  /// PV = Planned Value (BCWS — Budgeted Cost of Work Scheduled).
+  plannedValue         Decimal  @db.Decimal(14, 2)
+  /// EV = Earned Value (BCWP — Budgeted Cost of Work Performed).
+  earnedValue          Decimal  @db.Decimal(14, 2)
+  /// AC = Actual Cost (ACWP — Actual Cost of Work Performed).
+  actualCost           Decimal  @db.Decimal(14, 2)
+  /// BAC snapshotted para tracking de cambios al budget.
+  budgetAtCompletion   Decimal? @db.Decimal(14, 2)
+  /// CPI = EV / AC.
+  cpi                  Float?
+  /// SPI = EV / PV.
+  spi                  Float?
+  /// EAC = BAC / CPI (estimación al cierre).
+  estimateAtCompletion Decimal? @db.Decimal(14, 2)
+  /// VAC = BAC - EAC.
+  varianceAtCompletion Decimal? @db.Decimal(14, 2)
+  notes                String?
+
+  createdAt DateTime @default(now())
+
+  @@index([projectId, snapshotDate])
 }

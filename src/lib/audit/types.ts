@@ -107,6 +107,28 @@ export const KNOWN_AUDIT_ACTIONS = [
   'cross_dependency.removed',
   // Wave P10 (HU-10.7) — Resource allocation snapshot refresh
   'allocation.snapshot_refreshed',
+  // Wave P12 (Scrum 100%) — Impediments
+  'impediment.created',
+  'impediment.updated',
+  'impediment.resolved',
+  'impediment.escalated',
+  // Wave P12 (Scrum 100%) — Daily Scrum
+  'daily_scrum.created',
+  'daily_scrum.updated',
+  // Wave P12 (Scrum 100%) — Improvement items
+  'improvement.created',
+  'improvement.updated',
+  'improvement.completed',
+  // Wave P12 (Scrum 100%) — DoD HARD enforcement
+  'project.dod_hard_toggled',
+  // Wave P12 (PMI 100%) — Lessons Learned
+  'lesson.created',
+  'lesson.updated',
+  'lesson.deleted',
+  // Wave P12 (PMI 100%) — EVM Snapshot
+  'evm.snapshot_captured',
+  // Wave P12 (PMI 100%) — Communications Plan
+  'project.comms_plan_updated',
   // Usuario / sesión
   'user.login',
   'user.logout',
@@ -192,6 +214,21 @@ export const ACTION_LABELS: Record<AuditAction, string> = {
   'cross_dependency.updated': 'Dependencia cross-project actualizada',
   'cross_dependency.removed': 'Dependencia cross-project eliminada',
   'allocation.snapshot_refreshed': 'Snapshot de allocation refrescado',
+  'impediment.created': 'Impediment registrado',
+  'impediment.updated': 'Impediment actualizado',
+  'impediment.resolved': 'Impediment resuelto',
+  'impediment.escalated': 'Impediment escalado',
+  'daily_scrum.created': 'Daily Scrum registrado',
+  'daily_scrum.updated': 'Daily Scrum actualizado',
+  'improvement.created': 'Improvement creado',
+  'improvement.updated': 'Improvement actualizado',
+  'improvement.completed': 'Improvement cerrado',
+  'project.dod_hard_toggled': 'DoD HARD enforcement cambiado',
+  'lesson.created': 'Lesson Learned capturada',
+  'lesson.updated': 'Lesson Learned actualizada',
+  'lesson.deleted': 'Lesson Learned eliminada',
+  'evm.snapshot_captured': 'EVM snapshot capturado',
+  'project.comms_plan_updated': 'Communications Plan actualizado',
   'user.login': 'Inicio de sesión',
   'user.logout': 'Cierre de sesión',
   'user.password_changed': 'Contraseña cambiada',
