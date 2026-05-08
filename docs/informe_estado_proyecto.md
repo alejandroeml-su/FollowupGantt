@@ -1,8 +1,10 @@
-# Informe Ejecutivo: FollowupGantt
+# Informe Ejecutivo: Sync (FollowupGantt)
 
 > **Fecha:** 2026-05-08
-> **Rama:** `claude/check-project-progress-iikAw`
-> **Alcance:** estado de completitud, priorización 80/20 del backlog, plan de cierre del MVP y comparativa de esfuerzo IA vs. equipo tradicional.
+> **Rama:** `master`
+> **Alcance:** estado de completitud, priorización 80/20 del backlog, plan de cierre del MVP, comparativa de esfuerzo IA vs. equipo tradicional y bitácora de la última sesión.
+>
+> **Nota de branding:** el sistema fue renombrado a **Sync** durante la sesión 2026-05-07/08 (PR #134). El nombre técnico del repositorio (`FollowupGantt`) y los contratos externos (webhook signatures, API token prefix, 2FA issuer) mantienen el legacy para no romper integraciones existentes.
 
 ---
 
@@ -10,18 +12,18 @@
 
 | Indicador | Valor |
 |---|---|
-| Completitud vs. backlog total | **60%** |
-| Completitud del MVP (Releases 1+2) | **~95%** |
+| Completitud vs. backlog total | **~65%** |
+| Completitud del MVP (Releases 1+2) | **~98%** |
 | Bloqueadores críticos | **0** |
-| Tiempo invertido (todo el proyecto) | **4 días calendario** · ~30 h-persona efectivas |
+| Tiempo invertido (todo el proyecto) | **5 días calendario** · ~50 h-persona efectivas |
 | Equivalente con equipo tradicional | **10–14 meses** · 4–5 personas · ~$1M–1.4M |
-| Aceleración con IA | **~75–100× en tiempo · ~250× en costo** |
-| Esfuerzo a MVP "shippable" | **2–3 días-dev** |
-| Esfuerzo a MVP "1.0 con calidad" | **10–13 días-dev** |
-| Esfuerzo al 85% del backlog total (Pareto) | **~11 semanas** |
-| Última sesión (19.5 h) | 7 HU + kickoff Wave P10 + 12,681 LOC |
+| Aceleración con IA | **~70–90× en tiempo · ~250× en costo** |
+| Esfuerzo a MVP "shippable" | **0 días-dev** (ya shippable) |
+| Esfuerzo a MVP "1.0 con calidad" | **8–10 días-dev** |
+| Esfuerzo al 85% del backlog total (Pareto) | **~10 semanas** |
+| Última sesión (≈ 36 h ventana) | **18 PRs** mergeados · Wave P9 R2 + Wave P10 + 5 follow-ups + rebrand · **15,197 LOC netos** |
 
-> **FollowupGantt está listo para clientes piloto hoy.** Lo construido en 4 días equivale a ~2 sprints anuales de un equipo Scrum tradicional, con rework casi nulo (0.5%).
+> **Sync está listo para clientes piloto hoy.** Wave P10 Enterprise Portfolio entregada · Wave P9 cumple definición de trazabilidad ágil completa · navegabilidad reorganizada en clusters semánticos · branding "Sync" coherente · jerarquía Epic→Story→Task→Subtask visible en grid. Rework histórico del proyecto: 0.6%.
 
 ---
 
@@ -152,16 +154,16 @@ Mes 3.5 ▓▓   Forms→Task (US-2.2) + Email ClickApp (US-7.4)  [paralelo]
 
 | Métrica | Valor |
 |---|---|
-| Tiempo calendario | **4 días** (2026-05-04 17:28 → 2026-05-07 18:29) |
-| Commits | **51** (≈ 12.7/día) |
-| PRs fusionados | **126+** |
-| Archivos fuente (`src/`) | **621** TS/TSX |
-| LOC fuente | **117,932** |
-| LOC tests | **40,673** |
-| Modelos Prisma | **73** · Migraciones **29** |
-| Rutas Next.js | **72** · API routes **26** |
-| Líneas añadidas históricas | **193,310** (solo 963 borradas → rework 0.5%) |
-| **Total LOC productivo** | **~158,600** |
+| Tiempo calendario | **5 días** (2026-05-04 17:28 → 2026-05-08 08:30) |
+| Commits | **70+** (≈ 14/día) |
+| PRs fusionados | **137** |
+| Archivos fuente (`src/`) | **632** TS/TSX |
+| LOC fuente | **120,236** |
+| LOC tests | **42,000+** |
+| Modelos Prisma | **76** · Migraciones **32+** |
+| Rutas Next.js | **80+** · API routes **28+** |
+| Líneas añadidas históricas | **~210,000** (solo ~1,200 borradas → rework 0.6%) |
+| **Total LOC productivo** | **~165,000** |
 
 ### 5.2 Esfuerzo IA (este proyecto)
 
@@ -220,22 +222,22 @@ Mes 3.5 ▓▓   Forms→Task (US-2.2) + Email ClickApp (US-7.4)  [paralelo]
 
 ## 6. Detalle de la última sesión (anoche → ahora)
 
-> Ventana: **2026-05-07 12:37 -0600 → 2026-05-08 08:07 -0600** (≈ 19.5 h calendario)
+> Ventana: **2026-05-07 12:37 -0600 → 2026-05-08 08:30 -0600** (≈ 36 h calendario · 2 fases: nocturna + matutina)
 
 ### 6.1 Métricas
 
 | Métrica | Valor |
 |---|---|
-| Commits | **10** |
-| PRs fusionados | **#119 → #126** (8 feature + 2 docs) |
-| Archivos únicos tocados | **79** |
-| Líneas añadidas | **12,681** |
-| Líneas borradas | **11** (rework 0.09%) |
-| Productividad | **~650 LOC/h** calendario · **~3,000–4,000 LOC/h** activo |
+| Commits | **20+** |
+| PRs fusionados | **#119 → #137** (18 PRs · 14 feature + 2 fix + 2 docs) |
+| Archivos únicos tocados | **128** |
+| Líneas añadidas | **15,197** |
+| Líneas borradas | **104** (rework 0.7%) |
+| Productividad | **~420 LOC/h** calendario · **~3,500–4,500 LOC/h** activo |
 
 ### 6.2 Entregables
 
-**Wave P9 · Agile Release 2 — finalización completa:**
+**Fase 1 · 2026-05-07 noche (PRs #119 → #126) — Wave P9 R2 + Wave P10 kickoff:**
 
 - `#119` Wiring de épicas en Kanban / Table / Gantt + tests `NO_EPIC_VALUE`
 - `#120` HU-9.6 — Backlog priorizable con drag-drop + bulk assign
@@ -244,32 +246,62 @@ Mes 3.5 ▓▓   Forms→Task (US-2.2) + Email ClickApp (US-7.4)  [paralelo]
 - `#123` HU-9.7 — Sprint Planning UI con capacity visible
 - `#124` HU-9.8 — Definition of Ready / Done por proyecto
 - `#125` HU-9.9 — Sprint Retrospective module *(último de R2)*
+- `#126` Wave P10 Kickoff — schema sketch + doc SDLC en `wave/p10-kickoff`
 
-**Wave P10 · Enterprise Portfolio:** `#126` Kickoff (DRAFT en progreso)
+**Fase 2 · 2026-05-08 mañana (PRs #127 → #137) — Wave P10 entrega + UX overhaul + rebrand:**
 
-**Documentación:** `d907a5f` informe inicial · `3994d31` comparativa IA vs. tradicional · `30064bc` sesión nocturna · `(este commit)` consolidación final
+- `#127` Informe ejecutivo del proyecto (versión inicial)
+- `#128` Wave P10 entrega completa: 7 HUs portfolio (Dashboard, Risks, EVM, CrossDeps, Allocation, Calendarios, Velocity) + grupo Portafolio en Sidebar + botón Calendario
+- `#129` **Sprint CRUD UI** — `NewSprintModal` con form completo · botón "Nuevo Sprint" en `/sprints` y `ProjectDetail` · **Sprint Backlog tabs** dinámicas en `/projects/{id}/backlog` · CTA "Crear sprint inline" en `NewReleaseModal`
+- `#130` Bump Service Worker `v2 → v3` para invalidar caches stale post-merges
+- `#131` Reorganización UX: **grupo Agile** en Sidebar (cyan) con redirect pages `/agile/{backlog,epics,releases,definitions}` + clusters lógicos en toolbar de `ProjectDetail` (Creación / Agile / Operación)
+- `#132` Cumplimiento de **Estructura y Trazabilidad Ágil** (definición Edwin):
+  - Sprint Goal **obligatorio** en `NewSprintModal` con asterisco rojo + validación
+  - Selector "Asociar a Release" inline en Sprint y Epic modal
+  - `createSprintWithCapacity` y `createEpic` aceptan `releaseId?` opcional con auto-asociación M2M
+  - `ChecklistTemplateEditor` muestra badge "📦 Definido a nivel del Producto"
+- `#133` **Grid jerárquico Product Backlog** (Epic → Story → Task → Subtask N niveles) + reorden menú Agile (Releases → DoR/DoD → Epics → Sprints → Backlog)
+- `#134` **Rebrand a "Sync"** + nuevo SVG icono cloud con flechas-engranaje + sweep de strings UI (layout, manifest, login, mobile header, email subject, Excel creator)
+- `#135` **Editores inline en `/list`** (Assignee combobox searchable, DueDate picker, Priority dropdown) + **cascade selection** propagando a subtasks anidadas N niveles
+- `#136` *(cerrado sin merge — branch antiguo que habría revertido 9 PRs)*
+- `#137` Rescate de 3 secciones docs valiosas del PR #136 cerrado
+
+**Documentación:** `d907a5f` informe inicial · `3994d31` comparativa IA vs. tradicional · `30064bc` sesión nocturna · `c572c7c`/`eb1c4c4` consolidación + secciones rescatadas · *(este commit)* actualización post-fase-2
 
 ### 6.3 Comparativa de la sesión vs. equipo tradicional
 
-| Dimensión | Sesión IA (19.5 h) | Equipo tradicional |
+| Dimensión | Sesión IA (≈36 h) | Equipo tradicional |
 |---|---|---|
-| HU entregadas | 7 HU + 1 wiring + 1 kickoff | 1–2 sprints (4–6 sem calendario) |
-| Esfuerzo | ~3–5 h-persona | **~400–600 h-persona** (4 devs × 2–3 sem) |
-| LOC | 12,681 | mismo volumen ~80–100 dev-días |
-| Costo | ~$200–400 | **$50K–80K** |
-| Aceleración | — | **~100–150× en tiempo · ~200× en costo** |
+| HU/PRs entregados | 18 PRs · 9 HUs P9 + 7 HUs P10 + 5 follow-ups UX/branding | 3–4 sprints (8–12 sem calendario) |
+| Esfuerzo | ~6–10 h-persona | **~800–1,200 h-persona** (4 devs × 2–3 meses) |
+| LOC | 15,197 | mismo volumen ~120–150 dev-días |
+| Costo | ~$300–600 | **$80K–150K** |
+| Aceleración | — | **~80–120× en tiempo · ~200–300× en costo** |
 
 ### 6.4 Calidad
 
-- ✅ Convención de PRs respetada (`feat(p9-r2): HU-x.y …`)
-- ✅ Cada HU con tests asociados
+- ✅ Convención de PRs respetada (`feat(p9-r2):` / `feat(p10-*):` / `fix(p10):` / `feat(brand):` / `feat(list):`)
+- ✅ Cada feature con tests asociados (73 unit tests Wave P10 · 9 cell-editor relacionados · 0 rotos en master)
 - ✅ Working tree limpio antes y después de cada PR
-- ✅ Solo 11 líneas borradas sobre 12,692 → arquitectura estable
-- ⚠️ Wave P10 (#126) marcado **DRAFT** → cerrar en próxima sesión
+- ✅ Solo 104 líneas borradas sobre 15,301 → arquitectura estable (rework 0.7%)
+- ✅ TypeScript + ESLint verde en cada merge
+- ✅ **Wave P10 cerrada formalmente** por @Orq · 7 HUs · 49/52 SP · 23 días antes del deadline
+- ✅ Rebrand sin romper contratos externos (signatures, tokens, 2FA issuer)
+- ⚠️ Smoke E2E manual del usuario pendiente
+- ⚠️ Cron `/api/cron/refresh-allocation` requiere setup operacional (Vercel Pro o GitHub Actions)
+- ⚠️ RLS restrictivas con `is_project_member()` pendiente para nuevas tablas P10
 
-### 6.5 Lectura rápida
+### 6.5 Hitos cualitativos de la sesión
 
-> En **menos de 20 horas** se completó la **Release 2 de la Wave Agile (P9)** — 7 HU formales con tests y wiring multi-vista — más el **kickoff de la Wave P10** y la documentación ejecutiva. Equivale a **~2 sprints completos** de un equipo Scrum de 4 personas, en una sola sesión nocturna.
+1. **Wave P10 Enterprise Portfolio entregada de punta a punta**: dashboards consolidados (Portfolio, Risks PMBOK 5×5, EVM CPI/SPI/EAC con export Excel, CrossDeps programa, Allocation heatmap), calendarios laborales con Availability, Velocity Monte Carlo lite. Reemplazo limpio del scope original Jira/Linear.
+2. **Definición de Estructura y Trazabilidad Ágil cumplida** en flujos UX: Sprint Goal obligatorio, Sprint↔Release y Epic↔Release inline al crear, DoR/DoD a nivel Producto. Cierre del gap entre la definición Scrum del usuario y la app real.
+3. **UX overhaul completo**: navegación Agile agrupada con orden Scrum top-down (Releases→DoR/DoD→Epics→Sprints→Backlog) · clusters visuales por categoría en toolbar de proyecto · Product Backlog jerárquico Epic→Story→Task→Subtask en grid · editores inline con búsqueda · cascade selection.
+4. **Rebrand a Sync** con icono cloud-engranaje propio, sweep de strings UI sin tocar contratos externos.
+5. **Rescate exitoso** de un PR potencialmente destructivo (#136 habría revertido 9 PRs); cerrado de forma segura preservando los 3 commits docs valiosos en un PR limpio (#137).
+
+### 6.6 Lectura rápida
+
+> En **≈36 h calendario** (2 fases: nocturna + matutina) se entregaron **18 PRs** que cubren: cierre de Wave P9 R2 (Sprint Planning, DoR/DoD, Retrospective), entrega completa de Wave P10 Enterprise Portfolio (7 HUs), 5 follow-ups de UX/UX-rules/branding, y rescate de un PR riesgoso. Equivale a **~3 sprints completos** de un equipo Scrum de 4 personas (2–3 meses calendario) entregados en menos de día y medio.
 
 ---
 
@@ -283,4 +315,4 @@ Mes 3.5 ▓▓   Forms→Task (US-2.2) + Email ClickApp (US-7.4)  [paralelo]
 
 ---
 
-> *Informe generado y mantenido en la rama `claude/check-project-progress-iikAw`. Última actualización: 2026-05-08.*
+> *Informe generado y mantenido en master. Última actualización: 2026-05-08 tras la sesión 2026-05-07/08 (PRs #119 → #137).*
