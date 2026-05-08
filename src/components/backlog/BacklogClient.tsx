@@ -29,6 +29,9 @@ import {
   ChevronRight,
   CheckSquare,
   Square,
+  ListTree,
+  Rocket,
+  Target as TargetIcon,
 } from 'lucide-react'
 import {
   DndContext,
@@ -66,12 +69,30 @@ type SprintOption = {
 
 type EpicOption = { id: string; name: string; color: string }
 
+/**
+ * Wave P9 follow-up demo · Sprint Backlog tabs.
+ * Cada Sprint Backlog group trae su propio set de tasks ya asignadas al sprint.
+ */
+export type SprintBacklogGroup = {
+  sprintId: string
+  sprintName: string
+  sprintGoal: string | null
+  capacity: number | null
+  startDate: string | null
+  endDate: string | null
+  tasks: BacklogTask[]
+}
+
 type Props = {
   project: { id: string; name: string }
   initialBacklog: BacklogTask[]
   sprints: SprintOption[]
   epics: EpicOption[]
+  /** Wave P9 follow-up — Sprint Backlogs por tab. Si vacío, sólo Product Backlog. */
+  sprintBacklogs?: SprintBacklogGroup[]
 }
+
+type ActiveView = 'PRODUCT' | string // sprintId
 
 const PRIORITY_BADGE: Record<string, string> = {
   CRITICAL: 'bg-red-500/15 text-red-300 border-red-500/40',
@@ -85,12 +106,19 @@ export default function BacklogClient({
   initialBacklog,
   sprints,
   epics,
+  sprintBacklogs = [],
 }: Props) {
-  const [items, setItems] = useState(initialBacklog)
+  const [productBacklog, setProductBacklog] = useState(initialBacklog)
+  const [activeView, setActiveView] = useState<ActiveView>('PRODUCT')
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [priorityFilter, setPriorityFilter] = useState<string>('')
   const [epicFilter, setEpicFilter] = useState<string>('')
   const [isPending, startTransition] = useTransition()
+
+  // Source-of-truth de items según tab activa.
+  const activeSprint = sprintBacklogs.find((s) => s.sprintId === activeView) ?? null
+  const items = activeView === 'PRODUCT' ? productBacklog : activeSprint?.tasks ?? []
+  const isProductBacklog = activeView === 'PRODUCT'
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
@@ -128,14 +156,17 @@ export default function BacklogClient({
   }
 
   function handleDragEnd(e: DragEndEvent) {
+    // Drag-drop sólo persiste en Product Backlog (reorderBacklog asume sprintId=null).
+    // En Sprint Backlogs el reorder vive en el board del sprint (futuro).
+    if (!isProductBacklog) return
     const { active, over } = e
     if (!over || active.id === over.id) return
-    const from = items.findIndex((t) => t.id === active.id)
-    const to = items.findIndex((t) => t.id === over.id)
+    const from = productBacklog.findIndex((t) => t.id === active.id)
+    const to = productBacklog.findIndex((t) => t.id === over.id)
     if (from < 0 || to < 0) return
 
-    const next = arrayMove(items, from, to)
-    setItems(next) // optimistic
+    const next = arrayMove(productBacklog, from, to)
+    setProductBacklog(next) // optimistic
 
     startTransition(async () => {
       try {
@@ -144,7 +175,7 @@ export default function BacklogClient({
           orderedTaskIds: next.map((t) => t.id),
         })
       } catch (err) {
-        setItems(items) // rollback
+        setProductBacklog(productBacklog) // rollback
         toast.error(err instanceof Error ? err.message : 'Error al reordenar')
       }
     })
@@ -158,8 +189,12 @@ export default function BacklogClient({
       try {
         const r = await bulkAssignToSprint({ taskIds: ids, sprintId })
         toast.success(`${r.count} tarea${r.count === 1 ? '' : 's'} movida${r.count === 1 ? '' : 's'} al sprint`)
-        // Optimistic: remover del backlog local.
-        setItems((prev) => prev.filter((t) => !selected.has(t.id)))
+        // Optimistic: remover del Product Backlog local. Para Sprint
+        // Backlogs el server action revalida el path → router.refresh()
+        // recargará el snapshot del sprint.
+        if (isProductBacklog) {
+          setProductBacklog((prev) => prev.filter((t) => !selected.has(t.id)))
+        }
         setSelected(new Set())
       } catch (err) {
         toast.error(err instanceof Error ? err.message : 'Error al asignar')
@@ -169,21 +204,98 @@ export default function BacklogClient({
 
   return (
     <>
-      <header className="flex shrink-0 items-center justify-between border-b border-border bg-card px-6 py-4">
+      <header className="flex shrink-0 items-start justify-between border-b border-border bg-card px-6 py-4">
         <div>
           <Link
-            href={`/projects/${project.id}/epics`}
+            href={`/projects/${project.id}`}
             className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
           >
             <ArrowLeft className="h-3 w-3" /> {project.name}
           </Link>
           <h1 className="mt-1 text-xl font-bold text-foreground">
-            Backlog priorizable
+            {isProductBacklog
+              ? 'Product Backlog'
+              : `Sprint Backlog · ${activeSprint?.sprintName ?? ''}`}
           </h1>
           <p className="mt-0.5 text-xs text-muted-foreground">
-            Stories sin sprint, ordenadas por prioridad. Arrastra para reordenar
-            y selecciona varias para mover a un sprint en bloque.
+            {isProductBacklog
+              ? 'Stories sin sprint, ordenadas por prioridad. Arrastra para reordenar y selecciona varias para mover a un sprint en bloque.'
+              : activeSprint?.sprintGoal
+                ? `🎯 ${activeSprint.sprintGoal}`
+                : 'Tareas comprometidas en este sprint. Refinamiento desde Sprint Planning.'}
           </p>
+          {/* Tab strip Product Backlog | Sprint Backlogs */}
+          <div
+            role="tablist"
+            aria-label="Vistas de backlog"
+            className="mt-3 flex flex-wrap gap-1.5"
+          >
+            <button
+              type="button"
+              role="tab"
+              aria-selected={isProductBacklog}
+              onClick={() => {
+                setActiveView('PRODUCT')
+                setSelected(new Set())
+              }}
+              className={clsx(
+                'inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium transition-colors',
+                isProductBacklog
+                  ? 'bg-indigo-500/15 text-indigo-300 border border-indigo-500/40'
+                  : 'border border-border bg-input/40 text-muted-foreground hover:bg-input',
+              )}
+            >
+              <ListTree className="h-3 w-3" />
+              Product Backlog
+              <span className="rounded bg-indigo-500/20 px-1.5 text-[10px] font-bold">
+                {productBacklog.length}
+              </span>
+            </button>
+            {sprintBacklogs.map((sb) => {
+              const isActive = activeView === sb.sprintId
+              return (
+                <button
+                  key={sb.sprintId}
+                  type="button"
+                  role="tab"
+                  aria-selected={isActive}
+                  onClick={() => {
+                    setActiveView(sb.sprintId)
+                    setSelected(new Set())
+                  }}
+                  className={clsx(
+                    'inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium transition-colors',
+                    isActive
+                      ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/40'
+                      : 'border border-border bg-input/40 text-muted-foreground hover:bg-input',
+                  )}
+                  title={
+                    sb.sprintGoal
+                      ? `${sb.sprintName} · 🎯 ${sb.sprintGoal}`
+                      : sb.sprintName
+                  }
+                >
+                  <Rocket className="h-3 w-3" />
+                  {sb.sprintName}
+                  <span
+                    className={clsx(
+                      'rounded px-1.5 text-[10px] font-bold',
+                      isActive
+                        ? 'bg-emerald-500/20'
+                        : 'bg-secondary/60',
+                    )}
+                  >
+                    {sb.tasks.length}
+                  </span>
+                  {sb.capacity != null && (
+                    <span className="text-[10px] opacity-70">
+                      / {sb.capacity} SP
+                    </span>
+                  )}
+                </button>
+              )
+            })}
+          </div>
         </div>
         <div className="flex items-center gap-3">
           {/* Wave P9 R2 (HU-9.7) — Sprint Planning UI dedicado para

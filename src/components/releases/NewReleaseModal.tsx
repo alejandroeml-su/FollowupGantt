@@ -11,8 +11,8 @@
  *   - Multi-select via checkboxes (más accesible que combobox custom).
  */
 
-import { useEffect, useState, useTransition } from 'react'
-import { X as CloseIcon, Sparkles, Rocket } from 'lucide-react'
+import { useEffect, useMemo, useState, useTransition } from 'react'
+import { X as CloseIcon, Sparkles, Rocket, Plus } from 'lucide-react'
 import { clsx } from 'clsx'
 import {
   createRelease,
@@ -20,6 +20,7 @@ import {
   setReleaseEpics,
   setReleaseSprints,
 } from '@/lib/actions/releases'
+import { NewSprintModal } from '@/components/sprints/NewSprintModal'
 import { toast } from '@/components/interactions/Toaster'
 
 type EpicOption = {
@@ -83,6 +84,15 @@ export function NewReleaseModal({
     new Set(initial?.selectedSprintIds ?? []),
   )
   const [isPending, startTransition] = useTransition()
+
+  // Wave P9 follow-up demo — sprints recién creados desde este modal,
+  // se mantienen locales hasta el siguiente refresh del padre.
+  const [extraSprints, setExtraSprints] = useState<SprintOption[]>([])
+  const [showSprintModal, setShowSprintModal] = useState(false)
+  const allSprints = useMemo(
+    () => [...sprints, ...extraSprints],
+    [sprints, extraSprints],
+  )
 
   useEffect(() => {
     if (!open) return
@@ -347,36 +357,49 @@ export function NewReleaseModal({
                     </label>
                   ))
                 )
-              ) : sprints.length === 0 ? (
-                <p className="py-3 text-center text-[11px] text-muted-foreground">
-                  No hay sprints activos en el proyecto.
-                </p>
               ) : (
-                sprints.map((s) => (
-                  <label
-                    key={s.id}
-                    className={clsx(
-                      'flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-sm transition-colors',
-                      selectedSprintIds.has(s.id)
-                        ? 'bg-indigo-500/10 text-foreground'
-                        : 'hover:bg-secondary',
-                    )}
+                <>
+                  {allSprints.length === 0 ? (
+                    <p className="py-3 text-center text-[11px] text-muted-foreground">
+                      No hay sprints activos. Crea uno con el botón de abajo.
+                    </p>
+                  ) : (
+                    allSprints.map((s) => (
+                      <label
+                        key={s.id}
+                        className={clsx(
+                          'flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-sm transition-colors',
+                          selectedSprintIds.has(s.id)
+                            ? 'bg-indigo-500/10 text-foreground'
+                            : 'hover:bg-secondary',
+                        )}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={selectedSprintIds.has(s.id)}
+                          onChange={() => toggleSprint(s.id)}
+                          className="h-4 w-4 cursor-pointer accent-indigo-500"
+                        />
+                        <span className="text-foreground">{s.name}</span>
+                        {s.startDate && s.endDate && (
+                          <span className="ml-auto text-[10px] text-muted-foreground">
+                            {new Date(s.startDate).toLocaleDateString()} →{' '}
+                            {new Date(s.endDate).toLocaleDateString()}
+                          </span>
+                        )}
+                      </label>
+                    ))
+                  )}
+                  {/* CTA crear sprint inline */}
+                  <button
+                    type="button"
+                    onClick={() => setShowSprintModal(true)}
+                    className="mt-1 flex w-full items-center justify-center gap-1.5 rounded border border-dashed border-indigo-500/40 bg-indigo-500/5 px-2 py-2 text-[11px] font-medium text-indigo-300 hover:bg-indigo-500/15"
                   >
-                    <input
-                      type="checkbox"
-                      checked={selectedSprintIds.has(s.id)}
-                      onChange={() => toggleSprint(s.id)}
-                      className="h-4 w-4 cursor-pointer accent-indigo-500"
-                    />
-                    <span className="text-foreground">{s.name}</span>
-                    {s.startDate && s.endDate && (
-                      <span className="ml-auto text-[10px] text-muted-foreground">
-                        {new Date(s.startDate).toLocaleDateString()} →{' '}
-                        {new Date(s.endDate).toLocaleDateString()}
-                      </span>
-                    )}
-                  </label>
-                ))
+                    <Plus className="h-3.5 w-3.5" />
+                    Crear nuevo sprint
+                  </button>
+                </>
               )}
             </div>
           </div>
@@ -401,6 +424,27 @@ export function NewReleaseModal({
           </button>
         </footer>
       </div>
+
+      {/* Sprint inline creation modal (overlay encima de Release modal) */}
+      <NewSprintModal
+        open={showSprintModal}
+        onClose={() => setShowSprintModal(false)}
+        projectId={projectId}
+        onSuccess={(newSprintId) => {
+          // Agregar a la lista local con datos placeholder y auto-seleccionar.
+          // El próximo refresh del padre traerá el detalle completo.
+          setExtraSprints((prev) => [
+            ...prev,
+            {
+              id: newSprintId,
+              name: 'Sprint recién creado',
+              startDate: null,
+              endDate: null,
+            },
+          ])
+          setSelectedSprintIds((prev) => new Set([...prev, newSprintId]))
+        }}
+      />
     </div>
   )
 }

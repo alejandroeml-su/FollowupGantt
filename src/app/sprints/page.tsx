@@ -25,6 +25,7 @@ import { computeVelocity } from '@/lib/agile/burndown'
 import SprintBoardClient from '@/components/sprints/SprintBoardClient'
 import SprintBacklog from '@/components/sprints/SprintBacklog'
 import VelocityChart from '@/components/sprints/VelocityChart'
+import { NewSprintButton } from '@/components/sprints/NewSprintButton'
 import { getServerT } from '@/lib/i18n/server'
 
 export const dynamic = 'force-dynamic'
@@ -114,6 +115,16 @@ export default async function SprintsPage() {
   return (
     <PageShell title={shellTitle} subtitle={shellSubtitle}>
       <div className="space-y-8">
+        {/* ── Header CTA ──────────────────────────────── */}
+        <div className="flex items-center justify-between">
+          <p className="text-xs text-muted-foreground">
+            {sprints.length} sprint{sprints.length === 1 ? '' : 's'} ·{' '}
+            {planningSprints.length} en planificación · {completedSprints.length}{' '}
+            completado{completedSprints.length === 1 ? '' : 's'}
+          </p>
+          <NewSprintButton projectId={projectId} />
+        </div>
+
         {/* ── Sprint activo ───────────────────────────── */}
         <section>
           <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-muted-foreground">
