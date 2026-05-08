@@ -60,6 +60,10 @@ export const KNOWN_AUDIT_ACTIONS = [
   // Wave P9 R2 (HU-9.8) — DoR/DoD por proyecto
   'project.dor_updated',
   'project.dod_updated',
+  // Wave P11-Scrum (HU-11.1) — Product Goal
+  'project.product_goal_updated',
+  // Wave P11-Scrum (HU-11.2) — Sprint Review
+  'sprint.reviewed',
   // Wave P9 R2 (HU-9.9) — Sprint Retrospective
   'retrospective.created',
   'retrospective.item_added',
@@ -129,6 +133,8 @@ export const ACTION_LABELS: Record<AuditAction, string> = {
   'release.scope_updated': 'Scope de Release actualizado',
   'project.dor_updated': 'Definition of Ready actualizada',
   'project.dod_updated': 'Definition of Done actualizada',
+  'project.product_goal_updated': 'Product Goal actualizado',
+  'sprint.reviewed': 'Sprint Review cerrado',
   'retrospective.created': 'Retrospectiva creada',
   'retrospective.item_added': 'Item agregado a retro',
   'retrospective.item_removed': 'Item eliminado de retro',
