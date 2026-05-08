@@ -9,6 +9,7 @@ import {
   GanttChart,
   Calendar as CalIcon,
   Table as TableIcon,
+  LineChart,
 } from 'lucide-react'
 import { hrefWithFilters, pickFilters } from '@/lib/filters'
 
@@ -16,6 +17,7 @@ const VIEWS = [
   { href: '/list', label: 'List', icon: LayoutList },
   { href: '/kanban', label: 'Kanban', icon: Kanban },
   { href: '/gantt', label: 'Gantt', icon: GanttChart },
+  { href: '/timeline', label: 'Timeline', icon: LineChart },
   { href: '/calendar', label: 'Calendar', icon: CalIcon },
   { href: '/table', label: 'Table', icon: TableIcon },
 ] as const
