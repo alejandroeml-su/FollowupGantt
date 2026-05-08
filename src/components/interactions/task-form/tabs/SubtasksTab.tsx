@@ -17,6 +17,7 @@ import {
   getSubtasks,
   toggleSubtaskDone,
 } from '@/lib/actions'
+import { useUIStore } from '@/lib/stores/ui'
 import { toast } from '../../Toaster'
 
 type Props = {
@@ -68,6 +69,10 @@ function initials(name: string | undefined | null): string {
 export function SubtasksTab({ task, users, initialSubtasks }: Props) {
   const inputId = useId()
   const isEditing = task !== null
+  // Wave P9 follow-up — click en nombre de subtarea abre su drawer (mismo
+  // patrón que list/kanban). Aplica recursivamente porque cada drawer
+  // muestra sus propias subtareas con este mismo componente.
+  const openDrawer = useUIStore((s) => s.openDrawer)
   const [rows, setRows] = useState<RowState[]>(() => {
     const seed = initialSubtasks ?? task?.subtasks ?? []
     return seed.map(toRow)
@@ -278,16 +283,22 @@ export function SubtasksTab({ task, users, initialSubtasks }: Props) {
               />
 
               <div className="flex flex-1 items-center gap-2 min-w-0">
-                <span
-                  className={`truncate text-sm ${
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    openDrawer(row.id)
+                  }}
+                  className={`truncate text-sm text-left flex-1 cursor-pointer rounded transition-colors hover:text-indigo-300 hover:underline focus:outline-none focus-visible:ring-1 focus-visible:ring-ring ${
                     isDone
                       ? 'line-through text-muted-foreground'
                       : 'text-foreground'
                   }`}
-                  title={row.title}
+                  title={`Abrir ${row.title}`}
+                  aria-label={`Abrir subtarea ${row.title}`}
                 >
                   {row.title}
-                </span>
+                </button>
                 {row.mnemonic && (
                   <span className="text-[10px] text-muted-foreground/80 font-mono shrink-0">
                     {row.mnemonic}
