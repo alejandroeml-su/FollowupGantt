@@ -129,7 +129,12 @@
       "portfolioRisks": "Riesgos consolidados",
       "portfolioFinance": "Costos & EVM",
       "portfolioDependencies": "Dependencias programa",
-      "portfolioAllocation": "Allocation equipo"
+      "portfolioAllocation": "Allocation equipo",
+      "agileSprints": "Sprints",
+      "agileBacklog": "Backlog",
+      "agileEpics": "Epics",
+      "agileReleases": "Releases / Roadmap",
+      "agileDefinitions": "DoR & DoD"
     },
     "menuClose": "Cerrar menú",
     "menuExpand": "Expandir menú",
