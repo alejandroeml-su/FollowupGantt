@@ -22,6 +22,7 @@ import { ProjectDocsSection } from '@/components/docs/ProjectDocsSection';
 import { ExportProjectButton } from '@/components/backup/ExportProjectButton';
 import { ImportProjectDialog } from '@/components/backup/ImportProjectDialog';
 import ProjectHeaderPresence from '@/components/projects/ProjectHeaderPresence';
+import { NewSprintButton } from '@/components/sprints/NewSprintButton';
 import type { CurrentUserPresence } from '@/lib/auth/get-current-user-presence';
 
 // Datos Mock con jerarquía
@@ -203,6 +204,12 @@ export default function ProjectDetailClient({ projectId, currentUser }: Props) {
             >
               <CalendarIcon className="h-4 w-4" /> Calendario
             </Link>
+            {/* Wave P9 follow-up — Crear nuevo sprint inline. */}
+            <NewSprintButton
+              projectId={projectId}
+              variant="outline"
+              label="Nuevo Sprint"
+            />
             {/* P3-3 · Backup/Restore: export full + import nuevo proyecto. */}
             <ExportProjectButton projectId={projectId} />
             <ImportProjectDialog />
