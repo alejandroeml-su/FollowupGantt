@@ -12,7 +12,7 @@ type PageProps = {
 export default async function ProjectEpicsPage({ params }: PageProps) {
   const { id: projectId } = await params
 
-  const [project, epics, users] = await Promise.all([
+  const [project, epics, users, releases] = await Promise.all([
     prisma.project.findUnique({
       where: { id: projectId },
       select: { id: true, name: true },
@@ -21,6 +21,12 @@ export default async function ProjectEpicsPage({ params }: PageProps) {
     prisma.user.findMany({
       select: { id: true, name: true },
       orderBy: { name: 'asc' },
+    }),
+    // Wave P9 follow-up — Releases activas para asociar la Epic al crear.
+    prisma.release.findMany({
+      where: { projectId, archivedAt: null, releasedDate: null },
+      select: { id: true, name: true, version: true, scopeMode: true },
+      orderBy: { plannedDate: 'asc' },
     }),
   ])
 
@@ -46,6 +52,7 @@ export default async function ProjectEpicsPage({ params }: PageProps) {
         project={project}
         epics={serializedEpics}
         users={users}
+        releases={releases}
       />
     </div>
   )

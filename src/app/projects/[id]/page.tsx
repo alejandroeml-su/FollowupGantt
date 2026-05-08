@@ -12,6 +12,7 @@
  */
 import ProjectDetailClient from '@/components/projects/ProjectDetailClient';
 import { getCurrentUserPresence } from '@/lib/auth/get-current-user-presence';
+import prisma from '@/lib/prisma';
 
 type PageProps = {
   params: Promise<{ id: string }>;
@@ -19,7 +20,27 @@ type PageProps = {
 
 export default async function ProjectDetailManagement({ params }: PageProps) {
   const { id } = await params;
-  const currentUser = await getCurrentUserPresence();
+  const [currentUser, sprintReleases] = await Promise.all([
+    getCurrentUserPresence(),
+    // Wave P9 follow-up — Releases con scopeMode=SPRINT activas para
+    // que el modal "Nuevo Sprint" pueda ofrecer asociación.
+    prisma.release.findMany({
+      where: {
+        projectId: id,
+        archivedAt: null,
+        releasedDate: null,
+        scopeMode: 'SPRINT',
+      },
+      select: { id: true, name: true, version: true, scopeMode: true },
+      orderBy: { plannedDate: 'asc' },
+    }),
+  ]);
 
-  return <ProjectDetailClient projectId={id} currentUser={currentUser} />;
+  return (
+    <ProjectDetailClient
+      projectId={id}
+      currentUser={currentUser}
+      sprintReleases={sprintReleases}
+    />
+  );
 }

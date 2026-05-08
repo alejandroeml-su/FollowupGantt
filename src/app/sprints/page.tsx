@@ -63,12 +63,30 @@ export default async function SprintsPage() {
   let sprints: Awaited<ReturnType<typeof getSprintsWithMetrics>> = []
   let backlog: Awaited<ReturnType<typeof getProjectBacklog>> = []
   let velocity: Awaited<ReturnType<typeof getVelocityHistory>> = []
+  let sprintReleases: Array<{
+    id: string
+    name: string
+    version: string
+    scopeMode: 'EPIC' | 'SPRINT'
+  }> = []
 
   try {
-    ;[sprints, backlog, velocity] = await Promise.all([
+    ;[sprints, backlog, velocity, sprintReleases] = await Promise.all([
       getSprintsWithMetrics(projectId),
       getProjectBacklog(projectId),
       getVelocityHistory(projectId, 10),
+      // Wave P9 follow-up — Releases activas con scopeMode=SPRINT para
+      // permitir asociar el sprint nuevo desde NewSprintModal.
+      prisma.release.findMany({
+        where: {
+          projectId,
+          archivedAt: null,
+          releasedDate: null,
+          scopeMode: 'SPRINT',
+        },
+        select: { id: true, name: true, version: true, scopeMode: true },
+        orderBy: { plannedDate: 'asc' },
+      }),
     ])
   } catch {
     // Migración pendiente: la columna `capacity` aún no existe ⇒ fallback.
@@ -122,7 +140,7 @@ export default async function SprintsPage() {
             {planningSprints.length} en planificación · {completedSprints.length}{' '}
             completado{completedSprints.length === 1 ? '' : 's'}
           </p>
-          <NewSprintButton projectId={projectId} />
+          <NewSprintButton projectId={projectId} releases={sprintReleases} />
         </div>
 
         {/* ── Sprint activo ───────────────────────────── */}

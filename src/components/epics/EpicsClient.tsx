@@ -38,6 +38,16 @@ type Props = {
   project: { id: string; name: string }
   epics: EpicSerialized[]
   users: { id: string; name: string }[]
+  /**
+   * Wave P9 follow-up — Releases del proyecto (con scopeMode=EPIC) para
+   * permitir asociar la Epic recién creada vía selector inline.
+   */
+  releases?: Array<{
+    id: string
+    name: string
+    version: string
+    scopeMode: 'EPIC' | 'SPRINT'
+  }>
 }
 
 const STATUS_CONFIG: Record<
@@ -50,7 +60,7 @@ const STATUS_CONFIG: Record<
   CANCELLED: { label: 'Cancelada', tone: 'bg-rose-500/15 text-rose-300' },
 }
 
-export default function EpicsClient({ project, epics, users }: Props) {
+export default function EpicsClient({ project, epics, users, releases = [] }: Props) {
   const [showNew, setShowNew] = useState(false)
   const [editing, setEditing] = useState<EpicSerialized | null>(null)
   const [archivingId, setArchivingId] = useState<string | null>(null)
@@ -203,6 +213,7 @@ export default function EpicsClient({ project, epics, users }: Props) {
         onClose={() => setShowNew(false)}
         projectId={project.id}
         users={users}
+        releases={releases}
       />
 
       {editing && (

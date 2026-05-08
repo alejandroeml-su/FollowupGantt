@@ -35,11 +35,25 @@ export type EpicModalInitial = {
   plannedEndDate?: string | null
 }
 
+export type EpicReleaseOption = {
+  id: string
+  name: string
+  version: string
+  scopeMode: 'EPIC' | 'SPRINT'
+}
+
 type Props = {
   open: boolean
   onClose: () => void
   projectId: string
   users?: { id: string; name: string }[]
+  /**
+   * Releases del proyecto. Si hay con scopeMode=EPIC, ofrecemos
+   * selector para asociar la Epic (regla ágil: Épicas se asignan a
+   * un Release según importancia).
+   */
+  releases?: EpicReleaseOption[]
+  defaultReleaseId?: string | null
   /** Si se pasa con `id`, es edit; sin id, es create. */
   initial?: EpicModalInitial
   onSuccess?: (epicId: string) => void
@@ -57,6 +71,8 @@ export function NewEpicModal({
   onClose,
   projectId,
   users = [],
+  releases = [],
+  defaultReleaseId,
   initial,
   onSuccess,
 }: Props) {
@@ -73,7 +89,11 @@ export function NewEpicModal({
   const [plannedEndDate, setPlannedEndDate] = useState(
     initial?.plannedEndDate ? initial.plannedEndDate.split('T')[0] : '',
   )
+  const [releaseId, setReleaseId] = useState(defaultReleaseId ?? '')
   const [isPending, startTransition] = useTransition()
+
+  // Solo Releases con scopeMode=EPIC pueden recibir epics.
+  const epicReleases = releases.filter((r) => r.scopeMode === 'EPIC')
 
   const isEdit = !!initial?.id
   const titleId = useId()
@@ -134,6 +154,7 @@ export function NewEpicModal({
             ownerId: ownerId || null,
             plannedStartDate: plannedStartDate || null,
             plannedEndDate: plannedEndDate || null,
+            releaseId: releaseId || null,
           })
           toast.success('Epic creada')
           onSuccess?.(epic.id)
@@ -294,6 +315,33 @@ export function NewEpicModal({
               />
             </div>
           </div>
+
+          {/* Selector Release · regla ágil "Épicas se asignan a un Release" */}
+          {!isEdit && epicReleases.length > 0 && (
+            <div className="space-y-1.5">
+              <label htmlFor="epic-release" className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                Asociar a Release
+              </label>
+              <select
+                id="epic-release"
+                value={releaseId}
+                onChange={(e) => setReleaseId(e.target.value)}
+                className="w-full rounded-md border border-border bg-input px-3 py-2 text-sm text-input-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-ring"
+              >
+                <option value="">— Sin Release (no recomendado) —</option>
+                {epicReleases.map((r) => (
+                  <option key={r.id} value={r.id}>
+                    {r.name} ({r.version})
+                  </option>
+                ))}
+              </select>
+              <p className="text-[10px] text-muted-foreground">
+                ✨ Definición ágil: las Épicas se asignan a un Release según
+                qué tan importantes sean. La asociación es opcional pero
+                recomendada para trazabilidad.
+              </p>
+            </div>
+          )}
         </div>
 
         <footer className="flex items-center justify-end gap-2 border-t border-border bg-subtle/50 px-5 py-3">

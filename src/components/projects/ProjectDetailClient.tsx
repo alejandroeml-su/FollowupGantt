@@ -60,9 +60,23 @@ interface MockTask { id: string; title: string; type: string; start: string; end
 type Props = {
   projectId: string;
   currentUser: CurrentUserPresence | null;
+  /**
+   * Wave P9 follow-up — Releases del proyecto con scopeMode=SPRINT
+   * para que el modal "Nuevo Sprint" pueda ofrecer asociación.
+   */
+  sprintReleases?: Array<{
+    id: string;
+    name: string;
+    version: string;
+    scopeMode: 'EPIC' | 'SPRINT';
+  }>;
 };
 
-export default function ProjectDetailClient({ projectId, currentUser }: Props) {
+export default function ProjectDetailClient({
+  projectId,
+  currentUser,
+  sprintReleases = [],
+}: Props) {
   const [tasks] = useState(initialTasks);
   const [dependencies] = useState(mockDependencies);
 
@@ -170,6 +184,7 @@ export default function ProjectDetailClient({ projectId, currentUser }: Props) {
                 projectId={projectId}
                 variant="solid"
                 label="Nuevo Sprint"
+                releases={sprintReleases}
               />
             </div>
 

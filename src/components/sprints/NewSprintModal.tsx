@@ -28,6 +28,13 @@ import { clsx } from 'clsx'
 import { createSprintWithCapacity } from '@/lib/actions/sprints'
 import { toast } from '@/components/interactions/Toaster'
 
+export type ReleaseOption = {
+  id: string
+  name: string
+  version: string
+  scopeMode: 'EPIC' | 'SPRINT'
+}
+
 type Props = {
   open: boolean
   onClose: () => void
@@ -36,6 +43,14 @@ type Props = {
   defaultStart?: string | null
   /** Pre-poblado opcional. Default = startDate + 14 días. */
   defaultEnd?: string | null
+  /**
+   * Releases con scopeMode=SPRINT del proyecto. Si hay alguna, se ofrece
+   * selector para asociar el sprint a una release (regla ágil: Sprints
+   * viven dentro de un Release).
+   */
+  releases?: ReleaseOption[]
+  /** Pre-selecciona una release (caller que sabe contexto). */
+  defaultReleaseId?: string | null
   onSuccess?: (sprintId: string) => void
 }
 
@@ -60,6 +75,8 @@ export function NewSprintModal({
   projectId,
   defaultStart,
   defaultEnd,
+  releases = [],
+  defaultReleaseId,
   onSuccess,
 }: Props) {
   const titleId = useId()
@@ -68,7 +85,14 @@ export function NewSprintModal({
   const [startDate, setStartDate] = useState(defaultStart ?? todayIso())
   const [endDate, setEndDate] = useState(defaultEnd ?? todayIso(14))
   const [capacity, setCapacity] = useState<string>('')
+  const [releaseId, setReleaseId] = useState<string>(defaultReleaseId ?? '')
   const [isPending, startTransition] = useTransition()
+
+  // Solo Releases con scopeMode=SPRINT pueden recibir sprints.
+  const sprintReleases = useMemo(
+    () => releases.filter((r) => r.scopeMode === 'SPRINT'),
+    [releases],
+  )
 
   // Reset al abrir/cerrar. Reset state syncronously when `open` changes
   // (no useEffect → cumple regla react-hooks/set-state-in-effect).
@@ -81,6 +105,7 @@ export function NewSprintModal({
       setStartDate(defaultStart ?? todayIso())
       setEndDate(defaultEnd ?? todayIso(14))
       setCapacity('')
+      setReleaseId(defaultReleaseId ?? '')
     }
   }
 
@@ -105,8 +130,10 @@ export function NewSprintModal({
   }, [open, isPending, onClose])
 
   const days = useMemo(() => diffDays(startDate, endDate), [startDate, endDate])
+  // Regla ágil: Sprint Goal obligatorio + nombre + rango válido.
   const valid =
     name.trim().length > 0 &&
+    goal.trim().length > 0 &&
     startDate &&
     endDate &&
     days != null &&
@@ -115,8 +142,16 @@ export function NewSprintModal({
   if (!open) return null
 
   const handleSubmit = () => {
-    if (!valid) {
-      toast.error('Completa nombre + fechas válidas (fin ≥ inicio)')
+    if (!name.trim()) {
+      toast.error('Nombre del sprint requerido')
+      return
+    }
+    if (!goal.trim()) {
+      toast.error('Sprint Goal requerido — cada sprint debe tener una meta clara')
+      return
+    }
+    if (!days || days <= 0) {
+      toast.error('Fechas inválidas (fin debe ser ≥ inicio)')
       return
     }
 
@@ -125,10 +160,11 @@ export function NewSprintModal({
         const result = await createSprintWithCapacity({
           name: name.trim(),
           projectId,
-          goal: goal.trim() || null,
+          goal: goal.trim(),
           startDate,
           endDate,
           capacity: capacity ? Number(capacity) : null,
+          releaseId: releaseId || null,
         })
         toast.success(`Sprint "${name.trim()}" creado`)
         onSuccess?.(result.id)
@@ -186,10 +222,10 @@ export function NewSprintModal({
             />
           </div>
 
-          {/* Goal */}
+          {/* Goal — OBLIGATORIO según definición ágil */}
           <div>
             <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-              Objetivo del sprint
+              Sprint Goal <span className="text-rose-400">*</span>
             </label>
             <textarea
               value={goal}
@@ -198,6 +234,10 @@ export function NewSprintModal({
               rows={2}
               className="mt-1 w-full resize-none rounded-md border border-border bg-input px-3 py-2 text-sm text-input-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-ring"
             />
+            <p className="mt-1 text-[10px] text-muted-foreground">
+              🎯 Cada Sprint debe tener una meta clara que diga para qué se está
+              trabajando.
+            </p>
           </div>
 
           {/* Fechas */}
@@ -257,6 +297,31 @@ export function NewSprintModal({
               Opcional · podrás ajustarlo después en Sprint Planning
             </p>
           </div>
+
+          {/* Selector Release · regla ágil "Sprints viven dentro de un Release" */}
+          {sprintReleases.length > 0 && (
+            <div>
+              <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                Asociar a Release
+              </label>
+              <select
+                value={releaseId}
+                onChange={(e) => setReleaseId(e.target.value)}
+                className="mt-1 w-full rounded-md border border-border bg-input px-3 py-2 text-sm text-input-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-ring"
+              >
+                <option value="">— Sin Release (no recomendado) —</option>
+                {sprintReleases.map((r) => (
+                  <option key={r.id} value={r.id}>
+                    {r.name} ({r.version})
+                  </option>
+                ))}
+              </select>
+              <p className="mt-1 text-[10px] text-muted-foreground">
+                🚀 Definición ágil: los Sprints viven dentro de un Release. La
+                asociación es opcional pero recomendada para trazabilidad.
+              </p>
+            </div>
+          )}
         </div>
 
         {/* Footer */}

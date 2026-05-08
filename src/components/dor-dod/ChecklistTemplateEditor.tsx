@@ -34,6 +34,11 @@ type Props = {
   projectId: string
   mode: 'DOR' | 'DOD'
   initial: string[]
+  /**
+   * Wave P9 follow-up — nombre del proyecto/producto para clarificar
+   * el alcance ("DoR/DoD se definen a nivel de Producto").
+   */
+  projectName?: string
 }
 
 const META = {
@@ -61,6 +66,7 @@ export function ChecklistTemplateEditor({
   projectId,
   mode,
   initial,
+  projectName,
 }: Props) {
   const meta = META[mode]
   const [items, setItems] = useState<string[]>(initial)
@@ -172,6 +178,12 @@ export function ChecklistTemplateEditor({
             <p className="mt-0.5 text-[11px] text-muted-foreground">
               {meta.subtitle}
             </p>
+            {projectName && (
+              <p className="mt-1 inline-flex items-center gap-1 rounded-full border border-indigo-500/30 bg-indigo-500/10 px-2 py-0.5 text-[10px] font-medium text-indigo-300">
+                📦 Definido a nivel del Producto:{' '}
+                <span className="font-semibold">{projectName}</span>
+              </p>
+            )}
           </div>
           <button
             type="button"
