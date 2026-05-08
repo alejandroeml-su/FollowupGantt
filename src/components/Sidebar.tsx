@@ -11,6 +11,7 @@ import {
   Bell, PenSquare, Brain, Scale, FileBarChart, Plug, FileSignature, Workflow,
   DatabaseBackup, UserPlus, Layers, ShieldAlert as ShieldAlertIcon,
   DollarSign, GitBranch, Users2, ListTree, Sparkles as SparklesIcon, CheckSquare,
+  LineChart,
   type LucideIcon
 } from 'lucide-react';
 import { clsx } from 'clsx';
@@ -60,6 +61,7 @@ const topRoutes: RouteItem[] = [
   { name: 'sidebar.dashboard', path: '/', icon: LayoutDashboard },
   { name: 'sidebar.items.list', path: '/list', icon: List },
   { name: 'sidebar.items.gantt', path: '/gantt', icon: CalendarDays },
+  { name: 'sidebar.items.timeline', path: '/timeline', icon: LineChart },
   { name: 'sidebar.items.calendar', path: '/calendar', icon: CalendarDays },
   { name: 'sidebar.items.table', path: '/table', icon: Table },
   { name: 'sidebar.items.mindmaps', path: '/mindmaps', icon: Network },

@@ -91,6 +91,7 @@
       "list": "Tasks",
       "kanban": "Kanban",
       "gantt": "Gantt",
+      "timeline": "Timeline",
       "calendar": "Calendar",
       "table": "Table",
       "mindmaps": "Mind Map",
