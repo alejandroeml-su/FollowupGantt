@@ -92,12 +92,18 @@ const menuGroups: RouteGroup[] = [
     label: 'sidebar.groups.agile',
     icon: Rocket,
     color: 'text-cyan-400',
+    // Orden Scrum/PMI top-down (planeación → ejecución):
+    //   1. Releases/Roadmap — qué se va a entregar y cuándo
+    //   2. DoR/DoD — criterios de calidad antes/después
+    //   3. Epics — bloques grandes que cumplen el roadmap
+    //   4. Sprints — iteraciones para ejecutar las epics
+    //   5. Backlog — lista priorizada de trabajo (Product + Sprint)
     routes: [
-      { name: 'sidebar.items.agileSprints', path: '/sprints', icon: Rocket },
-      { name: 'sidebar.items.agileBacklog', path: '/agile/backlog', icon: ListTree },
-      { name: 'sidebar.items.agileEpics', path: '/agile/epics', icon: SparklesIcon },
       { name: 'sidebar.items.agileReleases', path: '/agile/releases', icon: Rocket },
       { name: 'sidebar.items.agileDefinitions', path: '/agile/definitions', icon: CheckSquare },
+      { name: 'sidebar.items.agileEpics', path: '/agile/epics', icon: SparklesIcon },
+      { name: 'sidebar.items.agileSprints', path: '/sprints', icon: Rocket },
+      { name: 'sidebar.items.agileBacklog', path: '/agile/backlog', icon: ListTree },
     ],
   },
   // ── Estrategia (amber) ──────────────────────────────────────────

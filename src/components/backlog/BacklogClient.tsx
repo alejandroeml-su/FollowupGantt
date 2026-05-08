@@ -31,7 +31,6 @@ import {
   Square,
   ListTree,
   Rocket,
-  Target as TargetIcon,
 } from 'lucide-react'
 import {
   DndContext,
@@ -57,6 +56,7 @@ import {
   type BacklogTask,
 } from '@/lib/actions/backlog'
 import { EpicBadge } from '@/components/epics/EpicBadge'
+import { ProductBacklogTreeGrid } from './ProductBacklogTreeGrid'
 import { toast } from '@/components/interactions/Toaster'
 
 type SprintOption = {
@@ -83,6 +83,35 @@ export type SprintBacklogGroup = {
   tasks: BacklogTask[]
 }
 
+/**
+ * Wave P9 follow-up demo · árbol jerárquico Product Backlog.
+ * Cada task puede tener `children` (subtasks) recursivamente. Edwin pidió
+ * la vista por Epica → Story → Task → Subtask como grid.
+ */
+export type ProductBacklogTreeTask = {
+  id: string
+  mnemonic: string | null
+  title: string
+  description: string | null
+  status: string
+  priority: string
+  type: string
+  storyPoints: number | null
+  position: number
+  parentId: string | null
+  assignee: { id: string; name: string } | null
+  children: ProductBacklogTreeTask[]
+}
+
+export type ProductBacklogTreeGroup = {
+  epicId: string | null
+  epicName: string
+  epicColor: string
+  tasks: ProductBacklogTreeTask[]
+}
+
+export type ProductBacklogTreeData = ProductBacklogTreeGroup[]
+
 type Props = {
   project: { id: string; name: string }
   initialBacklog: BacklogTask[]
@@ -90,6 +119,11 @@ type Props = {
   epics: EpicOption[]
   /** Wave P9 follow-up — Sprint Backlogs por tab. Si vacío, sólo Product Backlog. */
   sprintBacklogs?: SprintBacklogGroup[]
+  /**
+   * Wave P9 follow-up — Product Backlog jerárquico (Epic > Story > Task > Subtask).
+   * Si se pasa, el tab "Product Backlog" muestra el grid en lugar de lista plana.
+   */
+  productTreeByEpic?: ProductBacklogTreeData
 }
 
 type ActiveView = 'PRODUCT' | string // sprintId
@@ -107,6 +141,7 @@ export default function BacklogClient({
   sprints,
   epics,
   sprintBacklogs = [],
+  productTreeByEpic,
 }: Props) {
   const [productBacklog, setProductBacklog] = useState(initialBacklog)
   const [activeView, setActiveView] = useState<ActiveView>('PRODUCT')
@@ -400,18 +435,29 @@ export default function BacklogClient({
         )}
       </div>
 
-      {/* Lista drag-drop */}
+      {/* Render condicional:
+          · Product Backlog: grid jerárquico Epic → Story → Task → Subtask
+            (Edwin demo · cumple definición ágil de visualización)
+          · Sprint Backlogs: lista plana (drag-drop tiene sentido aquí)
+          · Fallback Product Backlog sin tree data: lista plana legacy
+       */}
       <div className="flex-1 overflow-auto p-6">
-        {filtered.length === 0 ? (
+        {isProductBacklog && productTreeByEpic ? (
+          <ProductBacklogTreeGrid groups={productTreeByEpic} />
+        ) : filtered.length === 0 ? (
           <div className="mx-auto max-w-md rounded-xl border border-dashed border-border bg-card p-10 text-center">
             <h2 className="text-base font-semibold text-foreground">
               {items.length === 0
-                ? 'Backlog vacío'
+                ? isProductBacklog
+                  ? 'Product Backlog vacío'
+                  : 'Sprint Backlog vacío'
                 : 'Sin coincidencias'}
             </h2>
             <p className="mt-2 text-sm text-muted-foreground">
               {items.length === 0
-                ? 'No hay Stories sin sprint en este proyecto. Crea Tasks de tipo Story sin asignar a sprint y aparecerán aquí.'
+                ? isProductBacklog
+                  ? 'No hay Stories sin sprint en este proyecto. Crea Tasks de tipo Story sin asignar a sprint y aparecerán aquí.'
+                  : 'Aún no hay items asignados a este sprint. Mueve tasks desde el Product Backlog usando el bulk-assign.'
                 : 'Ajusta los filtros para ver las tareas del backlog.'}
             </p>
           </div>
