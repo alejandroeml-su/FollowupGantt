@@ -158,61 +158,78 @@ export default function ProjectDetailClient({ projectId, currentUser }: Props) {
                 projectId={projectId}
               />
             ) : null}
-            <button
-              onClick={() => { setSelectedParentId(null); setIsTaskModalOpen(true); }}
-              className="flex items-center gap-2 rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-500 shadow-lg shadow-indigo-500/20"
-            >
-              <Plus className="h-4 w-4" /> Crear Fase / Tarea
-            </button>
-            <button className="flex items-center gap-2 rounded-md bg-secondary px-4 py-2 text-sm font-medium text-foreground/90 hover:bg-secondary/80 border border-border">
-              <Settings className="h-4 w-4" /> Línea Base
-            </button>
-            {/* Wave P9 · Agile Maturity — acceso a Epics del proyecto. */}
-            <Link
-              href={`/projects/${projectId}/epics`}
-              className="flex items-center gap-2 rounded-md bg-secondary px-4 py-2 text-sm font-medium text-foreground/90 hover:bg-secondary/80 border border-border"
-            >
-              <Sparkles className="h-4 w-4" /> Epics
-            </Link>
-            {/* Wave P9 · Agile Maturity (HU-9.6) — Backlog priorizable. */}
-            <Link
-              href={`/projects/${projectId}/backlog`}
-              className="flex items-center gap-2 rounded-md bg-secondary px-4 py-2 text-sm font-medium text-foreground/90 hover:bg-secondary/80 border border-border"
-            >
-              <ListTree className="h-4 w-4" /> Backlog
-            </Link>
-            {/* Wave P9 · Agile Maturity (HU-9.4 + HU-9.5) — Releases / Roadmap. */}
-            <Link
-              href={`/projects/${projectId}/releases`}
-              className="flex items-center gap-2 rounded-md bg-secondary px-4 py-2 text-sm font-medium text-foreground/90 hover:bg-secondary/80 border border-border"
-            >
-              <Rocket className="h-4 w-4" /> Releases
-            </Link>
-            {/* Wave P9 R2 (HU-9.8) — Definitions of Ready & Done. */}
-            <Link
-              href={`/projects/${projectId}/definitions`}
-              className="flex items-center gap-2 rounded-md bg-secondary px-4 py-2 text-sm font-medium text-foreground/90 hover:bg-secondary/80 border border-border"
-              title="Definitions of Ready & Done"
-            >
-              <CheckSquare className="h-4 w-4" /> DoR/DoD
-            </Link>
-            {/* Wave P10 (HU-10.2) — Calendario laboral del proyecto. */}
-            <Link
-              href={`/projects/${projectId}/calendar`}
-              className="flex items-center gap-2 rounded-md bg-secondary px-4 py-2 text-sm font-medium text-foreground/90 hover:bg-secondary/80 border border-border"
-              title="Calendario laboral + agenda equipo"
-            >
-              <CalendarIcon className="h-4 w-4" /> Calendario
-            </Link>
-            {/* Wave P9 follow-up — Crear nuevo sprint inline. */}
-            <NewSprintButton
-              projectId={projectId}
-              variant="outline"
-              label="Nuevo Sprint"
-            />
-            {/* P3-3 · Backup/Restore: export full + import nuevo proyecto. */}
-            <ExportProjectButton projectId={projectId} />
-            <ImportProjectDialog />
+            {/* ═══════ Cluster: Acciones de creación primarias ═══════ */}
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => { setSelectedParentId(null); setIsTaskModalOpen(true); }}
+                className="flex items-center gap-2 rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-500 shadow-lg shadow-indigo-500/20"
+              >
+                <Plus className="h-4 w-4" /> Crear Fase / Tarea
+              </button>
+              <NewSprintButton
+                projectId={projectId}
+                variant="solid"
+                label="Nuevo Sprint"
+              />
+            </div>
+
+            {/* Divider vertical */}
+            <span className="hidden h-6 w-px bg-border md:inline-block" aria-hidden />
+
+            {/* ═══════ Cluster: Agile (Wave P9) — secondary outline ═══════ */}
+            <div className="flex items-center gap-1.5 rounded-lg border border-cyan-500/20 bg-cyan-500/5 px-2 py-1.5">
+              <span className="hidden text-[10px] font-bold uppercase tracking-wider text-cyan-300 md:inline-block">
+                Agile
+              </span>
+              <Link
+                href={`/projects/${projectId}/epics`}
+                className="flex items-center gap-1.5 rounded-md bg-card px-2.5 py-1.5 text-xs font-medium text-foreground hover:bg-secondary border border-border"
+                title="Epics del proyecto"
+              >
+                <Sparkles className="h-3.5 w-3.5 text-amber-400" /> Epics
+              </Link>
+              <Link
+                href={`/projects/${projectId}/backlog`}
+                className="flex items-center gap-1.5 rounded-md bg-card px-2.5 py-1.5 text-xs font-medium text-foreground hover:bg-secondary border border-border"
+                title="Product Backlog & Sprint Backlogs"
+              >
+                <ListTree className="h-3.5 w-3.5 text-indigo-400" /> Backlog
+              </Link>
+              <Link
+                href={`/projects/${projectId}/releases`}
+                className="flex items-center gap-1.5 rounded-md bg-card px-2.5 py-1.5 text-xs font-medium text-foreground hover:bg-secondary border border-border"
+                title="Releases / Roadmap"
+              >
+                <Rocket className="h-3.5 w-3.5 text-emerald-400" /> Releases
+              </Link>
+              <Link
+                href={`/projects/${projectId}/definitions`}
+                className="flex items-center gap-1.5 rounded-md bg-card px-2.5 py-1.5 text-xs font-medium text-foreground hover:bg-secondary border border-border"
+                title="Definitions of Ready & Done"
+              >
+                <CheckSquare className="h-3.5 w-3.5 text-rose-400" /> DoR/DoD
+              </Link>
+            </div>
+
+            {/* ═══════ Cluster: Operación / Admin ═══════ */}
+            <div className="flex items-center gap-2">
+              <button
+                className="flex items-center gap-2 rounded-md bg-secondary px-3 py-1.5 text-xs font-medium text-foreground/90 hover:bg-secondary/80 border border-border"
+                title="Capturar línea base"
+              >
+                <Settings className="h-3.5 w-3.5" /> Línea Base
+              </button>
+              <Link
+                href={`/projects/${projectId}/calendar`}
+                className="flex items-center gap-2 rounded-md bg-secondary px-3 py-1.5 text-xs font-medium text-foreground/90 hover:bg-secondary/80 border border-border"
+                title="Calendario laboral + agenda equipo"
+              >
+                <CalendarIcon className="h-3.5 w-3.5" /> Calendario
+              </Link>
+              {/* P3-3 · Backup/Restore */}
+              <ExportProjectButton projectId={projectId} />
+              <ImportProjectDialog />
+            </div>
           </div>
         </div>
 

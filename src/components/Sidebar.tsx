@@ -10,7 +10,7 @@ import {
   Menu, PanelLeftClose, BarChart3, Rocket, Clock, Compass, Key, Cable, ScrollText,
   Bell, PenSquare, Brain, Scale, FileBarChart, Plug, FileSignature, Workflow,
   DatabaseBackup, UserPlus, Layers, ShieldAlert as ShieldAlertIcon,
-  DollarSign, GitBranch, Users2,
+  DollarSign, GitBranch, Users2, ListTree, Sparkles as SparklesIcon, CheckSquare,
   type LucideIcon
 } from 'lucide-react';
 import { clsx } from 'clsx';
@@ -69,10 +69,9 @@ const topRoutes: RouteItem[] = [
 ];
 
 const menuGroups: RouteGroup[] = [
-  // ── Portfolio (indigo · NUEVO Wave P10) ─────────────────────────
-  // Vistas ejecutivas multi-proyecto entregadas en Wave P10:
-  // dashboard consolidado, riesgos, EVM/costos, dependencias programa
-  // y allocation cross-project del equipo.
+  // ── Portfolio (indigo · Wave P10) ──────────────────────────────
+  // Vistas ejecutivas multi-proyecto: dashboard consolidado, riesgos,
+  // EVM/costos, dependencias programa y allocation cross-project del equipo.
   {
     label: 'sidebar.groups.portfolio',
     icon: Layers,
@@ -83,6 +82,22 @@ const menuGroups: RouteGroup[] = [
       { name: 'sidebar.items.portfolioFinance', path: '/portfolio/finance', icon: DollarSign },
       { name: 'sidebar.items.portfolioDependencies', path: '/portfolio/dependencies', icon: GitBranch },
       { name: 'sidebar.items.portfolioAllocation', path: '/portfolio/allocation', icon: Users2 },
+    ],
+  },
+  // ── Agile (cyan · Wave P9) ─────────────────────────────────────
+  // Herramientas Scrum/Agile agrupadas para acceso rápido sin tener
+  // que entrar al detalle del proyecto. Cada entry redirige al
+  // proyecto activo (heurística pickActiveProjectId).
+  {
+    label: 'sidebar.groups.agile',
+    icon: Rocket,
+    color: 'text-cyan-400',
+    routes: [
+      { name: 'sidebar.items.agileSprints', path: '/sprints', icon: Rocket },
+      { name: 'sidebar.items.agileBacklog', path: '/agile/backlog', icon: ListTree },
+      { name: 'sidebar.items.agileEpics', path: '/agile/epics', icon: SparklesIcon },
+      { name: 'sidebar.items.agileReleases', path: '/agile/releases', icon: Rocket },
+      { name: 'sidebar.items.agileDefinitions', path: '/agile/definitions', icon: CheckSquare },
     ],
   },
   // ── Estrategia (amber) ──────────────────────────────────────────
@@ -99,14 +114,14 @@ const menuGroups: RouteGroup[] = [
     ],
   },
   // ── Operación (cyan) ────────────────────────────────────────────
-  // Tracking diario: sprints, plantillas, timesheets, workload y
-  // resource leveling.
+  // Tracking diario: plantillas, timesheets, workload y resource
+  // leveling. Sprints se movieron al grupo Agile (Wave P9 follow-up)
+  // para tener todas las herramientas Scrum agrupadas.
   {
     label: 'sidebar.groups.operations',
     icon: Zap,
-    color: 'text-cyan-400',
+    color: 'text-orange-400',
     routes: [
-      { name: 'sidebar.items.sprints', path: '/sprints', icon: Rocket },
       { name: 'sidebar.items.templates', path: '/templates', icon: LayoutTemplate },
       { name: 'sidebar.items.timesheets', path: '/timesheets', icon: Clock },
       { name: 'sidebar.items.workload', path: '/workload', icon: ClipboardList },
