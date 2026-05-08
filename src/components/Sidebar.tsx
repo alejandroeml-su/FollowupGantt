@@ -9,7 +9,8 @@ import {
   Zap, LayoutTemplate, Sparkles, ChevronDown, Settings, Briefcase,
   Menu, PanelLeftClose, BarChart3, Rocket, Clock, Compass, Key, Cable, ScrollText,
   Bell, PenSquare, Brain, Scale, FileBarChart, Plug, FileSignature, Workflow,
-  DatabaseBackup, UserPlus,
+  DatabaseBackup, UserPlus, Layers, ShieldAlert as ShieldAlertIcon,
+  DollarSign, GitBranch, Users2,
   type LucideIcon
 } from 'lucide-react';
 import { clsx } from 'clsx';
@@ -68,6 +69,22 @@ const topRoutes: RouteItem[] = [
 ];
 
 const menuGroups: RouteGroup[] = [
+  // ── Portfolio (indigo · NUEVO Wave P10) ─────────────────────────
+  // Vistas ejecutivas multi-proyecto entregadas en Wave P10:
+  // dashboard consolidado, riesgos, EVM/costos, dependencias programa
+  // y allocation cross-project del equipo.
+  {
+    label: 'sidebar.groups.portfolio',
+    icon: Layers,
+    color: 'text-indigo-400',
+    routes: [
+      { name: 'sidebar.items.portfolio', path: '/portfolio', icon: Layers },
+      { name: 'sidebar.items.portfolioRisks', path: '/portfolio/risks', icon: ShieldAlertIcon },
+      { name: 'sidebar.items.portfolioFinance', path: '/portfolio/finance', icon: DollarSign },
+      { name: 'sidebar.items.portfolioDependencies', path: '/portfolio/dependencies', icon: GitBranch },
+      { name: 'sidebar.items.portfolioAllocation', path: '/portfolio/allocation', icon: Users2 },
+    ],
+  },
   // ── Estrategia (amber) ──────────────────────────────────────────
   // OKRs, reportes ejecutivos y AI Insights. Visible a todos los
   // roles; AGENTE puede consultar status reports de sus proyectos.
