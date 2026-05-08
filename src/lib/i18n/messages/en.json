@@ -84,7 +84,8 @@
       "strategy": "Strategy",
       "operations": "Operations",
       "workspace": "Workspace",
-      "settings": "Settings"
+      "settings": "Settings",
+      "portfolio": "Portfolio"
     },
     "items": {
       "list": "Tasks",
@@ -123,7 +124,12 @@
       "backupRestore": "Backup / Restore",
       "workspaces": "Workspaces",
       "members": "Members",
-      "invitations": "Pending Invitations"
+      "invitations": "Pending Invitations",
+      "portfolio": "Executive view",
+      "portfolioRisks": "Consolidated risks",
+      "portfolioFinance": "Costs & EVM",
+      "portfolioDependencies": "Program dependencies",
+      "portfolioAllocation": "Team allocation"
     },
     "menuClose": "Close menu",
     "menuExpand": "Expand menu",

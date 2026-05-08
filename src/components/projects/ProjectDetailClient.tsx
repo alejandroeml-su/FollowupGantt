@@ -195,6 +195,14 @@ export default function ProjectDetailClient({ projectId, currentUser }: Props) {
             >
               <CheckSquare className="h-4 w-4" /> DoR/DoD
             </Link>
+            {/* Wave P10 (HU-10.2) — Calendario laboral del proyecto. */}
+            <Link
+              href={`/projects/${projectId}/calendar`}
+              className="flex items-center gap-2 rounded-md bg-secondary px-4 py-2 text-sm font-medium text-foreground/90 hover:bg-secondary/80 border border-border"
+              title="Calendario laboral + agenda equipo"
+            >
+              <CalendarIcon className="h-4 w-4" /> Calendario
+            </Link>
             {/* P3-3 · Backup/Restore: export full + import nuevo proyecto. */}
             <ExportProjectButton projectId={projectId} />
             <ImportProjectDialog />
