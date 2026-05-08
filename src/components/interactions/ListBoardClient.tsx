@@ -43,6 +43,9 @@ import { computeProgressWithSource } from '@/lib/progress/rollup'
 import { EpicBadge } from '@/components/epics/EpicBadge'
 import { useTaskShortcuts } from '@/lib/hooks/useTaskShortcuts'
 import StatusSelector from '@/components/StatusSelector'
+import { AssigneeSelector } from './cell-editors/AssigneeSelector'
+import { PrioritySelector } from './cell-editors/PrioritySelector'
+import { DueDateSelector } from './cell-editors/DueDateSelector'
 import { TaskWithContextMenu } from './TaskContextMenuItems'
 import { TaskDrawer } from './TaskDrawer'
 import { TaskDrawerContent } from './TaskDrawerContent'
@@ -124,9 +127,53 @@ export function ListBoardClient({
 
   const selectedIds = useUIStore((s) => s.selectedIds)
   const toggleSelection = useUIStore((s) => s.toggleSelection)
+  const toggleManySelection = useUIStore((s) => s.toggleManySelection)
   const selectRange = useUIStore((s) => s.selectRange)
   const clearSelection = useUIStore((s) => s.clearSelection)
   const drawerTaskId = useUIStore((s) => s.drawerTaskId)
+
+  /**
+   * Wave P9 follow-up — cascade selection: al toggle una task con
+   * subtasks, también se seleccionan/deseleccionan todos sus
+   * descendientes recursivamente. Edwin: "si seleccionamos una tarea
+   * que tiene varias tareas anidadas también estas tareas dependientes
+   * deben de seleccionarse".
+   */
+  const collectIdsCascade = (root: SerializedTask): string[] => {
+    const ids: string[] = []
+    const visit = (t: SerializedTask) => {
+      ids.push(t.id)
+      for (const c of t.subtasks ?? []) visit(c)
+    }
+    visit(root)
+    return ids
+  }
+  const findTaskInTree = (
+    nodes: (SerializedTask & { subtasks?: SerializedTask[] })[],
+    targetId: string,
+  ): SerializedTask | null => {
+    for (const n of nodes) {
+      if (n.id === targetId) return n
+      if (n.subtasks) {
+        const found = findTaskInTree(n.subtasks, targetId)
+        if (found) return found
+      }
+    }
+    return null
+  }
+  const toggleSelectionCascade = (taskId: string, additive: boolean) => {
+    const target = findTaskInTree(items, taskId)
+    if (!target) {
+      toggleSelection(taskId, additive)
+      return
+    }
+    const ids = collectIdsCascade(target)
+    if (ids.length <= 1) {
+      toggleSelection(taskId, additive)
+    } else {
+      toggleManySelection(ids, additive)
+    }
+  }
 
   // Re-sync cuando el server revalida la página (revalidatePath en actions).
   // El setState-in-effect es intencional: el server es la fuente de verdad
@@ -336,7 +383,8 @@ export function ListBoardClient({
                         expanded={expanded}
                         setFocusedId={setFocusedId}
                         setExpanded={setExpanded}
-                        toggleSelection={toggleSelection}
+                        toggleSelection={toggleSelectionCascade}
+                        users={users}
                       />
                     ))}
                   </div>
@@ -350,7 +398,8 @@ export function ListBoardClient({
                     expanded={expanded}
                     setFocusedId={setFocusedId}
                     setExpanded={setExpanded}
-                    toggleSelection={toggleSelection}
+                    toggleSelection={toggleSelectionCascade}
+                    users={users}
                   />
                 ))}
           </SortableContext>
@@ -422,6 +471,8 @@ type RowProps = {
   setNodeRef?: (node: HTMLElement | null) => void
   style?: React.CSSProperties
   children?: React.ReactNode
+  /** Wave P9 follow-up — usuarios para AssigneeSelector inline. */
+  users?: { id: string; name: string; email?: string | null }[]
 }
 
 function Row({
@@ -437,21 +488,12 @@ function Row({
   setNodeRef,
   style,
   children,
+  users = [],
 }: RowProps) {
   const openDrawer = useUIStore((s) => s.openDrawer)
-  const priorityColor = PRIORITY_COLOR[task.priority] ?? 'text-muted-foreground'
   const statusColor = STATUS_COLOR[task.status] ?? 'text-muted-foreground'
   const commentCount = task.comments?.length ?? 0
   const hasSubs = (task.subtasks?.length ?? 0) > 0
-  const dateStr = task.endDate
-    ? (() => {
-        try {
-          return new Date(task.endDate).toLocaleDateString()
-        } catch {
-          return 'Sin fecha'
-        }
-      })()
-    : 'Sin fecha'
 
   // Avance rollup: si la task tiene subtareas, % derivado del promedio
   // de subtareas (recursivo). Si es hoja, su `progress` directo.
@@ -598,24 +640,34 @@ function Row({
             </div>
           </div>
 
-          <div className="col-span-2 flex items-center">
-            <UserCircle2 className="mr-2 h-4 w-4 text-muted-foreground" />
-            <span className="truncate text-xs text-foreground/90">
-              {task.assignee?.name ?? 'Sin Asignar'}
-            </span>
+          {/* Wave P9 follow-up — celdas editables inline */}
+          <div className="col-span-2" onClick={(e) => e.stopPropagation()}>
+            <AssigneeSelector
+              taskId={task.id}
+              currentAssignee={task.assignee ?? null}
+              users={users}
+            />
           </div>
 
           <div className="col-span-2" onClick={(e) => e.stopPropagation()}>
             <StatusSelector taskId={task.id} currentStatus={task.status} />
           </div>
 
-          <div className="col-span-2 flex items-center text-xs text-muted-foreground">
-            <Calendar className="mr-2 h-3.5 w-3.5" />
-            {dateStr}
+          <div className="col-span-2" onClick={(e) => e.stopPropagation()}>
+            <DueDateSelector
+              taskId={task.id}
+              currentEndDate={task.endDate ?? null}
+            />
           </div>
 
-          <div className="col-span-1 flex justify-center">
-            <Flag className={clsx('h-4 w-4', priorityColor)} />
+          <div
+            className="col-span-1 flex justify-center"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <PrioritySelector
+              taskId={task.id}
+              currentPriority={task.priority}
+            />
           </div>
 
           <div className="col-span-1 flex justify-center text-xs text-muted-foreground">
@@ -693,7 +745,8 @@ function RootTaskTree({
   setFocusedId,
   setExpanded,
   toggleSelection,
-}: RecursiveTreeProps) {
+  users = [],
+}: RecursiveTreeProps & { users?: { id: string; name: string; email?: string | null }[] }) {
   const isExpanded = expanded.has(task.id)
   const onToggleExpand = () =>
     setExpanded((prev) => {
@@ -713,6 +766,7 @@ function RootTaskTree({
       onFocus={() => setFocusedId(task.id)}
       onToggleExpand={onToggleExpand}
       onToggleSelect={(additive) => toggleSelection(task.id, additive)}
+      users={users}
     >
       {isExpanded &&
         (task.subtasks ?? []).map((child) => (
@@ -726,6 +780,7 @@ function RootTaskTree({
             setFocusedId={setFocusedId}
             setExpanded={setExpanded}
             toggleSelection={toggleSelection}
+            users={users}
           />
         ))}
     </SortableListRow>
@@ -746,7 +801,8 @@ function SubtaskBranch({
   setFocusedId,
   setExpanded,
   toggleSelection,
-}: RecursiveTreeProps & { level: number }) {
+  users = [],
+}: RecursiveTreeProps & { level: number; users?: { id: string; name: string; email?: string | null }[] }) {
   const hasChildren = (task.subtasks?.length ?? 0) > 0
   const isExpanded = expanded.has(task.id)
   const onToggleExpand = hasChildren
@@ -770,6 +826,7 @@ function SubtaskBranch({
         onFocus={() => setFocusedId(task.id)}
         onToggleExpand={onToggleExpand}
         onToggleSelect={(additive) => toggleSelection(task.id, additive)}
+        users={users}
       />
       {isExpanded && hasChildren
         ? (task.subtasks ?? []).map((grand) => (
@@ -783,6 +840,7 @@ function SubtaskBranch({
               setFocusedId={setFocusedId}
               setExpanded={setExpanded}
               toggleSelection={toggleSelection}
+              users={users}
             />
           ))
         : null}
