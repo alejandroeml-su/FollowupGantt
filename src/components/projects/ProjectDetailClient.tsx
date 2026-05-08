@@ -17,6 +17,7 @@ import Link from 'next/link';
 import {
   ArrowLeft, Plus, Calendar as CalendarIcon, Link as LinkIcon,
   GitCommit, ChevronDown, ListTree, Settings, X, Sparkles, Rocket, CheckSquare,
+  Target,
 } from 'lucide-react';
 import { ProjectDocsSection } from '@/components/docs/ProjectDocsSection';
 import { ExportProjectButton } from '@/components/backup/ExportProjectButton';
@@ -223,6 +224,14 @@ export default function ProjectDetailClient({
                 title="Definitions of Ready & Done"
               >
                 <CheckSquare className="h-3.5 w-3.5 text-rose-400" /> DoR/DoD
+              </Link>
+              {/* Wave P11-Scrum (HU-11.1) — Product Goal link */}
+              <Link
+                href={`/projects/${projectId}/product-goal`}
+                className="flex items-center gap-1.5 rounded-md bg-card px-2.5 py-1.5 text-xs font-medium text-foreground hover:bg-secondary border border-border"
+                title="Product Goal · commitment Scrum"
+              >
+                <Target className="h-3.5 w-3.5 text-fuchsia-400" /> Product Goal
               </Link>
             </div>
 

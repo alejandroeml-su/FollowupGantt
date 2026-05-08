@@ -502,6 +502,13 @@ model Project {
   dorTemplate Json?
   dodTemplate Json?
 
+  /// Wave P11-Scrum (HU-11.1) — Product Goal a nivel producto.
+  /// Shape: `{ statement: string, successMetrics: string[],
+  /// targetDate: string|null, lastReviewedAt: string|null }`.
+  /// Commitment formal del Scrum Guide 2020 — define el "para qué"
+  /// del Product Backlog. El Product Owner es responsable.
+  productGoal Json?
+
   // Relaciones
   phases          Phase[]
   sprints         Sprint[]
@@ -785,6 +792,15 @@ model Sprint {
   startedAt      DateTime?
   endedAt        DateTime?
   velocityActual Int?
+
+  // ── Sprint Review (Wave P11-Scrum · HU-11.2) ────────────────────
+  /// Timestamp de cierre del Sprint Review event. Si NULL, el Review
+  /// aún no se ha realizado (incluso si el sprint ya está endedAt).
+  reviewedAt   DateTime?
+  /// Notas/feedback del Review por stakeholders.
+  reviewNotes  String?
+  /// Link de demo del increment (Loom, video grabado, etc).
+  demoUrl      String?
 
   // Ola P8 · Equipo P8-1 · Resource Management — overrides puntuales
   // de capacidad por usuario para este sprint (vacaciones, on-call,
