@@ -16,7 +16,7 @@ export function ReportHeader({
   return (
     <header className="report-header">
       <div>
-        <div className="logo">FollowupGantt</div>
+        <div className="logo">Sync</div>
         <h1>{title}</h1>
         {subtitle ? <div style={{ color: '#4b5563', fontSize: '11pt' }}>{subtitle}</div> : null}
       </div>

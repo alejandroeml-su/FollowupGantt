@@ -19,7 +19,7 @@ export async function GET(req: NextRequest) {
   })
 
   const wb = new ExcelJS.Workbook()
-  wb.creator = 'FollowupGantt · Wave P10'
+  wb.creator = 'Sync · Wave P10'
   wb.created = new Date()
   wb.title = 'Portfolio Finance · EVM'
 

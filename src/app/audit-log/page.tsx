@@ -43,7 +43,7 @@ export default async function AuditLogPage() {
 }
 
 export const metadata = {
-  title: 'Auditoría · FollowupGantt',
+  title: 'Auditoría · Sync',
   description:
     'Registro centralizado de eventos del sistema (compliance ITIL/SOC2)',
 }

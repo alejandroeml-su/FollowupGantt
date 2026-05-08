@@ -26,6 +26,6 @@ export default async function TemplatesPage() {
 }
 
 export const metadata = {
-  title: 'Templates · FollowupGantt',
+  title: 'Templates · Sync',
   description: 'Plantillas reutilizables y tareas recurrentes',
 }

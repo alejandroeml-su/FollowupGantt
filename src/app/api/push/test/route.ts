@@ -43,7 +43,7 @@ export async function GET(req: NextRequest) {
     )
   }
 
-  const title = searchParams.get('title') ?? 'FollowupGantt — Test Push'
+  const title = searchParams.get('title') ?? 'Sync — Test Push'
   const body =
     searchParams.get('body') ??
     'Este es un push de prueba enviado desde /api/push/test.'

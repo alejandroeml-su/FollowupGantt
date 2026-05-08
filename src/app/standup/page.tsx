@@ -18,7 +18,7 @@ import { generateUserStandup } from '@/lib/actions/standup'
 import { StandupView } from '@/components/standup/StandupView'
 
 export const metadata = {
-  title: 'Standup · FollowupGantt',
+  title: 'Standup · Sync',
   description: 'Standup diario generado automáticamente.',
 }
 

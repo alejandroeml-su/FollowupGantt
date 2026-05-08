@@ -269,7 +269,7 @@ export function OnboardingFlow({ bindings }: Props = {}) {
     >
       <header className="space-y-3">
         <h1 className="text-3xl font-black tracking-tight text-foreground">
-          Bienvenido a FollowupGantt
+          Bienvenido a Sync
         </h1>
         <p className="text-sm text-muted-foreground">
           Configura tu workspace en 4 pasos rápidos.

@@ -36,7 +36,7 @@ export default async function LoginPage({
           Iniciar sesión
         </h1>
         <p className="mb-6 text-sm text-muted-foreground">
-          Accede a tu espacio de trabajo de FollowupGantt.
+          Accede a tu espacio de trabajo de Sync.
         </p>
 
         {resetSuccess ? (

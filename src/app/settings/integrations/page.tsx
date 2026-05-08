@@ -27,7 +27,7 @@ export default async function IntegrationsSettingsPage() {
         <div>
           <h1 className="text-xl font-semibold text-white">Integraciones</h1>
           <p className="mt-1 text-xs text-muted-foreground">
-            Conecta FollowupGantt con Slack, Microsoft Teams y GitHub para
+            Conecta Sync con Slack, Microsoft Teams y GitHub para
             recibir notificaciones y vincular tareas a issues/PRs.
           </p>
         </div>

@@ -50,7 +50,7 @@ export async function exportWeekTimesheet(input: {
   const data = await getWeekTimesheet(userId, weekStart)
 
   const wb = new ExcelJS.Workbook()
-  wb.creator = 'FollowupGantt'
+  wb.creator = 'Sync'
   wb.created = new Date()
   wb.title = `Timesheet ${userName} ${fmtDateShort(weekStart)}`
 

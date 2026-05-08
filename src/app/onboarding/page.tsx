@@ -13,7 +13,7 @@ import { listMyWorkspaces } from '@/lib/actions/workspaces'
 import { OnboardingFlow } from '@/components/onboarding/OnboardingFlow'
 
 export const metadata = {
-  title: 'Onboarding · FollowupGantt',
+  title: 'Onboarding · Sync',
   description:
     'Configura tu workspace en 4 pasos: workspace, miembros, proyecto y primera tarea.',
 }

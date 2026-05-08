@@ -278,13 +278,13 @@ export async function testIntegrationWebhook(
 
   if (integration.type === 'SLACK') {
     const message: SlackBlockKitMessage = {
-      text: 'Prueba de conexión desde FollowupGantt',
+      text: 'Prueba de conexión desde Sync',
       blocks: [
         {
           type: 'section',
           text: {
             type: 'mrkdwn',
-            text: ':white_check_mark: *Prueba de conexión* desde FollowupGantt — la integración Slack está activa.',
+            text: ':white_check_mark: *Prueba de conexión* desde Sync — la integración Slack está activa.',
           },
         },
       ],
@@ -306,7 +306,7 @@ export async function testIntegrationWebhook(
         },
         {
           type: 'TextBlock',
-          text: 'La integración Microsoft Teams de FollowupGantt está activa.',
+          text: 'La integración Microsoft Teams de Sync está activa.',
           wrap: true,
         },
       ],

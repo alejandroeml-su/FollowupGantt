@@ -42,7 +42,7 @@ export function ProfilePushSection({ userId }: Props) {
       <p className="mt-1 text-sm text-muted-foreground">
         Recibe alertas inmediatas cuando se te asigne una tarea, mencionen en
         un comentario o se capture un baseline. Las notificaciones llegan al
-        navegador incluso si la pestaña de FollowupGantt está cerrada.
+        navegador incluso si la pestaña de Sync está cerrada.
       </p>
       <div className="mt-4">
         <EnableWebPushButton userId={userId ?? null} />

@@ -25,7 +25,7 @@ export default async function WebhooksSettingsPage() {
           <h1 className="text-xl font-semibold text-white">Webhooks</h1>
           <p className="mt-1 text-xs text-muted-foreground">
             Recibe notificaciones HTTP firmadas con HMAC SHA-256 cuando ocurren
-            eventos en FollowupGantt (tareas, baselines, dependencias).
+            eventos en Sync (tareas, baselines, dependencias).
           </p>
         </div>
       </header>
