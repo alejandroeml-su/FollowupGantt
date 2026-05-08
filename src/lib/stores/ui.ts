@@ -64,6 +64,13 @@ type UIState = {
   activeWorkspaceId: string | null
 
   toggleSelection: (id: string, additive?: boolean) => void
+  /**
+   * Wave P9 follow-up — selecciona/deselecciona varios IDs a la vez.
+   * Usado para cascade selection (task + sus descendientes anidados).
+   * Comportamiento: si todos los IDs ya están seleccionados → deselecciona
+   * todos; si no, agrega todos al set actual.
+   */
+  toggleManySelection: (ids: string[], additive?: boolean) => void
   selectRange: (ids: string[]) => void
   clearSelection: () => void
   openDrawer: (id: string) => void
@@ -112,6 +119,21 @@ export const useUIStore = create<UIState>()(
           const next = new Set(additive ? s.selectedIds : [])
           if (additive && s.selectedIds.has(id)) next.delete(id)
           else next.add(id)
+          return { selectedIds: next }
+        }),
+      toggleManySelection: (ids, additive = false) =>
+        set((s) => {
+          if (ids.length === 0) return {}
+          const next = new Set(additive ? s.selectedIds : [])
+          // Si todos ya estaban en el set actual (additive), interpretamos
+          // como "deseleccionar todos"; si alguno faltaba, "seleccionar todos".
+          const allWereSelected =
+            additive && ids.every((id) => s.selectedIds.has(id))
+          if (allWereSelected) {
+            for (const id of ids) next.delete(id)
+          } else {
+            for (const id of ids) next.add(id)
+          }
           return { selectedIds: next }
         }),
       selectRange: (ids) => set({ selectedIds: new Set(ids) }),
