@@ -61,8 +61,13 @@ export function PortfolioHealthCard({ rows, summary }: Props) {
             {summary.totalProjects} proyecto{summary.totalProjects === 1 ? '' : 's'} monitoreado{summary.totalProjects === 1 ? '' : 's'}
           </p>
         </div>
+        {/* Wave P10 — apunta al Portfolio Dashboard nuevo (vista ejecutiva
+            con cards/heatmap/EVM/risks/allocation) en lugar del reporte
+            imprimible legacy `/reports/portfolio`, que requiere rol
+            específico y no es la vista de exploración esperada al hacer
+            click en "Salud del portafolio". */}
         <Link
-          href="/reports/portfolio"
+          href="/portfolio"
           className="text-xs font-semibold text-primary hover:underline"
         >
           Ver portafolio →
