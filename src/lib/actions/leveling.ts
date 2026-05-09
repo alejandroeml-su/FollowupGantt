@@ -106,6 +106,9 @@ interface TaskRow {
   hardDeadline: Date | null
   dailyEffortHours: number | null
   priority: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL'
+  /// Wave P13 fix — necesario para excluir tareas DONE del leveling
+  /// (sus fechas son históricas y no se pueden mover).
+  status: 'TODO' | 'IN_PROGRESS' | 'REVIEW' | 'DONE'
 }
 
 async function loadProjectMeta(projectId: string): Promise<{
@@ -122,6 +125,7 @@ async function loadProjectMeta(projectId: string): Promise<{
       title: true,
       assigneeId: true,
       priority: true,
+      status: true,
       assignee: { select: { name: true } },
       // Los dos campos nuevos pueden no existir todavía en producción si la
       // migración SQL no ha corrido. Prisma generará el typecheck local pero
@@ -164,6 +168,7 @@ async function loadProjectMeta(projectId: string): Promise<{
     hardDeadline: extraById.get(t.id)?.hardDeadline ?? null,
     dailyEffortHours: extraById.get(t.id)?.dailyEffortHours ?? null,
     priority: t.priority,
+    status: t.status,
   }))
 
   // Calendar + workdayHours (mismo patrón que workload/page.tsx).
@@ -322,15 +327,38 @@ export async function computeLevelingPlan(
     actionError('CYCLE_DETECTED', 'El grafo de dependencias contiene ciclos')
   }
 
-  // Capacidad uniforme = workdayHours del calendario; cada usuario asignado
-  // a alguna tarea entra al map.
+  // Wave P13 fix — Excluir tareas DONE del leveling.
+  // Sus fechas ya son históricas y no se pueden re-planificar, pero como
+  // dependencies forman cadenas largas el CPM las marca isCritical=true,
+  // resultando en TODAS las tareas terminando como `unresolved · CRITICAL`.
+  // El CPM completo se mantiene (las DONE siguen siendo predecesoras
+  // válidas para el cálculo de fechas), solo se filtran del input del
+  // algoritmo greedy de shifting.
+  const doneTaskIds = new Set(
+    meta.tasks.filter((t) => t.status === 'DONE').map((t) => t.id),
+  )
+
+  // Filtrar usuarios que solo tienen tareas DONE — no aportan al leveling.
   const userIds = Array.from(
-    new Set(meta.tasks.map((t) => t.assigneeId).filter((x): x is string => !!x)),
+    new Set(
+      meta.tasks
+        .filter((t) => t.status !== 'DONE')
+        .map((t) => t.assigneeId)
+        .filter((x): x is string => !!x),
+    ),
   )
   const capacity = buildUniformCapacity(userIds, meta.workdayHours)
 
+  // Construir un cpm-like solo con tareas activas (preserva shape).
+  const filteredResults = new Map(
+    Array.from(cpm.results.entries()).filter(
+      ([id]) => !doneTaskIds.has(id),
+    ),
+  )
+  const filteredCpm = { ...cpm, results: filteredResults }
+
   const plan = levelResources({
-    cpm,
+    cpm: filteredCpm,
     capacityPerDay: capacity,
     calendar: baseInput.calendar,
     defaultDailyEffortHours: meta.workdayHours,
