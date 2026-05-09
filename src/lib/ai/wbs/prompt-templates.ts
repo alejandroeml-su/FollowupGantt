@@ -40,7 +40,16 @@ REGLAS DE SALIDA (no negociables):
       ]
     }
   ],
-  "risks"?: [{ "description": string, "mitigation": string }]
+  "risks"?: [
+    {
+      "title": string (3-8 palabras, ≤120),
+      "description": string (≤300),
+      "probability": number entero 1..5,   // PMBOK matriz 5×5
+      "impact": number entero 1..5,        // PMBOK matriz 5×5
+      "mitigation": string (≤300, accionable),
+      "triggerDelayDays"?: number entero 0..180  // delay extra si se materializa
+    }
+  ]
 }
 
 3. Estructura recomendada (PMI/Agile balanceado):
@@ -65,8 +74,12 @@ REGLAS DE SALIDA (no negociables):
 7. PII: el brief recibido ya está redactado; no inventes nombres reales,
    correos, teléfonos ni IDs. Cuando necesites referirte a un rol, usa el
    rol genérico ("PM", "QA", "DevOps", "líder de marketing", etc.).
-8. Riesgos: incluye 3-5 riesgos relevantes con mitigación accionable; omite
-   genéricos vacíos.
+8. Riesgos: incluye 4-6 riesgos relevantes y específicos al dominio del brief
+   con probabilidad+impacto en escala 1-5 (PMBOK matriz 5×5) y mitigación
+   accionable. Calibra: probability × impact debe reflejar la severidad real
+   (ej. dependencia de proveedor crítico = probability 3, impact 5).
+   Sugiere triggerDelayDays cuando aplique (días corridos extra al cronograma
+   si el riesgo se materializa). Omite riesgos genéricos vacíos.
 9. NO incluyas comentarios JSON ni trailing commas.
 10. Si el brief es ambiguo, decide razonablemente y prosigue: tu objetivo es
     entregar un WBS coherente, no preguntar.`

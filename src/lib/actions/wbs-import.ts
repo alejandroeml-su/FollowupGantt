@@ -69,6 +69,8 @@ export interface ApplyWBSResult {
   phaseCount: number
   taskCount: number
   dependencyCount: number
+  /** Wave P14 — riesgos creados desde `wbs.risks[]`. */
+  riskCount: number
   /** Mapa title → taskId (post-suffix) por si la UI quiere navegar tras crear. */
   titleToId: Record<string, string>
   warnings: string[]
@@ -229,12 +231,41 @@ export async function applyGeneratedWBS(input: ApplyWBSInput): Promise<ApplyWBSR
       }
     }
 
+    // 5. Wave P14 — Crear riesgos del WBS si hay risks[].
+    let riskCount = 0
+    if (wbs.risks && wbs.risks.length > 0) {
+      for (const r of wbs.risks) {
+        try {
+          await tx.risk.create({
+            data: {
+              projectId: project.id,
+              title: (r.title ?? r.description.slice(0, 80)).trim(),
+              description: r.description,
+              probability: r.probability ?? 3,
+              impact: r.impact ?? 3,
+              mitigation: r.mitigation,
+              triggerDelayDays: r.triggerDelayDays ?? null,
+              ownerId: managerId ?? user.id,
+            },
+          })
+          riskCount++
+        } catch (err) {
+          warnings.push(
+            `Riesgo ignorado: "${r.title ?? r.description.slice(0, 40)}" (${
+              err instanceof Error ? err.message : String(err)
+            })`,
+          )
+        }
+      }
+    }
+
     return {
       projectId: project.id,
       projectCreated,
       phaseCount: phaseIds.length,
       taskCount,
       dependencyCount,
+      riskCount,
       titleToId: Object.fromEntries(titleToId),
     }
   })

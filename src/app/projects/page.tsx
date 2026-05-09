@@ -5,6 +5,8 @@ import prisma from "@/lib/prisma";
 import { createProject, deleteProject } from "@/lib/actions";
 import AreaFormClient from "@/components/AreaFormClient";
 import { WBSGeneratorTrigger } from "@/components/projects/WBSGeneratorDialog";
+import { ProjectDefinitionLazyTrigger } from "@/components/projects/ProjectDefinitionLazyTrigger";
+import type { ProjectDefinitionCatalogs } from "@/components/projects/ProjectDefinitionDialog";
 import { requireUser } from "@/lib/auth/get-current-user";
 import { getProjectAccessFilter, getVisibleProjectIds } from "@/lib/auth/visibility";
 
@@ -59,6 +61,20 @@ export default async function ProjectsMaintenance() {
       g.areas.map((a) => ({ id: a.id, name: a.name, gerenciaId: g.id })),
     ),
     users: users.map((u) => ({ id: u.id, name: u.name })),
+  };
+
+  // Wave P14 — catálogos para ProjectDefinitionLazyTrigger (incluye teams).
+  const teams = await prisma.team.findMany({
+    select: { id: true, name: true },
+    orderBy: { name: 'asc' },
+  });
+  const projectDefinitionCatalogs: ProjectDefinitionCatalogs = {
+    gerencias: gerencias.map((g) => ({ id: g.id, name: g.name })),
+    areas: gerencias.flatMap((g) =>
+      g.areas.map((a) => ({ id: a.id, name: a.name, gerenciaId: g.id })),
+    ),
+    users: users.map((u) => ({ id: u.id, name: u.name, email: u.email })),
+    teams,
   };
 
   return (
@@ -151,7 +167,7 @@ export default async function ProjectsMaintenance() {
                   {area.projects.length > 0 ? (
                     <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
                       {area.projects.map(project => (
-                        <ProjectCard key={project.id} project={project} />
+                        <ProjectCard key={project.id} project={project} catalogs={projectDefinitionCatalogs} />
                       ))}
                     </div>
                   ) : (
@@ -171,7 +187,7 @@ export default async function ProjectsMaintenance() {
               <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-widest mb-3">Sin Área Asignada</h3>
               <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
                 {standaloneProjects.map(project => (
-                  <ProjectCard key={project.id} project={project} />
+                  <ProjectCard key={project.id} project={project} catalogs={projectDefinitionCatalogs} />
                 ))}
               </div>
             </div>
@@ -194,7 +210,13 @@ type ProjectCardData = {
   tasks?: { status: string }[];
 };
 
-function ProjectCard({ project }: { project: ProjectCardData }) {
+function ProjectCard({
+  project,
+  catalogs,
+}: {
+  project: ProjectCardData
+  catalogs: ProjectDefinitionCatalogs
+}) {
   const taskCount = project.tasks?.length || 0;
   const doneTasks = project.tasks?.filter((t) => t.status === 'DONE').length || 0;
   const progress = taskCount > 0 ? Math.round((doneTasks / taskCount) * 100) : 0;
@@ -216,6 +238,12 @@ function ProjectCard({ project }: { project: ProjectCardData }) {
           <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium border ${statusStyle}`}>
             {project.status}
           </span>
+          <ProjectDefinitionLazyTrigger
+            projectId={project.id}
+            projectName={project.name}
+            catalogs={catalogs}
+            variant="icon"
+          />
           <form action={deleteProject}>
             <input type="hidden" name="id" value={project.id} />
             <button type="submit" className="p-1 hover:bg-red-500/20 rounded text-muted-foreground hover:text-red-400 transition-colors opacity-0 group-hover:opacity-100">
@@ -235,12 +263,20 @@ function ProjectCard({ project }: { project: ProjectCardData }) {
         </div>
       </div>
 
-      <Link
-        href="/list"
-        className="text-xs font-medium text-indigo-400 hover:text-indigo-300 transition-colors flex items-center gap-1 bg-indigo-500/10 px-3 py-1.5 rounded hover:bg-indigo-500/20 w-fit"
-      >
-        Ver Tareas ➔
-      </Link>
+      <div className="flex items-center gap-2">
+        <Link
+          href={`/projects/${project.id}`}
+          className="text-xs font-medium text-indigo-400 hover:text-indigo-300 transition-colors flex items-center gap-1 bg-indigo-500/10 px-3 py-1.5 rounded hover:bg-indigo-500/20 w-fit"
+        >
+          Ver Proyecto ➔
+        </Link>
+        <ProjectDefinitionLazyTrigger
+          projectId={project.id}
+          projectName={project.name}
+          catalogs={catalogs}
+          variant="button"
+        />
+      </div>
     </div>
   );
 }
