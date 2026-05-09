@@ -136,6 +136,22 @@ export function ConsolidatedRiskList({
             <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] text-muted-foreground">
               <span>Detectado {formatDate(r.detectedAt)}</span>
               {r.ownerName && <span>· Owner: {r.ownerName}</span>}
+              {/* Wave P14c — task asociada (origen Brain AI o manual) */}
+              {r.taskId && (r.taskMnemonic || r.taskTitle) && (
+                <span>
+                  ·{' '}
+                  <Link
+                    href={`/projects/${r.projectId}#task-${r.taskId}`}
+                    className="inline-flex items-center gap-1 rounded bg-indigo-500/15 px-1.5 py-0.5 text-indigo-300 hover:bg-indigo-500/25"
+                    title={r.taskTitle ?? undefined}
+                  >
+                    🔗 {r.taskMnemonic ? `[${r.taskMnemonic}]` : 'task'}
+                    {r.taskTitle && (
+                      <span className="hidden sm:inline">{r.taskTitle.slice(0, 40)}</span>
+                    )}
+                  </Link>
+                </span>
+              )}
               {r.mitigation && (
                 <span className="italic">· Mitigación: {r.mitigation}</span>
               )}
