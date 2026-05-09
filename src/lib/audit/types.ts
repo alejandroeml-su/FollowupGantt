@@ -129,6 +129,11 @@ export const KNOWN_AUDIT_ACTIONS = [
   'evm.snapshot_captured',
   // Wave P12 (PMI 100%) — Communications Plan
   'project.comms_plan_updated',
+  // Wave P13 (RBAC visibilidad) — Intentos no autorizados
+  'access.denied',
+  'role.assigned',
+  'role.revoked',
+  'user.gerencia_assigned',
   // Usuario / sesión
   'user.login',
   'user.logout',
@@ -229,6 +234,10 @@ export const ACTION_LABELS: Record<AuditAction, string> = {
   'lesson.deleted': 'Lesson Learned eliminada',
   'evm.snapshot_captured': 'EVM snapshot capturado',
   'project.comms_plan_updated': 'Communications Plan actualizado',
+  'access.denied': 'Intento de acceso denegado',
+  'role.assigned': 'Rol asignado a usuario',
+  'role.revoked': 'Rol revocado de usuario',
+  'user.gerencia_assigned': 'Gerencia asignada al usuario',
   'user.login': 'Inicio de sesión',
   'user.logout': 'Cierre de sesión',
   'user.password_changed': 'Contraseña cambiada',

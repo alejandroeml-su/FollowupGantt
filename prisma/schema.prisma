@@ -324,6 +324,14 @@ model User {
   changeRequestsRequested ChangeRequest[] @relation("ChangeRequestRequester")
   changeRequestsApproved  ChangeRequest[] @relation("ChangeRequestApprover")
 
+  /// Wave P13 (RBAC visibilidad por gerencia) — Gerencia que el usuario
+  /// gestiona si su rol es GERENTE_AREA. Para roles superiores
+  /// (GERENCIA_GENERAL/ADMIN/SUPER_ADMIN) se ignora; para USER también
+  /// es null. La visibilidad por gerencia se resuelve vía
+  /// `Project.area.gerenciaId == user.gerenciaId`.
+  gerenciaId String?
+  gerencia   Gerencia? @relation("GerenteArea", fields: [gerenciaId], references: [id], onDelete: SetNull)
+
   // Wave P12 (Scrum 100%) — Impediments & Daily Scrum & Improvements
   impedimentsRaised  Impediment[]      @relation("ImpedimentRaiser")
   impedimentsOwned   Impediment[]      @relation("ImpedimentOwner")
@@ -427,7 +435,10 @@ model Team {
   name        String  @unique
   description String?
 
-  members TeamMember[]
+  members  TeamMember[]
+  /// Wave P13 — Proyectos asignados al equipo. Cualquier miembro activo
+  /// (TeamMember) gana visibilidad sobre estos proyectos.
+  projects TeamProject[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -440,6 +451,22 @@ model TeamMember {
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@id([teamId, userId])
+}
+
+/// Wave P13 (RBAC visibilidad) — Asignación de equipos a proyectos.
+/// Un proyecto puede tener N equipos asignados; un equipo puede trabajar
+/// en N proyectos. Los miembros del equipo heredan visibilidad sobre los
+/// proyectos asignados (regla del Usuario estándar).
+model TeamProject {
+  teamId    String
+  projectId String
+  team      Team    @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@id([teamId, projectId])
+  @@index([projectId])
 }
 
 model ProjectAssignment {
@@ -457,7 +484,10 @@ model Gerencia {
   name        String  @unique // Ejemplo: "OPERACIONES", "FINANZAS"
   description String?
 
-  areas Area[]
+  areas    Area[]
+  /// Wave P13 — Gerentes de área que tienen visibilidad sobre todos
+  /// los proyectos de esta gerencia.
+  gerentes User[] @relation("GerenteArea")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -559,6 +589,8 @@ model Project {
   tasks           Task[]
   baselines       Baseline[]
   assignments     ProjectAssignment[]
+  /// Wave P13 (RBAC) — Equipos con visibilidad sobre el proyecto.
+  teamProjects    TeamProject[]
   mindMaps        MindMap[]
   // Wave P9 · Agile Maturity (HU-9.1, HU-9.2). Epic agrupa stories/tasks
   // bajo iniciativas reconocibles visualmente sin abusar del nesting de

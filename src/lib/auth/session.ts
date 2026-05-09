@@ -77,6 +77,11 @@ export interface SessionUser {
   email: string
   name: string
   roles: string[]
+  /// Wave P13 (RBAC) — Gerencia que gestiona si rol = GERENTE_AREA. NULL para otros roles.
+  gerenciaId?: string | null
+  /// Wave P13 (RBAC) — Workspace activo en el contexto de seguridad.
+  /// Determina el alcance "Todo el espacio" para GERENCIA_GENERAL.
+  workspaceId?: string | null
 }
 
 /**
@@ -126,7 +131,15 @@ export async function getSession(): Promise<SessionUser | null> {
           id: true,
           email: true,
           name: true,
+          gerenciaId: true,
           roles: { include: { role: { select: { name: true } } } },
+          // Wave P13 — workspace activo: por ahora tomamos el primer
+          // workspaceMembership; cuando UX permita switch lo movemos a cookie.
+          workspaceMemberships: {
+            select: { workspaceId: true },
+            take: 1,
+            orderBy: { createdAt: 'asc' },
+          },
         },
       },
     },
@@ -144,6 +157,8 @@ export async function getSession(): Promise<SessionUser | null> {
     email: session.user.email,
     name: session.user.name,
     roles: session.user.roles.map((ur) => ur.role.name),
+    gerenciaId: session.user.gerenciaId ?? null,
+    workspaceId: session.user.workspaceMemberships[0]?.workspaceId ?? null,
   }
 }
 
