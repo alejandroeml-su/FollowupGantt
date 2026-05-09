@@ -345,6 +345,7 @@ export default function ReleasesClient({
         open={showNew}
         onClose={() => setShowNew(false)}
         projectId={project.id}
+        projectName={project.name}
         users={users}
         epics={epics}
         sprints={sprints}
@@ -355,6 +356,7 @@ export default function ReleasesClient({
           open={true}
           onClose={() => setEditing(null)}
           projectId={project.id}
+          projectName={project.name}
           users={users}
           epics={epics}
           sprints={sprints}

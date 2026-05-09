@@ -82,6 +82,11 @@ const menuGroups: RouteGroup[] = [
     color: 'text-indigo-400',
     routes: [
       { name: 'sidebar.items.portfolio', path: '/portfolio', icon: Layers },
+      // Wave P14b — KPIs justo debajo de "Vista ejecutiva" del portafolio.
+      // Dashboards y KPIs cross-project son lectura ejecutiva (no gestión
+      // operativa), por eso pertenecen a Portfolio y no a "Gestión".
+      { name: 'sidebar.items.kpiDashboards', path: '/dashboards', icon: LayoutTemplate },
+      { name: 'sidebar.items.projectKpis', path: '/project-kpis', icon: BarChart3 },
       { name: 'sidebar.items.portfolioRisks', path: '/portfolio/risks', icon: ShieldAlertIcon },
       { name: 'sidebar.items.portfolioFinance', path: '/portfolio/finance', icon: DollarSign },
       { name: 'sidebar.items.portfolioDependencies', path: '/portfolio/dependencies', icon: GitBranch },
@@ -173,8 +178,6 @@ const menuGroups: RouteGroup[] = [
       { name: 'sidebar.items.docs', path: '/docs', icon: FileText },
       { name: 'sidebar.items.forms', path: '/forms', icon: ClipboardList },
       { name: 'sidebar.items.automations', path: '/automations', icon: Zap },
-      { name: 'sidebar.items.kpiDashboards', path: '/dashboards', icon: LayoutTemplate },
-      { name: 'sidebar.items.projectKpis', path: '/project-kpis', icon: BarChart3 },
     ],
   },
   // ── Workspace (emerald, NUEVO) ──────────────────────────────────
