@@ -1,8 +1,7 @@
 import Link from 'next/link'
 import { ArrowLeft, ShieldAlert } from 'lucide-react'
 import { loadConsolidatedRisks } from '@/lib/portfolio/risks'
-import { RiskMatrix } from '@/components/portfolio/RiskMatrix'
-import { ConsolidatedRiskList } from '@/components/portfolio/ConsolidatedRiskList'
+import { PortfolioRisksClient } from '@/components/portfolio/PortfolioRisksClient'
 
 export const dynamic = 'force-dynamic'
 
@@ -102,9 +101,11 @@ export default async function PortfolioRisksPage({ searchParams }: PageProps) {
             </div>
           </section>
 
-          <RiskMatrix matrix={overview.matrix} />
-
-          <ConsolidatedRiskList items={overview.items} />
+          {/* Wave P14c — wrapper client con filtro por celda matriz */}
+          <PortfolioRisksClient
+            items={overview.items}
+            matrix={overview.matrix}
+          />
         </div>
       </div>
     </div>
