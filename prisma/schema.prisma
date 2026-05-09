@@ -1044,6 +1044,9 @@ model Task {
   predecessors TaskDependency[] @relation("SuccessorTask")
   successors   TaskDependency[] @relation("PredecessorTask")
 
+  /// Wave P14c — Riesgos asociados a esta tarea (Brain AI register).
+  risks Risk[] @relation("TaskRisks")
+
   // Módulo ITIL (SLA Management)
   slaResponseLimit   DateTime? // Límite de tiempo para responder
   slaResolutionLimit DateTime? // Límite de tiempo para resolver
@@ -2600,6 +2603,17 @@ model Risk {
   // (días corridos). Alimenta la simulación Monte Carlo.
   triggerDelayDays Int?
 
+  /// Wave P14c (Avante Brain · Project Manager AI) — vínculo opcional con
+  /// la tarea específica que origina/contiene el riesgo. Permite el
+  /// drill-down "ver tarea" desde el Risk Register y excluir alertas
+  /// duplicadas cuando el LLM las re-sugiere.
+  ///
+  /// `onDelete: SetNull` porque el riesgo es metadata histórica del
+  /// proyecto y debe sobrevivir a la eliminación de la task que lo
+  /// originó (compliance PMI).
+  taskId String?
+  task   Task?   @relation("TaskRisks", fields: [taskId], references: [id], onDelete: SetNull)
+
   detectedAt DateTime  @default(now())
   closedAt   DateTime?
 
@@ -2608,6 +2622,7 @@ model Risk {
 
   @@index([projectId, status])
   @@index([probability, impact])
+  @@index([taskId])
 }
 
 // ─────────────────────────────────────────────────────────────────
