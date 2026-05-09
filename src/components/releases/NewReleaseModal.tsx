@@ -51,6 +51,9 @@ type Props = {
   open: boolean
   onClose: () => void
   projectId: string
+  /** Wave P14b — nombre del proyecto · visible en el header del modal para
+   *  dejar claro a qué proyecto se ancla la release. */
+  projectName?: string
   users?: { id: string; name: string }[]
   epics?: EpicOption[]
   sprints?: SprintOption[]
@@ -62,6 +65,7 @@ export function NewReleaseModal({
   open,
   onClose,
   projectId,
+  projectName,
   users = [],
   epics = [],
   sprints = [],
@@ -194,10 +198,21 @@ export function NewReleaseModal({
       }}
     >
       <div className="w-full max-w-[640px] max-h-[90vh] overflow-y-auto rounded-xl border border-border bg-card shadow-2xl">
-        <header className="sticky top-0 flex items-center justify-between border-b border-border bg-card px-5 py-3.5">
-          <h2 className="text-base font-semibold text-foreground">
-            {isEdit ? 'Editar Release' : 'Nueva Release'}
-          </h2>
+        <header className="sticky top-0 flex items-start justify-between border-b border-border bg-card px-5 py-3.5">
+          <div>
+            <h2 className="text-base font-semibold text-foreground">
+              {isEdit ? 'Editar Release' : 'Nueva Release'}
+            </h2>
+            {/* Wave P14b — proyecto visible para dejar clara la dependencia */}
+            {projectName && (
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                Proyecto:{' '}
+                <span className="font-medium text-indigo-300">
+                  {projectName}
+                </span>
+              </p>
+            )}
+          </div>
           <button
             type="button"
             onClick={onClose}
@@ -328,9 +343,26 @@ export function NewReleaseModal({
             <div className="max-h-[200px] space-y-1 overflow-y-auto rounded-md border border-border bg-input p-2">
               {scopeMode === 'EPIC' ? (
                 epics.length === 0 ? (
-                  <p className="py-3 text-center text-[11px] text-muted-foreground">
-                    No hay Epics activas en el proyecto.
-                  </p>
+                  <div className="py-4 text-center">
+                    <p className="text-[11px] text-muted-foreground">
+                      No hay Epics activas en{' '}
+                      {projectName ? (
+                        <span className="font-medium text-foreground">
+                          {projectName}
+                        </span>
+                      ) : (
+                        'este proyecto'
+                      )}
+                      .
+                    </p>
+                    <a
+                      href="/agile/epics"
+                      className="mt-2 inline-flex items-center gap-1 text-[11px] font-medium text-indigo-400 hover:text-indigo-300"
+                    >
+                      <Plus className="h-3 w-3" />
+                      Crear una Epic primero
+                    </a>
+                  </div>
                 ) : (
                   epics.map((e) => (
                     <label
