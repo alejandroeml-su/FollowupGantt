@@ -51,6 +51,12 @@ const applyInputSchema = z.object({
   overrideProjectName: z.string().min(1).max(120).optional(),
   /** Si TRUE, falla cuando el proyecto ya tiene fases (evita mezclar). */
   refuseIfHasPhases: z.boolean().optional(),
+  /** Wave P14 — Datos de definición del proyecto (obligatorios al crear). */
+  areaId: z.string().min(1).optional(),
+  methodology: z.enum(['SCRUM', 'PMI', 'HYBRID']).optional(),
+  managerId: z.string().min(1).optional(),
+  budget: z.number().nonnegative().optional(),
+  budgetCurrency: z.string().min(1).max(8).optional(),
 })
 
 export type ApplyWBSInput = z.input<typeof applyInputSchema>
@@ -77,7 +83,25 @@ export async function applyGeneratedWBS(input: ApplyWBSInput): Promise<ApplyWBSR
   if (!parsed.success) {
     actionError('INVALID_INPUT', parsed.error.issues[0]?.message ?? 'Input inválido')
   }
-  const { wbs, projectId, overrideProjectName, refuseIfHasPhases } = parsed.data
+  const {
+    wbs,
+    projectId,
+    overrideProjectName,
+    refuseIfHasPhases,
+    areaId,
+    methodology,
+    managerId,
+    budget,
+    budgetCurrency,
+  } = parsed.data
+
+  // Wave P14 — al crear un proyecto nuevo, exigir áreaId + methodology.
+  if (!projectId) {
+    if (!areaId)
+      actionError('INVALID_INPUT', 'areaId es obligatorio al crear un proyecto nuevo')
+    if (!methodology)
+      actionError('INVALID_INPUT', 'methodology es obligatorio al crear un proyecto nuevo')
+  }
 
   const warnings: string[] = []
 
@@ -96,17 +120,30 @@ export async function applyGeneratedWBS(input: ApplyWBSInput): Promise<ApplyWBSR
       }
       project = { id: existing.id }
     } else {
+      // Wave P14 — incluir definición completa del proyecto al crear.
       const created = await tx.project.create({
         data: {
           name: overrideProjectName ?? wbs.projectName,
           description: wbs.description,
           status: 'PLANNING',
-          managerId: user.id,
+          managerId: managerId ?? user.id,
+          areaId: areaId,
+          methodology: methodology ?? 'HYBRID',
+          budget: budget !== undefined ? budget : null,
+          budgetCurrency: budget !== undefined ? budgetCurrency ?? 'USD' : null,
         },
         select: { id: true },
       })
       project = created
       projectCreated = true
+
+      // Asignar al manager como member para que tenga visibilidad inmediata.
+      const ownerId = managerId ?? user.id
+      await tx.projectAssignment.upsert({
+        where: { projectId_userId: { projectId: created.id, userId: ownerId } },
+        update: {},
+        create: { projectId: created.id, userId: ownerId },
+      })
     }
 
     // 2. Crear las fases en orden.

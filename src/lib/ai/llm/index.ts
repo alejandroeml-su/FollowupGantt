@@ -183,6 +183,78 @@ const legacyStubClient: LLMClient = {
   },
 }
 
+/**
+ * Bridge automático Wave P14: traduce la API legacy `{system, messages}`
+ * al adapter real P7-1 (Anthropic/OpenAI). Se construye lazy en el primer
+ * request si hay credenciales en env (`ANTHROPIC_API_KEY` u `OPENAI_API_KEY`).
+ * Singleton cacheado para evitar reconstruir el `LanguageModel` en cada call.
+ *
+ * El bridge se materializa SOLO cuando `getLegacyClient()` lo necesita y
+ * `activeLegacyClient === legacyStubClient` (sin inyección manual). Los
+ * tests que llaman `setLLMClient(...)` no se ven afectados.
+ */
+let bridgeClient: LLMClient | null | undefined = undefined
+async function buildAutoBridgeClient(): Promise<LLMClient | null> {
+  if (bridgeClient !== undefined) return bridgeClient
+  try {
+    // Imports lazy: SDK + helpers se cargan solo cuando hay llave.
+    const [{ getLLMClient: getRealClient }, { generateText: sdkGenerateText }] =
+      await Promise.all([
+        import('./client'),
+        import('ai'),
+      ])
+    const real = await getRealClient()
+    if (!real) {
+      bridgeClient = null
+      return null
+    }
+    bridgeClient = {
+      async generateText(req: GenerateTextRequest): Promise<GenerateTextResponse> {
+        // Mapeo legacy {system, messages} → SDK ai {system, messages}.
+        const sysParts: string[] = []
+        if (req.system) sysParts.push(req.system)
+        const userParts = req.messages
+          .filter((m) => m.role === 'user')
+          .map((m) => m.content)
+        const result = await sdkGenerateText({
+          model: real.languageModel,
+          system: sysParts.join('\n\n') || undefined,
+          prompt: userParts.join('\n\n'),
+          temperature: req.temperature ?? real.config.temperature,
+          abortSignal: req.signal,
+        })
+        // El SDK 6.x expone usage.totalTokens / inputTokens / outputTokens.
+        const usage = (result.usage ?? {}) as {
+          totalTokens?: number
+          inputTokens?: number
+          outputTokens?: number
+        }
+        const tokens =
+          usage.totalTokens ??
+          (usage.inputTokens ?? 0) + (usage.outputTokens ?? 0)
+        return {
+          text: result.text ?? '',
+          tokensUsed: tokens,
+          fromCache: false,
+          provider: real.config.provider,
+        }
+      },
+    }
+    return bridgeClient
+  } catch {
+    bridgeClient = null
+    return null
+  }
+}
+
+/**
+ * Reset del bridge para tests. NO exportado por el barrel — solo
+ * accesible internamente.
+ */
+export function __resetLegacyBridge(): void {
+  bridgeClient = undefined
+}
+
 let activeLegacyClient: LLMClient = legacyStubClient
 
 /**
@@ -204,14 +276,23 @@ export function getLLMClient(): LLMClient {
 
 /**
  * Implementación legacy de `generateText` (estilo `{system, messages}`).
- * Delega en el cliente legacy inyectado. NO usa el adapter P7-1 porque
- * los consumers que la invocan (WBS) dependen de la inyección
- * sincronica vía `setLLMClient`; mezclar ambas APIs causaría más
- * fricción que la deuda que evitamos.
+ *
+ * Wave P14 — si no hay cliente inyectado vía `setLLMClient(...)`, se
+ * intenta construir un bridge al adapter real P7-1 (Anthropic/OpenAI)
+ * usando las credenciales en env. Si el bridge falla (sin keys o
+ * `LLM_ENABLED=false`), se cae al stub que lanza `LLM_NO_CLIENT` —
+ * el WBS atrapará la excepción y caerá al fallback heurístico.
+ *
+ * Tests que inyectan cliente custom siguen funcionando porque el bridge
+ * solo se activa cuando `activeLegacyClient === legacyStubClient`.
  */
 async function generateTextLegacy(
   req: GenerateTextRequest,
 ): Promise<GenerateTextResponse> {
+  if (activeLegacyClient === legacyStubClient) {
+    const bridge = await buildAutoBridgeClient()
+    if (bridge) return bridge.generateText(req)
+  }
   return activeLegacyClient.generateText(req)
 }
 

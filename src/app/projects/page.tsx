@@ -52,6 +52,15 @@ export default async function ProjectsMaintenance() {
     areas: g.areas.map(a => ({ id: a.id, name: a.name })),
   }));
 
+  // Wave P14 — catálogos para WBSGeneratorTrigger.
+  const wbsCatalogs = {
+    gerencias: gerencias.map((g) => ({ id: g.id, name: g.name })),
+    areas: gerencias.flatMap((g) =>
+      g.areas.map((a) => ({ id: a.id, name: a.name, gerenciaId: g.id })),
+    ),
+    users: users.map((u) => ({ id: u.id, name: u.name })),
+  };
+
   return (
     <div className="flex h-full flex-col bg-background overflow-y-auto p-8">
       <header className="mb-8 flex items-center justify-between max-w-7xl mx-auto w-full">
@@ -64,7 +73,7 @@ export default async function ProjectsMaintenance() {
             CRUD completo: Crear/Editar/Eliminar Proyectos por Gerencia y Área (Supabase + Prisma)
           </p>
         </div>
-        <WBSGeneratorTrigger />
+        <WBSGeneratorTrigger catalogs={wbsCatalogs} />
       </header>
 
       <div className="max-w-7xl mx-auto w-full space-y-10">
