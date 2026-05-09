@@ -29,6 +29,10 @@ type UIState = {
   sidebarCollapsed: boolean
   /** HU-2.3 — toggle global "Mostrar solo ruta crítica" en Gantt. */
   criticalOnly: boolean
+  /** Wave P13 · Estado expandible/colapsable del panel de filtros estándar. */
+  filtersExpanded: boolean
+  /** Wave P13 · Toggle del sub-panel "Rango de fechas" dentro del FiltersPanel. */
+  filtersDateRangeOpen: boolean
   /**
    * HU-3.2 — selección de línea base activa por proyecto. Clave compuesta
    * (projectId) para evitar leakage cross-project (R2 del backlog @PO):
@@ -83,6 +87,8 @@ type UIState = {
   setMobileSidebarOpen: (open: boolean) => void
   toggleSidebarCollapsed: (collapsed?: boolean) => void
   toggleCriticalOnly: (on?: boolean) => void
+  toggleFiltersExpanded: (open?: boolean) => void
+  toggleFiltersDateRange: (open?: boolean) => void
   setActiveBaseline: (projectId: string, baselineId: string | null) => void
   clearActiveBaseline: (projectId: string) => void
   toggleBaselineTrend: (open?: boolean) => void
@@ -103,6 +109,8 @@ export const useUIStore = create<UIState>()(
       mobileSidebarOpen: false,
       sidebarCollapsed: false,
       criticalOnly: false,
+      filtersExpanded: true,
+      filtersDateRangeOpen: false,
       activeBaselineId: {},
       baselineTrendOpen: false,
       activeViewByPath: {
@@ -163,6 +171,10 @@ export const useUIStore = create<UIState>()(
         set((s) => ({ sidebarCollapsed: collapsed ?? !s.sidebarCollapsed })),
       toggleCriticalOnly: (on) =>
         set((s) => ({ criticalOnly: on ?? !s.criticalOnly })),
+      toggleFiltersExpanded: (open) =>
+        set((s) => ({ filtersExpanded: open ?? !s.filtersExpanded })),
+      toggleFiltersDateRange: (open) =>
+        set((s) => ({ filtersDateRangeOpen: open ?? !s.filtersDateRangeOpen })),
       setActiveBaseline: (projectId, baselineId) =>
         set((s) => ({
           activeBaselineId: {
@@ -208,6 +220,8 @@ export const useUIStore = create<UIState>()(
           columnPrefs: s.columnPrefs,
           sidebarCollapsed: s.sidebarCollapsed,
           criticalOnly: s.criticalOnly,
+          filtersExpanded: s.filtersExpanded,
+          filtersDateRangeOpen: s.filtersDateRangeOpen,
           activeBaselineId: s.activeBaselineId,
           baselineTrendOpen: s.baselineTrendOpen,
           activeViewByPath: s.activeViewByPath,
