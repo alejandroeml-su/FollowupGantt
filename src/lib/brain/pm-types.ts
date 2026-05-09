@@ -62,10 +62,13 @@ export const RiskAlertSchema = z.object({
     'DEPENDENCY_VIOLATION',
     'STALE',
   ]),
-  /** Wave P14c — Mnemonic de la task que origina el riesgo (preferido).
-   *  Si no hay task específica, null. El backend lo resuelve a `taskId`
-   *  al persistir el riesgo. */
-  taskMnemonic: z.string().nullable(),
+  /** Wave P14c — Mnemonic de la task que origina el riesgo. Vacío si
+   *  el riesgo es global del proyecto (ej. EVM_DEVIATION).
+   *  Anthropic structured output trata mejor optional que nullable. */
+  taskMnemonic: z
+    .string()
+    .optional()
+    .describe('Mnemonic de la task asociada (ej. "p9-3"), o vacío si es global del proyecto.'),
   title: z.string().describe('Título corto del riesgo (5-10 palabras).'),
   rationale: z
     .string()
@@ -74,13 +77,26 @@ export const RiskAlertSchema = z.object({
     .string()
     .describe('Mitigación accionable concreta (lo que `Risk.mitigation` guarda).'),
   /** PMBOK · matriz 5×5. */
-  probability: z.number().int().min(1).max(5)
+  probability: z
+    .number()
+    .int()
+    .min(1)
+    .max(5)
     .describe('Probabilidad 1-5 según matriz PMBOK 5×5 (1 = muy improbable, 5 = casi seguro).'),
-  impact: z.number().int().min(1).max(5)
+  impact: z
+    .number()
+    .int()
+    .min(1)
+    .max(5)
     .describe('Impacto 1-5 según matriz PMBOK 5×5 (1 = trivial, 5 = catastrófico para el proyecto).'),
-  /** Días extra al cronograma si el riesgo se materializa (Monte Carlo). */
-  triggerDelayDays: z.number().int().min(0).max(180).nullable()
-    .describe('Días corridos extra al cronograma si se materializa. Null si no aplica delay temporal.'),
+  /** Días extra al cronograma si el riesgo se materializa.
+   *  0 = sin delay, valor positivo = días que añade al cronograma. */
+  triggerDelayDays: z
+    .number()
+    .int()
+    .min(0)
+    .max(180)
+    .describe('Días corridos extra al cronograma si se materializa. 0 si no aplica delay temporal.'),
 })
 
 export const RiskReportSchema = z.object({

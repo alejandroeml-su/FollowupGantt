@@ -186,18 +186,32 @@ Reglas:
 
 export async function generateRiskAnalysis(input: { projectId: string }): Promise<RiskReport> {
   if (!input?.projectId) {
-    throw new Error('[INVALID_INPUT] projectId es obligatorio para análisis de riesgos.')
+    throw new Error('[BRAIN_AI] projectId es obligatorio para análisis de riesgos.')
   }
   if (!process.env.ANTHROPIC_API_KEY) {
-    throw new Error('ANTHROPIC_API_KEY no está configurada en el servidor.')
+    throw new Error(
+      '[BRAIN_AI] ANTHROPIC_API_KEY no está configurada en el servidor (Vercel env vars).',
+    )
   }
-  const ctx = await gatherRiskContext(input.projectId)
+
+  let ctx
+  try {
+    ctx = await gatherRiskContext(input.projectId)
+  } catch (err) {
+    throw new Error(
+      `[BRAIN_AI] Error al cargar contexto del proyecto: ${err instanceof Error ? err.message : String(err)}`,
+    )
+  }
+
   if (!ctx.project) {
-    throw new Error('[NOT_FOUND] proyecto no existe')
+    throw new Error(`[BRAIN_AI] Proyecto ${input.projectId} no existe`)
   }
-  const { object } = await generateObject({
-    model: anthropic('claude-sonnet-4-6'),
-    schema: RiskReportSchema,
+
+  let object: RiskReport
+  try {
+    const result = await generateObject({
+      model: anthropic('claude-sonnet-4-6'),
+      schema: RiskReportSchema,
     system: `Eres Avante Brain, especialista en gestión de proyectos PMI/Agile/ITIL de FollowupGantt.
 
 Analizas datos del proyecto **${ctx.project.name}** (metodología ${ctx.project.methodology}) y devuelves
@@ -207,7 +221,7 @@ Reglas:
 - Devuelve **máximo 5 alertas**, priorizadas por severidad (HIGH > MEDIUM > LOW).
 - Cada alerta debe tener \`rationale\` con datos concretos (días atrasados, % avance, SPI numérico).
 - Cada alerta DEBE incluir \`probability\` (1-5), \`impact\` (1-5) y \`triggerDelayDays\` (días extra
-  al cronograma si el riesgo se materializa, null si no aplica).
+  al cronograma si el riesgo se materializa, 0 si no aplica delay temporal).
 - Calibración matriz 5×5:
   · prob 1-2 = improbable; 3 = posible; 4-5 = casi seguro
   · impact 1-2 = molestia; 3 = afecta release; 4 = afecta milestone; 5 = catastrófico
@@ -224,7 +238,7 @@ Reglas:
   · DEPENDENCY_VIOLATION: predecesora no terminada que bloquea sucesora
   · STALE: tarea IN_PROGRESS sin avance (progress=0)
 - \`taskMnemonic\` DEBE ser el mnemonic exacto de la tarea más relacionada (ej. "p9-3"),
-  o null si la alerta es global del proyecto (ej. EVM_DEVIATION).
+  o vacío/omitirlo si la alerta es global del proyecto (ej. EVM_DEVIATION).
 - \`suggestedAction\` debe ser una mitigación concreta y accionable que vaya directo al
   campo \`Risk.mitigation\` del Risk Register: "Reasignar a X", "Escalar a sponsor",
   "Acortar alcance", no genérica.
@@ -236,8 +250,13 @@ problemas relevantes ya están registrados, devuelve un solo alert LOW informati
 
 - Si todo está saludable y no hay riesgos NUEVOS para sugerir, devuelve un único alert
   informativo de severity=LOW indicándolo expresamente.`,
-    prompt: `Datos del proyecto a analizar:\n${JSON.stringify(ctx, null, 2)}`,
-  })
+      prompt: `Datos del proyecto a analizar:\n${JSON.stringify(ctx, null, 2)}`,
+    })
+    object = result.object
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err)
+    throw new Error(`[BRAIN_AI] LLM falló al generar análisis de riesgos: ${msg}`)
+  }
   return object
 }
 

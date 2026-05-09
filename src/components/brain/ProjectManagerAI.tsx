@@ -378,7 +378,7 @@ function RiskCard({
                       <span className="font-medium shrink-0">Mitigación:</span>
                       <span className="text-muted-foreground flex-1">{a.suggestedAction}</span>
                     </div>
-                    {a.triggerDelayDays !== null && a.triggerDelayDays > 0 && (
+                    {a.triggerDelayDays > 0 && (
                       <p className="text-[10px] text-amber-400/80">
                         ⏱ +{a.triggerDelayDays}d al cronograma si se materializa
                       </p>
