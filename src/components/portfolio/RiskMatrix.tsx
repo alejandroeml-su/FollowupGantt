@@ -28,9 +28,13 @@ const IMPACT_LABEL = ['', 'Insignif.', 'Menor', 'Moderado', 'Mayor', 'Severo']
 
 type Props = {
   matrix: RiskMatrixCell[]
+  /** Wave P14c · celda actualmente seleccionada (filtro de la lista). */
+  selectedCell?: { probability: number; impact: number } | null
+  /** Wave P14c · callback al hacer click en una celda con riesgos. */
+  onCellClick?: (probability: number, impact: number) => void
 }
 
-export function RiskMatrix({ matrix }: Props) {
+export function RiskMatrix({ matrix, selectedCell, onCellClick }: Props) {
   // Re-organizar por probability descendente (5 arriba) × impact ascendente.
   const grid: Record<number, Record<number, RiskMatrixCell>> = {}
   for (const c of matrix) {
@@ -42,6 +46,11 @@ export function RiskMatrix({ matrix }: Props) {
     <div className="rounded-xl border border-border bg-card p-4">
       <h3 className="mb-3 text-sm font-semibold text-foreground">
         Matriz probabilidad × impacto
+        {onCellClick && (
+          <span className="ml-2 text-[10px] font-normal text-muted-foreground">
+            (click en una celda con riesgos para filtrar el detalle)
+          </span>
+        )}
       </h3>
       <div
         className="grid gap-1"
@@ -60,7 +69,13 @@ export function RiskMatrix({ matrix }: Props) {
 
         {/* Filas: probability 5 → 1 */}
         {[5, 4, 3, 2, 1].map((p) => (
-          <FragmentRow key={`row-${p}`} p={p} grid={grid} />
+          <FragmentRow
+            key={`row-${p}`}
+            p={p}
+            grid={grid}
+            selectedCell={selectedCell}
+            onCellClick={onCellClick}
+          />
         ))}
       </div>
 
@@ -83,9 +98,13 @@ export function RiskMatrix({ matrix }: Props) {
 function FragmentRow({
   p,
   grid,
+  selectedCell,
+  onCellClick,
 }: {
   p: number
   grid: Record<number, Record<number, RiskMatrixCell>>
+  selectedCell?: { probability: number; impact: number } | null
+  onCellClick?: (probability: number, impact: number) => void
 }) {
   return (
     <>
@@ -96,11 +115,39 @@ function FragmentRow({
         const cell = grid[p]?.[i]
         if (!cell) return <div key={`empty-${p}-${i}`} />
         const empty = cell.count === 0
+        const isSelected =
+          selectedCell?.probability === p && selectedCell?.impact === i
+        const interactive = !empty && !!onCellClick
+        const tooltip = `P${p} × I${i} = ${p * i} (${cell.severity}) — ${cell.count} riesgo${cell.count === 1 ? '' : 's'}${interactive ? ' · click para filtrar' : ''}`
+
+        const baseClass = `flex h-12 items-center justify-center rounded border text-sm font-bold transition-all ${SEV_BG[cell.severity]} ${empty ? 'opacity-30' : ''} ${SEV_TEXT[cell.severity]}`
+        const interactiveClass = interactive
+          ? 'cursor-pointer hover:scale-105 hover:shadow-md'
+          : 'cursor-default'
+        const selectedClass = isSelected
+          ? 'ring-2 ring-indigo-400 ring-offset-1 ring-offset-card scale-105 shadow-md'
+          : ''
+
+        if (interactive) {
+          return (
+            <button
+              type="button"
+              key={`cell-${p}-${i}`}
+              onClick={() => onCellClick(p, i)}
+              aria-label={tooltip}
+              aria-pressed={isSelected}
+              className={`${baseClass} ${interactiveClass} ${selectedClass}`}
+              title={tooltip}
+            >
+              {cell.count}
+            </button>
+          )
+        }
         return (
           <div
             key={`cell-${p}-${i}`}
-            className={`flex h-12 items-center justify-center rounded border text-sm font-bold ${SEV_BG[cell.severity]} ${empty ? 'opacity-30' : ''} ${SEV_TEXT[cell.severity]}`}
-            title={`P${p} × I${i} = ${p * i} (${cell.severity}) — ${cell.count} riesgo${cell.count === 1 ? '' : 's'}`}
+            className={`${baseClass} ${interactiveClass}`}
+            title={tooltip}
           >
             {empty ? '·' : cell.count}
           </div>
