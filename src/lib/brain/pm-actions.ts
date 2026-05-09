@@ -212,7 +212,7 @@ export async function generateRiskAnalysis(input: { projectId: string }): Promis
     const result = await generateObject({
       model: anthropic('claude-sonnet-4-6'),
       schema: RiskReportSchema,
-    system: `Eres Avante Brain, especialista en gestión de proyectos PMI/Agile/ITIL de FollowupGantt.
+      system: `Eres Avante Brain, especialista en gestión de proyectos PMI/Agile/ITIL de FollowupGantt.
 
 Analizas datos del proyecto **${ctx.project.name}** (metodología ${ctx.project.methodology}) y devuelves
 alertas accionables en español, calibradas a la matriz PMBOK 5×5.
@@ -254,10 +254,144 @@ problemas relevantes ya están registrados, devuelve un solo alert LOW informati
     })
     object = result.object
   } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err)
-    throw new Error(`[BRAIN_AI] LLM falló al generar análisis de riesgos: ${msg}`)
+    // Wave P14c follow-up — Si el LLM falla (rate limit, schema rejection,
+    // output inválido, etc.) caemos a fallback heurístico calculado desde
+    // los datos reales del contexto. Garantiza que la feature funciona
+    // aunque el provider tenga problemas. El usuario verá las alertas
+    // marcadas con `type` lógico, sin la "narrativa" enriquecida del LLM.
+    const reason = err instanceof Error ? err.message : String(err)
+    console.warn('[BRAIN_AI] LLM fallback heuristic activated:', reason)
+    object = buildHeuristicRiskReport(ctx)
   }
   return object
+}
+
+// ─── Wave P14c follow-up · Heuristic fallback ───────────────────────
+
+interface RiskCtx {
+  now: string
+  project: { name: string; spi: number | null; cpi: number | null } | null
+  overdue: Array<{
+    mnemonic: string | null
+    title: string
+    priority: string
+    progress: number
+    daysOverdue: number | null
+  }>
+  criticalOpen: Array<{
+    mnemonic: string | null
+    title: string
+    progress: number
+  }>
+  existingRisks: Array<{ title: string; taskMnemonic: string | null }>
+}
+
+function buildHeuristicRiskReport(ctx: RiskCtx): RiskReport {
+  const existingTitles = new Set(
+    ctx.existingRisks.map((r) => r.title.toLowerCase()),
+  )
+
+  const alerts: RiskReport['alerts'] = []
+
+  // Overdue tasks
+  for (const t of ctx.overdue.slice(0, 3)) {
+    const title = `Tarea atrasada: ${t.title}`
+    if (existingTitles.has(title.toLowerCase())) continue
+    const days = t.daysOverdue ?? 0
+    const priority = t.priority === 'CRITICAL' ? 5 : t.priority === 'HIGH' ? 4 : 3
+    alerts.push({
+      severity: priority >= 4 ? 'HIGH' : 'MEDIUM',
+      type: 'OVERDUE',
+      taskMnemonic: t.mnemonic ?? undefined,
+      title: title.slice(0, 100),
+      rationale: `${days} días atrasada · ${t.progress}% avance · prioridad ${t.priority}.`,
+      suggestedAction:
+        days > 7
+          ? 'Escalar a sponsor + reasignar a recurso disponible.'
+          : 'Reasignar o re-priorizar para destrabar el deadline.',
+      probability: 4,
+      impact: priority,
+      triggerDelayDays: Math.min(days * 2, 60),
+    })
+  }
+
+  // Critical tasks at risk
+  for (const t of ctx.criticalOpen.slice(0, 2)) {
+    const title = `Crítica sin avance: ${t.title}`
+    if (existingTitles.has(title.toLowerCase())) continue
+    if (t.progress > 30) continue // solo si está estancada
+    alerts.push({
+      severity: 'HIGH',
+      type: 'CRITICAL_TASK',
+      taskMnemonic: t.mnemonic ?? undefined,
+      title: title.slice(0, 100),
+      rationale: `Tarea CRITICAL con ${t.progress}% de avance.`,
+      suggestedAction:
+        'Asignar pair-programming + revisión de bloqueos en próximo daily.',
+      probability: 4,
+      impact: 5,
+      triggerDelayDays: 14,
+    })
+  }
+
+  // EVM deviation
+  const spi = ctx.project?.spi ?? 1
+  const cpi = ctx.project?.cpi ?? 1
+  if (spi < 0.9 || cpi < 0.9) {
+    const title = `Desviación EVM · SPI ${spi.toFixed(2)} · CPI ${cpi.toFixed(2)}`
+    if (!existingTitles.has(title.toLowerCase())) {
+      alerts.push({
+        severity: spi < 0.85 || cpi < 0.85 ? 'HIGH' : 'MEDIUM',
+        type: 'EVM_DEVIATION',
+        taskMnemonic: undefined,
+        title: title.slice(0, 100),
+        rationale: `Performance index del proyecto fuera del rango saludable (>= 0.95).`,
+        suggestedAction:
+          'Revisar baseline + ajustar EAC + escalar a sponsor con plan de recuperación.',
+        probability: 4,
+        impact: 4,
+        triggerDelayDays: 21,
+      })
+    }
+  }
+
+  // Si no hay alertas, devolver un alert informativo
+  if (alerts.length === 0) {
+    alerts.push({
+      severity: 'LOW',
+      type: 'STALE',
+      taskMnemonic: undefined,
+      title: 'Sin riesgos nuevos detectados',
+      rationale:
+        'No se detectaron riesgos adicionales. Todos los conocidos ya están registrados o el proyecto está saludable.',
+      suggestedAction: 'Mantener cadencia de daily standups y monitoreo semanal.',
+      probability: 1,
+      impact: 1,
+      triggerDelayDays: 0,
+    })
+  }
+
+  // Determinar overallStatus desde los datos
+  let overallStatus: RiskReport['overallStatus'] = 'HEALTHY'
+  if (
+    alerts.some((a) => a.severity === 'HIGH') ||
+    spi < 0.85 ||
+    cpi < 0.85
+  ) {
+    overallStatus = 'CRITICAL'
+  } else if (
+    alerts.some((a) => a.severity === 'MEDIUM') ||
+    ctx.overdue.length > 0
+  ) {
+    overallStatus = 'AT_RISK'
+  }
+
+  return {
+    date: ctx.now,
+    overallStatus,
+    headline: `Análisis heurístico (fallback): ${ctx.overdue.length} atrasadas · ${ctx.criticalOpen.length} críticas abiertas · SPI ${spi.toFixed(2)}.`,
+    alerts: alerts.slice(0, 5),
+  }
 }
 
 // ─── Wave P14c — Registrar alerta como Risk en BD ────────────────────
