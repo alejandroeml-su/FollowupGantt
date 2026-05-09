@@ -8,6 +8,9 @@ import {
   RiskReportSchema,
   type StandupReport,
   type RiskReport,
+  type RegisterRiskInput,
+  type RegisterRiskResult,
+  type BrainProjectOption,
 } from './pm-types'
 
 // NOTA: NO re-exportamos types/schemas desde aquí. En archivos `'use server'`
@@ -62,14 +65,14 @@ async function gatherStandupContext(projectId?: string) {
   return { since: since.toISOString(), recentHistory, inProgress }
 }
 
-async function gatherRiskContext(projectId?: string) {
+async function gatherRiskContext(projectId: string) {
   const now = new Date()
   const overdue = await prisma.task.findMany({
     where: {
       archivedAt: null,
       status: { not: 'DONE' },
       endDate: { lt: now },
-      ...(projectId && { projectId }),
+      projectId,
     },
     take: 25,
     orderBy: [{ priority: 'desc' }, { endDate: 'asc' }],
@@ -89,7 +92,7 @@ async function gatherRiskContext(projectId?: string) {
       archivedAt: null,
       priority: 'CRITICAL',
       status: { not: 'DONE' },
-      ...(projectId && { projectId }),
+      projectId,
     },
     take: 20,
     select: {
@@ -101,13 +104,37 @@ async function gatherRiskContext(projectId?: string) {
       project: { select: { name: true } },
     },
   })
-  const projects = await prisma.project.findMany({
-    where: projectId ? { id: projectId } : undefined,
-    take: 10,
-    select: { id: true, name: true, spi: true, cpi: true, status: true },
+  const project = await prisma.project.findUnique({
+    where: { id: projectId },
+    select: {
+      id: true,
+      name: true,
+      spi: true,
+      cpi: true,
+      status: true,
+      methodology: true,
+    },
   })
+
+  // Wave P14c — risks YA REGISTRADOS en el proyecto, para que el LLM no
+  // los re-sugiera. Solo abiertos/en-mitigación (los CLOSED son históricos).
+  const existingRisks = await prisma.risk.findMany({
+    where: {
+      projectId,
+      status: { in: ['OPEN', 'MITIGATING'] },
+    },
+    select: {
+      title: true,
+      probability: true,
+      impact: true,
+      task: { select: { mnemonic: true, title: true } },
+    },
+    take: 50,
+  })
+
   return {
     now: now.toISOString().slice(0, 10),
+    project,
     overdue: overdue.map((t) => ({
       ...t,
       endDate: t.endDate?.toISOString().slice(0, 10),
@@ -119,7 +146,12 @@ async function gatherRiskContext(projectId?: string) {
       ...t,
       endDate: t.endDate?.toISOString().slice(0, 10),
     })),
-    projects,
+    existingRisks: existingRisks.map((r) => ({
+      title: r.title,
+      probability: r.probability,
+      impact: r.impact,
+      taskMnemonic: r.task?.mnemonic ?? null,
+    })),
   }
 }
 
@@ -152,34 +184,122 @@ Reglas:
   return object
 }
 
-export async function generateRiskAnalysis(input?: { projectId?: string }): Promise<RiskReport> {
+export async function generateRiskAnalysis(input: { projectId: string }): Promise<RiskReport> {
+  if (!input?.projectId) {
+    throw new Error('[INVALID_INPUT] projectId es obligatorio para análisis de riesgos.')
+  }
   if (!process.env.ANTHROPIC_API_KEY) {
     throw new Error('ANTHROPIC_API_KEY no está configurada en el servidor.')
   }
-  const ctx = await gatherRiskContext(input?.projectId)
+  const ctx = await gatherRiskContext(input.projectId)
+  if (!ctx.project) {
+    throw new Error('[NOT_FOUND] proyecto no existe')
+  }
   const { object } = await generateObject({
     model: anthropic('claude-sonnet-4-6'),
     schema: RiskReportSchema,
     system: `Eres Avante Brain, especialista en gestión de proyectos PMI/Agile/ITIL de FollowupGantt.
 
-Analizas datos de proyectos y devuelves alertas accionables en español.
+Analizas datos del proyecto **${ctx.project.name}** (metodología ${ctx.project.methodology}) y devuelves
+alertas accionables en español, calibradas a la matriz PMBOK 5×5.
 
 Reglas:
 - Devuelve **máximo 5 alertas**, priorizadas por severidad (HIGH > MEDIUM > LOW).
 - Cada alerta debe tener \`rationale\` con datos concretos (días atrasados, % avance, SPI numérico).
+- Cada alerta DEBE incluir \`probability\` (1-5), \`impact\` (1-5) y \`triggerDelayDays\` (días extra
+  al cronograma si el riesgo se materializa, null si no aplica).
+- Calibración matriz 5×5:
+  · prob 1-2 = improbable; 3 = posible; 4-5 = casi seguro
+  · impact 1-2 = molestia; 3 = afecta release; 4 = afecta milestone; 5 = catastrófico
+- \`severity\` se deriva del producto P×I:
+  · HIGH si P×I >= 12 · MEDIUM si 6-11 · LOW si <= 5
 - \`overallStatus\`:
-  - HEALTHY = sin atrasos críticos y SPI/CPI >= 0.95
-  - AT_RISK = 1-3 atrasos no-críticos o SPI 0.85-0.94
-  - CRITICAL = atrasos en tareas CRITICAL o SPI < 0.85
+  · HEALTHY = sin atrasos críticos y SPI/CPI >= 0.95
+  · AT_RISK = 1-3 atrasos no-críticos o SPI 0.85-0.94
+  · CRITICAL = atrasos en tareas CRITICAL o SPI < 0.85
 - \`type\` de alerta:
-  - OVERDUE: tarea pasó endDate y no está DONE
-  - CRITICAL_TASK: tarea con priority=CRITICAL en riesgo
-  - EVM_DEVIATION: SPI o CPI por debajo de 0.9
-  - DEPENDENCY_VIOLATION: predecesora no terminada que bloquea sucesora
-  - STALE: tarea IN_PROGRESS sin avance (progress=0)
-- \`suggestedAction\` debe ser concreta: "Reasignar a X", "Escalar a sponsor", "Acortar alcance", no genérica.
-- Si todo está saludable, devuelve un solo alert informativo de severity=LOW.`,
-    prompt: `Datos de proyectos:\n${JSON.stringify(ctx, null, 2)}`,
+  · OVERDUE: tarea pasó endDate y no está DONE
+  · CRITICAL_TASK: tarea con priority=CRITICAL en riesgo
+  · EVM_DEVIATION: SPI o CPI por debajo de 0.9
+  · DEPENDENCY_VIOLATION: predecesora no terminada que bloquea sucesora
+  · STALE: tarea IN_PROGRESS sin avance (progress=0)
+- \`taskMnemonic\` DEBE ser el mnemonic exacto de la tarea más relacionada (ej. "p9-3"),
+  o null si la alerta es global del proyecto (ej. EVM_DEVIATION).
+- \`suggestedAction\` debe ser una mitigación concreta y accionable que vaya directo al
+  campo \`Risk.mitigation\` del Risk Register: "Reasignar a X", "Escalar a sponsor",
+  "Acortar alcance", no genérica.
+
+🚫 **DEDUPE OBLIGATORIO**: el campo \`existingRisks\` del contexto contiene los riesgos
+YA REGISTRADOS en el Risk Register de este proyecto. **NO sugieras alertas que dupliquen
+en concepto** un riesgo ya registrado (compara title + taskMnemonic). Si todos los
+problemas relevantes ya están registrados, devuelve un solo alert LOW informativo.
+
+- Si todo está saludable y no hay riesgos NUEVOS para sugerir, devuelve un único alert
+  informativo de severity=LOW indicándolo expresamente.`,
+    prompt: `Datos del proyecto a analizar:\n${JSON.stringify(ctx, null, 2)}`,
   })
   return object
+}
+
+// ─── Wave P14c — Registrar alerta como Risk en BD ────────────────────
+
+/**
+ * Persiste una alerta del Project Manager AI como un `Risk` formal en
+ * el Risk Register del proyecto. Resuelve `taskMnemonic → taskId` si
+ * no se pasó explícito y la mnemonic existe en el mismo proyecto.
+ */
+export async function registerRiskFromAlert(
+  input: RegisterRiskInput,
+): Promise<RegisterRiskResult> {
+  if (!input.projectId)
+    throw new Error('[INVALID_INPUT] projectId requerido')
+  if (!input.alert?.title?.trim())
+    throw new Error('[INVALID_INPUT] alert.title requerido')
+
+  // Resolver taskId desde mnemonic si no viene explícito.
+  let taskId = input.taskId ?? null
+  if (!taskId && input.alert.taskMnemonic) {
+    const task = await prisma.task.findFirst({
+      where: {
+        projectId: input.projectId,
+        mnemonic: input.alert.taskMnemonic,
+        archivedAt: null,
+      },
+      select: { id: true },
+    })
+    taskId = task?.id ?? null
+  }
+
+  const created = await prisma.risk.create({
+    data: {
+      projectId: input.projectId,
+      taskId,
+      title: input.alert.title.trim().slice(0, 200),
+      description: input.alert.rationale.slice(0, 500),
+      probability: input.alert.probability,
+      impact: input.alert.impact,
+      mitigation: input.alert.suggestedAction.slice(0, 500),
+      triggerDelayDays: input.alert.triggerDelayDays ?? null,
+      status: 'OPEN',
+    },
+    select: { id: true, taskId: true },
+  })
+
+  return { riskId: created.id, taskId: created.taskId }
+}
+
+// ─── Wave P14c — Catálogo de proyectos para selector UI ──────────────
+
+export async function listProjectsForBrainAnalysis(): Promise<BrainProjectOption[]> {
+  const projects = await prisma.project.findMany({
+    where: { OR: [{ status: 'ACTIVE' }, { status: 'PLANNING' }] },
+    select: {
+      id: true,
+      name: true,
+      methodology: true,
+      status: true,
+    },
+    orderBy: [{ status: 'asc' }, { name: 'asc' }],
+  })
+  return projects
 }

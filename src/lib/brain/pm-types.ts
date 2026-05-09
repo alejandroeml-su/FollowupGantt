@@ -62,12 +62,25 @@ export const RiskAlertSchema = z.object({
     'DEPENDENCY_VIOLATION',
     'STALE',
   ]),
+  /** Wave P14c — Mnemonic de la task que origina el riesgo (preferido).
+   *  Si no hay task específica, null. El backend lo resuelve a `taskId`
+   *  al persistir el riesgo. */
   taskMnemonic: z.string().nullable(),
   title: z.string().describe('Título corto del riesgo (5-10 palabras).'),
   rationale: z
     .string()
     .describe('Explicación de 1-2 frases del por qué es riesgo, con datos concretos.'),
-  suggestedAction: z.string().describe('Acción concreta y accionable.'),
+  suggestedAction: z
+    .string()
+    .describe('Mitigación accionable concreta (lo que `Risk.mitigation` guarda).'),
+  /** PMBOK · matriz 5×5. */
+  probability: z.number().int().min(1).max(5)
+    .describe('Probabilidad 1-5 según matriz PMBOK 5×5 (1 = muy improbable, 5 = casi seguro).'),
+  impact: z.number().int().min(1).max(5)
+    .describe('Impacto 1-5 según matriz PMBOK 5×5 (1 = trivial, 5 = catastrófico para el proyecto).'),
+  /** Días extra al cronograma si el riesgo se materializa (Monte Carlo). */
+  triggerDelayDays: z.number().int().min(0).max(180).nullable()
+    .describe('Días corridos extra al cronograma si se materializa. Null si no aplica delay temporal.'),
 })
 
 export const RiskReportSchema = z.object({
@@ -83,4 +96,26 @@ export const RiskReportSchema = z.object({
     .describe('Top 5 alertas priorizadas por severidad (máx 5).'),
 })
 
+export type RiskAlert = z.infer<typeof RiskAlertSchema>
 export type RiskReport = z.infer<typeof RiskReportSchema>
+
+// ─── Wave P14c · Register risk inputs/outputs ─────────────────────
+
+export interface RegisterRiskInput {
+  projectId: string
+  alert: RiskAlert
+  /** Si null/undefined, el backend intenta resolver por taskMnemonic. */
+  taskId?: string | null
+}
+
+export interface RegisterRiskResult {
+  riskId: string
+  taskId: string | null
+}
+
+export interface BrainProjectOption {
+  id: string
+  name: string
+  methodology: string
+  status: string
+}
