@@ -30,6 +30,14 @@ enum ProjectStatus {
   COMPLETED
 }
 
+/// Wave P14 — Metodología de gestión del proyecto.
+/// SCRUM: ágil puro · PMI: plan-driven (PMBOK) · HYBRID: ambos.
+enum ProjectMethodology {
+  SCRUM
+  PMI
+  HYBRID
+}
+
 enum TaskStatus {
   TODO
   IN_PROGRESS
@@ -513,6 +521,11 @@ model Project {
   name        String
   description String?
   status      ProjectStatus @default(PLANNING)
+
+  /// Wave P14 — Metodología que rige la gestión del proyecto.
+  /// SCRUM: ágil puro · PMI: PMBOK plan-driven · HYBRID: combinación.
+  /// Determina qué vistas/artefactos exhibir como prominentes.
+  methodology ProjectMethodology @default(HYBRID)
 
   // Ola P4 · Equipo P4-1 — Multi-tenancy / Workspaces.
   // Opcional inicial: las server actions usan `getDefaultWorkspaceForUser`
