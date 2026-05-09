@@ -289,16 +289,26 @@ export async function registerRiskFromAlert(
     taskId = task?.id ?? null
   }
 
+  // Wave P14c — Clamp defensivo: el schema zod no puede usar min/max
+  // (Anthropic structured output los rechaza), así que el LLM podría
+  // devolver valores fuera de rango. Aquí los normalizamos antes de
+  // persistir para mantener integridad de la matriz 5×5.
+  const clampInt = (val: number, lo: number, hi: number): number =>
+    Math.max(lo, Math.min(hi, Math.round(val)))
+
   const created = await prisma.risk.create({
     data: {
       projectId: input.projectId,
       taskId,
       title: input.alert.title.trim().slice(0, 200),
       description: input.alert.rationale.slice(0, 500),
-      probability: input.alert.probability,
-      impact: input.alert.impact,
+      probability: clampInt(input.alert.probability, 1, 5),
+      impact: clampInt(input.alert.impact, 1, 5),
       mitigation: input.alert.suggestedAction.slice(0, 500),
-      triggerDelayDays: input.alert.triggerDelayDays ?? null,
+      triggerDelayDays:
+        input.alert.triggerDelayDays > 0
+          ? clampInt(input.alert.triggerDelayDays, 0, 180)
+          : null,
       status: 'OPEN',
     },
     select: { id: true, taskId: true },
