@@ -67,10 +67,27 @@ const wbsPhaseSchema = z.object({
 
 export type WBSPhase = z.infer<typeof wbsPhaseSchema>
 
+/**
+ * Wave P14 · Risk extendido con probability/impact (matriz 5×5 PMBOK)
+ * + título corto + delay si se materializa. Mantiene compat con outputs
+ * legacy del LLM: si solo viene `description`, normalizamos a title.
+ */
 const wbsRiskSchema = z.object({
-  description: z.string().min(1).max(200),
-  mitigation: z.string().min(1).max(200),
+  /** Título corto (3-8 palabras). */
+  title: z.string().min(1).max(120).optional(),
+  /** Descripción del riesgo (legacy). Si no viene title, se usa esto. */
+  description: z.string().min(1).max(300),
+  /** Probabilidad 1-5 (PMBOK matriz 5×5). */
+  probability: z.number().int().min(1).max(5).optional(),
+  /** Impacto 1-5 (PMBOK matriz 5×5). */
+  impact: z.number().int().min(1).max(5).optional(),
+  /** Mitigación / acción preventiva. */
+  mitigation: z.string().min(1).max(300),
+  /** Días corridos de delay extra si se materializa (alimenta Monte Carlo). */
+  triggerDelayDays: z.number().int().min(0).max(180).optional(),
 })
+
+export type WBSRisk = z.infer<typeof wbsRiskSchema>
 
 export const wbsSchema = z.object({
   projectName: z.string().min(1).max(100),
