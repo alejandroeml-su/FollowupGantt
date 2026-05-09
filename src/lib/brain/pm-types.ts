@@ -76,27 +76,25 @@ export const RiskAlertSchema = z.object({
   suggestedAction: z
     .string()
     .describe('Mitigación accionable concreta (lo que `Risk.mitigation` guarda).'),
-  /** PMBOK · matriz 5×5. */
+  /** PMBOK · matriz 5×5. NOTA: NO usar `.min/.max` aquí — Anthropic
+   *  structured output rechaza `minimum`/`maximum` en `integer` type:
+   *  "output_config.format.schema: For 'integer' type, properties
+   *  maximum, minimum are not supported". El rango (1-5 / 0-180) se
+   *  enforced en el system prompt + clamp en `registerRiskFromAlert`. */
   probability: z
     .number()
     .int()
-    .min(1)
-    .max(5)
-    .describe('Probabilidad 1-5 según matriz PMBOK 5×5 (1 = muy improbable, 5 = casi seguro).'),
+    .describe('Probabilidad ENTRE 1 y 5 según matriz PMBOK 5×5 (1=muy improbable, 5=casi seguro).'),
   impact: z
     .number()
     .int()
-    .min(1)
-    .max(5)
-    .describe('Impacto 1-5 según matriz PMBOK 5×5 (1 = trivial, 5 = catastrófico para el proyecto).'),
+    .describe('Impacto ENTRE 1 y 5 según matriz PMBOK 5×5 (1=trivial, 5=catastrófico).'),
   /** Días extra al cronograma si el riesgo se materializa.
    *  0 = sin delay, valor positivo = días que añade al cronograma. */
   triggerDelayDays: z
     .number()
     .int()
-    .min(0)
-    .max(180)
-    .describe('Días corridos extra al cronograma si se materializa. 0 si no aplica delay temporal.'),
+    .describe('Días corridos extra al cronograma si se materializa. ENTRE 0 y 180. 0 si no aplica.'),
 })
 
 export const RiskReportSchema = z.object({
