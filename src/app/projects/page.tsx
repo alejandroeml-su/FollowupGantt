@@ -1,17 +1,37 @@
 import { FolderKanban, Layers, Building2, Trash2 } from "lucide-react";
 import Link from 'next/link';
+import { redirect } from 'next/navigation';
 import prisma from "@/lib/prisma";
 import { createProject, deleteProject } from "@/lib/actions";
 import AreaFormClient from "@/components/AreaFormClient";
 import { WBSGeneratorTrigger } from "@/components/projects/WBSGeneratorDialog";
+import { requireUser } from "@/lib/auth/get-current-user";
+import { getProjectAccessFilter, getVisibleProjectIds } from "@/lib/auth/visibility";
 
 export const dynamic = "force-dynamic";
 
 export default async function ProjectsMaintenance() {
+  // Wave P13 (RBAC) — filtra TODA la página por visibilidad del usuario.
+  // Server-side; URL directa a /projects también queda restringida porque
+  // pasa por requireUser + filtro Prisma.
+  let user
+  try {
+    user = await requireUser()
+  } catch {
+    redirect('/login')
+  }
+  const visibleIds = await getVisibleProjectIds(user)
+  const accessFilter = await getProjectAccessFilter(user)
+
   const gerencias = await prisma.gerencia.findMany({
     include: {
       areas: {
-        include: { projects: { include: { tasks: true, manager: true } } },
+        include: {
+          projects: {
+            where: { id: { in: visibleIds.length > 0 ? visibleIds : ['__none__'] } },
+            include: { tasks: true, manager: true },
+          },
+        },
         orderBy: { name: 'asc' },
       },
     },
@@ -19,7 +39,7 @@ export default async function ProjectsMaintenance() {
   });
 
   const standaloneProjects = await prisma.project.findMany({
-    where: { areaId: null },
+    where: { AND: [{ areaId: null }, accessFilter] },
     include: { tasks: true, manager: true },
     orderBy: { name: 'asc' },
   });

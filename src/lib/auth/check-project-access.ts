@@ -1,7 +1,9 @@
 import 'server-only'
-import prisma from '@/lib/prisma'
 import { getCurrentUser } from '@/lib/auth/get-current-user'
-import { hasAdminRole } from '@/lib/auth/permissions'
+import {
+  assertCanViewProject,
+  canViewProject,
+} from '@/lib/auth/visibility'
 import type { SessionUser } from '@/lib/auth/session'
 
 /**
@@ -9,12 +11,11 @@ import type { SessionUser } from '@/lib/auth/session'
  * proyecto. Devuelve el usuario autenticado o lanza errores tipados:
  *
  *   - `[UNAUTHORIZED]` si no hay sesión válida.
- *   - `[FORBIDDEN]` si el usuario no es ADMIN/SUPER_ADMIN y no tiene
- *     `ProjectAssignment` para `projectId`.
+ *   - `[FORBIDDEN]` si el usuario no tiene visibilidad sobre el proyecto.
  *
- * Diseñado para ser barato: una sola query a `ProjectAssignment` cuando
- * el usuario no es admin. Cachear en futuro con `cache()` si el mismo
- * render dispara N actions sobre el mismo proyecto.
+ * Wave P13 (RBAC visibilidad): delega a `assertCanViewProject` que
+ * implementa la matriz jerárquica USER < GERENTE_AREA < GERENCIA_GENERAL
+ * < ADMIN < SUPER_ADMIN, con audit log automático en denials.
  *
  * Uso típico:
  *
@@ -35,27 +36,7 @@ export async function requireProjectAccess(
     throw new Error('[UNAUTHORIZED] Sesión requerida')
   }
 
-  // Admins (SUPER_ADMIN/ADMIN) tienen acceso global a todos los proyectos.
-  if (hasAdminRole(user.roles)) {
-    return user
-  }
-
-  const assignment = await prisma.projectAssignment.findUnique({
-    where: {
-      projectId_userId: {
-        projectId,
-        userId: user.id,
-      },
-    },
-    select: { projectId: true },
-  })
-
-  if (!assignment) {
-    throw new Error(
-      `[FORBIDDEN] El usuario no tiene acceso al proyecto ${projectId}`,
-    )
-  }
-
+  await assertCanViewProject(user, projectId)
   return user
 }
 
@@ -65,10 +46,7 @@ export async function requireProjectAccess(
  * seguir usando `requireProjectAccess` para defender el dato.
  */
 export async function canAccessProject(projectId: string): Promise<boolean> {
-  try {
-    await requireProjectAccess(projectId)
-    return true
-  } catch {
-    return false
-  }
+  const user = await getCurrentUser()
+  if (!user) return false
+  return canViewProject(user, projectId)
 }
