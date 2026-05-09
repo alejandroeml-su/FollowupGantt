@@ -52,6 +52,16 @@ type Props = {
   /** Pre-selecciona una release (caller que sabe contexto). */
   defaultReleaseId?: string | null
   onSuccess?: (sprintId: string) => void
+  /**
+   * Wave P12 (Scrum 100%) — Sugerencia de velocity histórica.
+   * Si viene, mostramos forecast P10/P50/P90 + botón "Aplicar P50".
+   */
+  velocityForecast?: {
+    p10: number
+    p50: number
+    p90: number
+    sampleSize: number
+  } | null
 }
 
 function todayIso(offsetDays = 0): string {
@@ -78,6 +88,7 @@ export function NewSprintModal({
   releases = [],
   defaultReleaseId,
   onSuccess,
+  velocityForecast,
 }: Props) {
   const titleId = useId()
   const [name, setName] = useState('')
@@ -296,6 +307,64 @@ export function NewSprintModal({
             <p className="mt-1 text-[10px] text-muted-foreground">
               Opcional · podrás ajustarlo después en Sprint Planning
             </p>
+
+            {/* Wave P12 — Velocity-based suggestion */}
+            {velocityForecast && velocityForecast.sampleSize >= 2 && (
+              <div className="mt-2 rounded-md border border-cyan-500/30 bg-cyan-500/10 px-3 py-2">
+                <div className="flex items-start gap-2">
+                  <span className="mt-0.5 text-cyan-300">📊</span>
+                  <div className="flex-1 text-[11px]">
+                    <div className="font-semibold text-cyan-200">
+                      Forecast Monte Carlo · histórico {velocityForecast.sampleSize} sprints
+                    </div>
+                    <div className="mt-0.5 text-muted-foreground">
+                      P10:{' '}
+                      <span className="font-medium text-foreground">
+                        {velocityForecast.p10}
+                      </span>{' '}
+                      · P50:{' '}
+                      <span className="font-bold text-cyan-200">
+                        {velocityForecast.p50}
+                      </span>{' '}
+                      · P90:{' '}
+                      <span className="font-medium text-foreground">
+                        {velocityForecast.p90}
+                      </span>{' '}
+                      SP
+                    </div>
+                    <div className="mt-1 flex gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setCapacity(velocityForecast.p10.toString())
+                        }
+                        className="rounded bg-card px-1.5 py-0.5 text-[10px] text-muted-foreground hover:bg-card-hover hover:text-foreground"
+                      >
+                        Aplicar P10
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setCapacity(velocityForecast.p50.toString())
+                        }
+                        className="rounded bg-cyan-500/30 px-1.5 py-0.5 text-[10px] font-semibold text-cyan-100 hover:bg-cyan-500/40"
+                      >
+                        Aplicar P50 (recomendado)
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setCapacity(velocityForecast.p90.toString())
+                        }
+                        className="rounded bg-card px-1.5 py-0.5 text-[10px] text-muted-foreground hover:bg-card-hover hover:text-foreground"
+                      >
+                        Aplicar P90
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Selector Release · regla ágil "Sprints viven dentro de un Release" */}

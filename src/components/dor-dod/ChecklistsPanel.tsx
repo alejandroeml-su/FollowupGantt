@@ -8,12 +8,25 @@
  * `ProjectDetailClient` o como sección colapsable en settings.
  *
  * Si las plantillas están vacías, muestra empty state con CTA.
+ *
+ * Wave P12 (Scrum 100% · DoD HARD) — Switch para activar enforcement
+ * bloqueante de DoD al mover a DONE.
  */
 
-import { useState } from 'react'
-import { CheckCircle2, ListChecks, Pencil, Plus } from 'lucide-react'
+import { useState, useTransition } from 'react'
+import {
+  CheckCircle2,
+  Lock,
+  ListChecks,
+  Pencil,
+  Plus,
+  Unlock,
+} from 'lucide-react'
 import { clsx } from 'clsx'
+import { useRouter } from 'next/navigation'
 import { ChecklistTemplateEditor } from './ChecklistTemplateEditor'
+import { toggleDodHardEnforce } from '@/lib/actions/dor-dod'
+import { toast } from '@/components/interactions/Toaster'
 
 type Props = {
   projectId: string
@@ -21,10 +34,40 @@ type Props = {
   dod: string[]
   /** Wave P9 follow-up — nombre del proyecto/producto para mostrar en el editor. */
   projectName?: string
+  /** Wave P12 — Default false (validación SOFT toast). True bloquea status DONE sin DoD completo. */
+  dodHardEnforce?: boolean
 }
 
-export function ChecklistsPanel({ projectId, dor, dod, projectName }: Props) {
+export function ChecklistsPanel({
+  projectId,
+  dor,
+  dod,
+  projectName,
+  dodHardEnforce = false,
+}: Props) {
   const [editing, setEditing] = useState<'DOR' | 'DOD' | null>(null)
+  const [hardEnforce, setHardEnforce] = useState(dodHardEnforce)
+  const [isPending, startTransition] = useTransition()
+  const router = useRouter()
+
+  const toggleHard = () => {
+    const next = !hardEnforce
+    setHardEnforce(next)
+    startTransition(async () => {
+      try {
+        await toggleDodHardEnforce({ projectId, enabled: next })
+        toast.success(
+          next
+            ? 'DoD HARD activo · DONE bloqueado sin checklist completo'
+            : 'DoD SOFT · solo toast informativo',
+        )
+        router.refresh()
+      } catch (err) {
+        setHardEnforce(!next)
+        toast.error(err instanceof Error ? err.message : 'Error')
+      }
+    })
+  }
 
   return (
     <>
@@ -46,6 +89,59 @@ export function ChecklistsPanel({ projectId, dor, dod, projectName }: Props) {
           onEdit={() => setEditing('DOD')}
         />
       </section>
+
+      <div
+        className={clsx(
+          'mt-3 flex flex-wrap items-center gap-3 rounded-lg border bg-card px-4 py-2.5 text-sm',
+          hardEnforce
+            ? 'border-rose-500/40 bg-rose-500/5'
+            : 'border-border',
+        )}
+      >
+        <span
+          className={clsx(
+            'flex h-7 w-7 items-center justify-center rounded-md',
+            hardEnforce
+              ? 'bg-rose-500/20 text-rose-300'
+              : 'bg-muted text-muted-foreground',
+          )}
+        >
+          {hardEnforce ? (
+            <Lock className="h-3.5 w-3.5" />
+          ) : (
+            <Unlock className="h-3.5 w-3.5" />
+          )}
+        </span>
+        <div className="flex-1">
+          <div className="font-medium text-foreground">
+            DoD HARD enforcement
+          </div>
+          <p className="text-xs text-muted-foreground">
+            {hardEnforce
+              ? 'Bloquea mover a DONE sin checklist DoD completo (recomendado para releases formales).'
+              : 'Solo muestra toast informativo. El equipo puede saltarse DoD bajo su responsabilidad.'}
+          </p>
+        </div>
+        <button
+          type="button"
+          role="switch"
+          aria-checked={hardEnforce}
+          onClick={toggleHard}
+          disabled={isPending}
+          className={clsx(
+            'relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors',
+            hardEnforce ? 'bg-rose-500' : 'bg-muted',
+            isPending && 'opacity-50',
+          )}
+        >
+          <span
+            className={clsx(
+              'inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition',
+              hardEnforce ? 'translate-x-5' : 'translate-x-0',
+            )}
+          />
+        </button>
+      </div>
 
       {editing === 'DOR' && (
         <ChecklistTemplateEditor

@@ -12,8 +12,8 @@ import { clsx } from 'clsx'
 import {
   createStakeholder,
   deleteStakeholder,
-  suggestEngagementStrategy,
 } from '@/lib/actions/stakeholders'
+import { suggestEngagementStrategy } from '@/lib/stakeholders/engagement'
 import { toast } from '@/components/interactions/Toaster'
 
 type Level = 'LOW' | 'MEDIUM' | 'HIGH'

@@ -2,31 +2,24 @@
 
 /**
  * Wave P11-PMI (HU-12.2) — Server actions Stakeholder Register.
+ *
+ * Nota: el helper síncrono `suggestEngagementStrategy` vive en
+ * `lib/stakeholders/engagement.ts` para cumplir la regla "files con
+ * 'use server' solo exportan funciones async". Importar desde ahí.
  */
 
 import { revalidatePath } from 'next/cache'
 import prisma from '@/lib/prisma'
 import { recordAuditEventSafe } from '@/lib/audit/events'
-
-type StakeholderLevel = 'LOW' | 'MEDIUM' | 'HIGH'
-type StakeholderInfluence = 'POSITIVE' | 'NEUTRAL' | 'NEGATIVE'
+import {
+  suggestEngagementStrategy,
+  type StakeholderInfluence,
+  type StakeholderLevel,
+} from '@/lib/stakeholders/engagement'
 
 function revalidateStakeholders(projectId: string) {
   revalidatePath(`/projects/${projectId}`)
   revalidatePath(`/projects/${projectId}/stakeholders`)
-}
-
-/**
- * Engagement strategy sugerida según matriz poder×interés (Mendelow).
- */
-export function suggestEngagementStrategy(
-  power: StakeholderLevel,
-  interest: StakeholderLevel,
-): string {
-  if (power === 'HIGH' && interest === 'HIGH') return 'Manage Closely'
-  if (power === 'HIGH') return 'Keep Satisfied'
-  if (interest === 'HIGH') return 'Keep Informed'
-  return 'Monitor'
 }
 
 export async function listStakeholders(projectId: string) {
