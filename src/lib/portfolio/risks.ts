@@ -23,6 +23,10 @@ export interface ConsolidatedRiskItem {
   projectName: string
   detectedAt: string // ISO
   mitigation: string | null
+  /** Wave P14c — Task asociada al risk (origen Brain AI o manual con task-link). */
+  taskId: string | null
+  taskMnemonic: string | null
+  taskTitle: string | null
 }
 
 export interface RiskMatrixCell {
@@ -89,6 +93,8 @@ export async function loadConsolidatedRisks(
       status: true,
       detectedAt: true,
       mitigation: true,
+      taskId: true,
+      task: { select: { mnemonic: true, title: true } },
       project: { select: { id: true, name: true } },
       owner: { select: { name: true } },
     },
@@ -107,6 +113,9 @@ export async function loadConsolidatedRisks(
     projectName: r.project.name,
     detectedAt: r.detectedAt.toISOString(),
     mitigation: r.mitigation,
+    taskId: r.taskId,
+    taskMnemonic: r.task?.mnemonic ?? null,
+    taskTitle: r.task?.title ?? null,
   }))
 
   // Matriz 5×5: count por celda (probability, impact). Solo riesgos NO closed.
