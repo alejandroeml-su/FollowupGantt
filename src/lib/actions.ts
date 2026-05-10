@@ -14,6 +14,9 @@ import { countPendingCriteria } from '@/lib/user-story/types'
 import { recordAuditEventSafe } from '@/lib/audit/events'
 import { nextProgressForStatus } from '@/lib/tasks/status-progress'
 import { seedOnboardingKit, shouldSeedKit } from '@/lib/onboarding/seed-kit'
+// Wave P17-B (API v2 / Webhooks v2) — dispatch fire-and-forget.
+import { dispatchEvent as dispatchV2Event } from '@/lib/webhooks-out/dispatcher'
+// Wave P17-D (Observability APM) — RED metrics wrapper.
 import { withMetrics } from '@/lib/observability/metrics'
 import type {
   TaskType,
@@ -182,10 +185,32 @@ export async function updateProject(formData: FormData) {
 
   if (!id || !name) throw new Error('ID y nombre son requeridos')
 
-  await prisma.project.update({
+  // Wave P17-B — leemos el status previo para detectar cambio y emitir
+  // webhook v2 `project.status_changed` solo si efectivamente cambió.
+  const before = await prisma.project.findUnique({
     where: { id },
-    data: { name, description, status: status as ProjectStatus }
+    select: { status: true, workspaceId: true },
   })
+
+  const updated = await prisma.project.update({
+    where: { id },
+    data: { name, description, status: status as ProjectStatus },
+    select: { id: true, name: true, status: true, workspaceId: true },
+  })
+
+  if (before && before.workspaceId && before.status !== updated.status) {
+    void dispatchV2Event({
+      workspaceId: before.workspaceId,
+      event: 'project.status_changed',
+      payload: {
+        project: { id: updated.id, name: updated.name },
+        previousStatus: before.status,
+        newStatus: updated.status,
+      },
+    })
+  }
+
+  // Wave P17-A — invalida cache de catálogo de proyectos.
   await invalidateCatalog(TAG_CATALOG_PROJECTS)
   revalidatePath('/projects')
   revalidatePath('/')
@@ -308,6 +333,7 @@ export async function createTask(formData: FormData) {
   }
 
   // Generar mnemónico automático: PRIM-1, INFRA-1...
+  // Wave P17-B: incluimos `workspaceId` para emitir webhook v2.
   const project = await prisma.project.findUnique({ where: { id: projectId } })
   const prefix = project?.name.split(' ').map(w => w[0]).join('').substring(0, 4).toUpperCase() || 'TASK'
   const count = await prisma.task.count({ where: { projectId } })
@@ -342,6 +368,20 @@ export async function createTask(formData: FormData) {
     after: created,
     metadata: { projectId, parentId: parentId || null },
   })
+  // Wave P17-B — Webhook v2 fire-and-forget (`task.created`).
+  if (project?.workspaceId) {
+    void dispatchV2Event({
+      workspaceId: project.workspaceId,
+      event: 'task.created',
+      payload: {
+        id: created.id,
+        title: created.title,
+        mnemonic: created.mnemonic,
+        status: created.status,
+        projectId,
+      },
+    })
+  }
   invalidateCpmCache(projectId)
   revalidatePath('/list')
   revalidatePath('/kanban')
