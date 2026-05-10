@@ -203,6 +203,8 @@ const menuGroups: RouteGroup[] = [
     color: 'text-violet-400',
     roles: ADMIN_ROLES,
     routes: [
+      // Wave P17-C — Self-Service Admin (SUPER_ADMIN). Atajo destacado.
+      { name: 'sidebar.items.adminPanel', path: '/admin', icon: ShieldAlertIcon, roles: SUPER_ONLY },
       { name: 'sidebar.items.rolesPermissions', path: '/settings/roles', icon: Settings },
       { name: 'sidebar.items.teams', path: '/settings/teams', icon: Users },
       { name: 'sidebar.items.gerencias', path: '/gerencias', icon: Building2 },
