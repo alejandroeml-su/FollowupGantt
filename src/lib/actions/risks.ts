@@ -324,6 +324,56 @@ export async function getRisksForProject(
   return rows.map(serializeRisk)
 }
 
+/**
+ * P17-A · Variante paginada (cursor-based) de `getRisksForProject`.
+ *
+ * Para listas largas (Risk Register cross-project con cientos de
+ * riesgos) la versión sin paginar carga todo en una sola respuesta y
+ * satura tanto Postgres como la red. Aquí el cursor es el `id` del
+ * último riesgo visto, ordenando por (probability DESC, impact DESC,
+ * createdAt DESC, id DESC).
+ *
+ * Devuelve `{ rows, nextCursor }`. Si `nextCursor` es null, no hay
+ * más páginas. La UI mantiene el cursor en estado y llama de nuevo
+ * con cursorId para cargar la siguiente.
+ */
+export async function getRisksForProjectPaginated(input: {
+  projectId?: string | null
+  status?: RiskStatus | null
+  limit?: number
+  cursorId?: string | null
+}): Promise<{ rows: SerializedRisk[]; nextCursor: string | null }> {
+  const limit = Math.max(1, Math.min(200, input.limit ?? 50))
+  const where: Prisma.RiskWhereInput = {}
+  if (input.projectId) where.projectId = input.projectId
+  if (input.status) where.status = input.status
+
+  const rows = await prisma.risk.findMany({
+    where,
+    orderBy: [
+      { probability: 'desc' },
+      { impact: 'desc' },
+      { createdAt: 'desc' },
+      { id: 'desc' },
+    ],
+    take: limit + 1,
+    ...(input.cursorId
+      ? { cursor: { id: input.cursorId }, skip: 1 }
+      : {}),
+    include: {
+      project: { select: { name: true } },
+      owner: { select: { name: true } },
+    },
+  })
+
+  const hasMore = rows.length > limit
+  const slice = hasMore ? rows.slice(0, limit) : rows
+  return {
+    rows: slice.map(serializeRisk),
+    nextCursor: hasMore ? slice[slice.length - 1]!.id : null,
+  }
+}
+
 export async function getRiskById(id: string): Promise<SerializedRisk | null> {
   const row = await prisma.risk.findUnique({
     where: { id },

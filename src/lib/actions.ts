@@ -1,7 +1,7 @@
 'use server'
 
 import prisma from '@/lib/prisma'
-import { revalidatePath } from 'next/cache'
+import { revalidatePath, revalidateTag, unstable_cache } from 'next/cache'
 import { after } from 'next/server'
 import { sendMentionNotification } from '@/lib/email/mention-notification'
 import { invalidateCpmCache } from '@/lib/scheduling/invalidate'
@@ -47,6 +47,26 @@ function revalidateTaskViews() {
 }
 
 // =============================================
+// P17-A · Cache strategy
+// =============================================
+//
+// Catálogos globales (gerencias, áreas, proyectos, usuarios) se leen en
+// muchas vistas y mutan poco. Los envolvemos en `unstable_cache` con
+// TTL 60s y un tag por catálogo para invalidación selectiva tras
+// cualquier mutación. Patron stale-while-revalidate ('max') consistente
+// con el resto del repo (audit.ts, notifications.ts).
+const CATALOG_REVALIDATE_SECONDS = 60
+const TAG_CATALOG_GERENCIAS = 'catalog:gerencias'
+const TAG_CATALOG_AREAS = 'catalog:areas'
+const TAG_CATALOG_PROJECTS = 'catalog:projects'
+const TAG_CATALOG_USERS = 'catalog:users'
+
+async function invalidateCatalog(tag: string): Promise<void> {
+  // Profile 'max' = stale-while-revalidate (deprecation-safe en Next 16).
+  revalidateTag(tag, 'max')
+}
+
+// =============================================
 // CRUD: GERENCIAS
 // =============================================
 
@@ -57,6 +77,7 @@ export async function createGerencia(formData: FormData) {
   if (!name) throw new Error('Nombre de la gerencia es requerido')
 
   await prisma.gerencia.create({ data: { name: name.toUpperCase(), description } })
+  await invalidateCatalog(TAG_CATALOG_GERENCIAS)
   revalidatePath('/gerencias')
   revalidatePath('/projects')
 }
@@ -72,6 +93,7 @@ export async function updateGerencia(formData: FormData) {
     where: { id },
     data: { name: name.toUpperCase(), description }
   })
+  await invalidateCatalog(TAG_CATALOG_GERENCIAS)
   revalidatePath('/gerencias')
   revalidatePath('/projects')
 }
@@ -81,15 +103,27 @@ export async function deleteGerencia(formData: FormData) {
   if (!id) throw new Error('ID es requerido')
 
   await prisma.gerencia.delete({ where: { id } })
+  await invalidateCatalog(TAG_CATALOG_GERENCIAS)
   revalidatePath('/gerencias')
   revalidatePath('/projects')
 }
 
 export async function getGerencias() {
-  return prisma.gerencia.findMany({
-    include: { areas: true },
-    orderBy: { name: 'asc' }
-  })
+  // P17-A · cacheado con tags `catalog:gerencias` + `catalog:areas`
+  // (la query incluye areas; cualquier mutación de áreas también
+  // invalida esta entrada). TTL 60s + stale-while-revalidate.
+  return unstable_cache(
+    async () =>
+      prisma.gerencia.findMany({
+        include: { areas: true },
+        orderBy: { name: 'asc' },
+      }),
+    ['catalog-gerencias'],
+    {
+      tags: [TAG_CATALOG_GERENCIAS, TAG_CATALOG_AREAS],
+      revalidate: CATALOG_REVALIDATE_SECONDS,
+    },
+  )()
 }
 
 // =============================================
@@ -137,6 +171,7 @@ export async function createProject(formData: FormData) {
     }
   }
 
+  await invalidateCatalog(TAG_CATALOG_PROJECTS)
   revalidatePath('/projects')
   revalidatePath('/')
   revalidatePath(`/projects/${created.id}`)
@@ -175,6 +210,8 @@ export async function updateProject(formData: FormData) {
     })
   }
 
+  // Wave P17-A — invalida cache de catálogo de proyectos.
+  await invalidateCatalog(TAG_CATALOG_PROJECTS)
   revalidatePath('/projects')
   revalidatePath('/')
 }
@@ -184,6 +221,7 @@ export async function deleteProject(formData: FormData) {
   if (!id) throw new Error('ID es requerido')
 
   await prisma.project.delete({ where: { id } })
+  await invalidateCatalog(TAG_CATALOG_PROJECTS)
   revalidatePath('/projects')
   revalidatePath('/')
 }
@@ -687,14 +725,15 @@ export async function createUser(formData: FormData) {
   if (!name || !email) throw new Error('Nombre y email son requeridos')
 
   await prisma.user.create({
-    data: { 
-      name, 
-      email, 
+    data: {
+      name,
+      email,
       roles: {
         create: roleIds.map(roleId => ({ roleId }))
       }
     }
   })
+  await invalidateCatalog(TAG_CATALOG_USERS)
   revalidatePath('/workload')
   revalidatePath('/settings/users')
 }
@@ -813,6 +852,7 @@ export async function deleteUser(formData: FormData) {
   if (!id) throw new Error('ID es requerido')
 
   await prisma.user.delete({ where: { id } })
+  await invalidateCatalog(TAG_CATALOG_USERS)
   revalidatePath('/workload')
   revalidatePath('/settings/users')
 }
@@ -830,6 +870,8 @@ export async function createArea(formData: FormData) {
   if (!gerenciaId) throw new Error('Gerencia es requerida')
 
   await prisma.area.create({ data: { name, description, gerenciaId } })
+  await invalidateCatalog(TAG_CATALOG_AREAS)
+  await invalidateCatalog(TAG_CATALOG_GERENCIAS)
   revalidatePath('/projects')
   revalidatePath('/gerencias')
 }
@@ -846,6 +888,8 @@ export async function updateArea(formData: FormData) {
   if (gerenciaId) data.gerenciaId = gerenciaId
 
   await prisma.area.update({ where: { id }, data })
+  await invalidateCatalog(TAG_CATALOG_AREAS)
+  await invalidateCatalog(TAG_CATALOG_GERENCIAS)
   revalidatePath('/projects')
   revalidatePath('/gerencias')
 }
@@ -855,6 +899,8 @@ export async function deleteArea(formData: FormData) {
   if (!id) throw new Error('ID es requerido')
 
   await prisma.area.delete({ where: { id } })
+  await invalidateCatalog(TAG_CATALOG_AREAS)
+  await invalidateCatalog(TAG_CATALOG_GERENCIAS)
   revalidatePath('/projects')
   revalidatePath('/gerencias')
 }
@@ -892,25 +938,61 @@ export async function createSprint(formData: FormData) {
 // =============================================
 
 export async function getProjects() {
-  return prisma.project.findMany({ orderBy: { name: 'asc' } })
+  // P17-A · catálogo de proyectos cacheado (TTL 60s, tag catalog:projects).
+  // Se invalida explícitamente desde createProject/updateProject/deleteProject.
+  return unstable_cache(
+    async () => prisma.project.findMany({ orderBy: { name: 'asc' } }),
+    ['catalog-projects'],
+    {
+      tags: [TAG_CATALOG_PROJECTS],
+      revalidate: CATALOG_REVALIDATE_SECONDS,
+    },
+  )()
 }
 
 export async function getUsers() {
-  return prisma.user.findMany({ orderBy: { name: 'asc' } })
+  // P17-A · catálogo de usuarios cacheado (TTL 60s, tag catalog:users).
+  return unstable_cache(
+    async () => prisma.user.findMany({ orderBy: { name: 'asc' } }),
+    ['catalog-users'],
+    {
+      tags: [TAG_CATALOG_USERS],
+      revalidate: CATALOG_REVALIDATE_SECONDS,
+    },
+  )()
 }
 
 export async function getAreas() {
-  return prisma.area.findMany({
-    include: { gerencia: true },
-    orderBy: { name: 'asc' }
-  })
+  // P17-A · catálogo de áreas cacheado (TTL 60s).
+  return unstable_cache(
+    async () =>
+      prisma.area.findMany({
+        include: { gerencia: true },
+        orderBy: { name: 'asc' },
+      }),
+    ['catalog-areas'],
+    {
+      tags: [TAG_CATALOG_AREAS, TAG_CATALOG_GERENCIAS],
+      revalidate: CATALOG_REVALIDATE_SECONDS,
+    },
+  )()
 }
 
 export async function getAreasByGerencia(gerenciaId: string) {
-  return prisma.area.findMany({
-    where: { gerenciaId },
-    orderBy: { name: 'asc' }
-  })
+  // P17-A · cacheado por gerenciaId (clave varía con el argumento). Se
+  // invalida con cualquier evento que afecte el catálogo de áreas.
+  return unstable_cache(
+    async () =>
+      prisma.area.findMany({
+        where: { gerenciaId },
+        orderBy: { name: 'asc' },
+      }),
+    ['catalog-areas-by-gerencia', gerenciaId],
+    {
+      tags: [TAG_CATALOG_AREAS],
+      revalidate: CATALOG_REVALIDATE_SECONDS,
+    },
+  )()
 }
 
 // =============================================

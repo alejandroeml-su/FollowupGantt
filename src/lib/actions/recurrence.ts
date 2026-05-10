@@ -284,16 +284,24 @@ export async function generateOverdueOccurrences(
     (d) => d.getTime() > lower.getTime() || (rule.lastGeneratedAt == null && d.getTime() >= rule.startDate.getTime()),
   )
 
+  // P17-A · paralelizamos: cada `instantiateFromTemplate` es idempotente
+  // sobre `(recurrenceRuleId, occurrenceDate)` (índice único en BD), así
+  // que correrlas en paralelo no provoca duplicados. Pre-P17 esto era un
+  // for/await secuencial → N round-trips serializados.
   let generated = 0
   let skipped = 0
-  for (const occurrenceDate of occurrences) {
-    const result = await instantiateFromTemplate({
-      templateId: rule.template.id,
-      projectId: rule.template.projectId,
-      recurrenceRuleId: rule.id,
-      occurrenceDate,
-      overrides: { startDate: occurrenceDate.toISOString() },
-    })
+  const results = await Promise.all(
+    occurrences.map((occurrenceDate) =>
+      instantiateFromTemplate({
+        templateId: rule.template.id,
+        projectId: rule.template.projectId as string,
+        recurrenceRuleId: rule.id,
+        occurrenceDate,
+        overrides: { startDate: occurrenceDate.toISOString() },
+      }),
+    ),
+  )
+  for (const result of results) {
     if (result.alreadyExisted) skipped++
     else generated++
   }

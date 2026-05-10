@@ -162,6 +162,82 @@ export async function getAllocationForRange(input: {
 }
 
 /**
+ * P17-A · Variante paginada de `getAllocationForRange`.
+ *
+ * Paginamos por usuario (no por celda) — el heatmap se interpreta como
+ * matriz [usuarios × semanas]. Para listas largas (>50 personas) la
+ * versión sin paginar carga TODA la matriz; aquí sólo materializamos
+ * un slice de usuarios.
+ *
+ * Estrategia:
+ *   1. Buscamos los `limit + 1` userIds (ordenados por nombre) que
+ *      tengan al menos una task activa en [start, end] — usando un
+ *      cursor `cursorUserId` para saltarse los ya vistos.
+ *   2. Limitamos a esos usuarios el cómputo del allocation.
+ *
+ * Devuelve `{ snapshots, nextCursor }` donde `nextCursor` es el
+ * userId más alto del slice (lexicográficamente) o null si no hay más.
+ */
+export async function getAllocationForRangePaginated(input: {
+  from?: Date | string
+  to?: Date | string
+  daysAhead?: number
+  limit?: number
+  cursorUserId?: string | null
+} = {}): Promise<{
+  snapshots: WeeklyAllocationSnapshot[]
+  nextCursor: string | null
+}> {
+  const limit = Math.max(1, Math.min(200, input.limit ?? 50))
+  const start = input.from
+    ? new Date(input.from)
+    : weekStartMonday(new Date())
+  const daysAhead = input.daysAhead ?? 28
+  const end = input.to
+    ? new Date(input.to)
+    : new Date(start.getTime() + daysAhead * 86_400_000)
+  start.setUTCHours(0, 0, 0, 0)
+  end.setUTCHours(0, 0, 0, 0)
+
+  // 1. Listar userIds activos en el rango (ordenados por id para cursor
+  //    estable). Usamos `distinct` sobre Task con un select ligero.
+  const activeAssignees = await prisma.task.findMany({
+    where: {
+      archivedAt: null,
+      status: { not: 'DONE' },
+      assigneeId: { not: null },
+      startDate: { lte: end },
+      endDate: { gte: start },
+      dailyEffortHours: { not: null },
+      ...(input.cursorUserId
+        ? { assigneeId: { gt: input.cursorUserId } }
+        : {}),
+    },
+    distinct: ['assigneeId'],
+    orderBy: { assigneeId: 'asc' },
+    take: limit + 1,
+    select: { assigneeId: true },
+  })
+  const userIds = activeAssignees
+    .map((r) => r.assigneeId)
+    .filter((v): v is string => !!v)
+
+  const hasMore = userIds.length > limit
+  const sliceIds = hasMore ? userIds.slice(0, limit) : userIds
+  if (sliceIds.length === 0) {
+    return { snapshots: [], nextCursor: null }
+  }
+
+  const allSnapshots = await getAllocationForRange({ from: start, to: end })
+  const snapshots = allSnapshots.filter((s) => sliceIds.includes(s.userId))
+
+  return {
+    snapshots,
+    nextCursor: hasMore ? sliceIds[sliceIds.length - 1] : null,
+  }
+}
+
+/**
  * Persiste los snapshots semanales en `ResourceAllocationSnapshot`.
  * Idempotente sobre `(userId, weekStart)` → upsert.
  *

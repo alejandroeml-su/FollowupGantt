@@ -177,18 +177,25 @@ export async function getLessonCategoryStats(input: {
   workspaceId?: string
   projectId?: string
 }) {
-  const lessons = await prisma.lessonLearned.findMany({
+  // P17-A · N+1/sobre-fetch fix: usábamos findMany para traer todas las
+  // filas y contarlas en TS. Ahora dejamos a Postgres agregar y solo
+  // viajamos los rollups (1 fila por categoría). La query crítica usa
+  // los índices @@index([projectId]) y la FK Project.workspaceId.
+  const grouped = await prisma.lessonLearned.groupBy({
+    by: ['category'],
     where: {
       projectId: input.projectId,
       project: input.workspaceId
         ? { workspaceId: input.workspaceId }
         : undefined,
     },
-    select: { category: true },
+    _count: { _all: true },
   })
   const stats: Record<string, number> = {}
-  for (const l of lessons) {
-    stats[l.category] = (stats[l.category] || 0) + 1
+  let total = 0
+  for (const g of grouped) {
+    stats[g.category] = g._count._all
+    total += g._count._all
   }
-  return { total: lessons.length, byCategory: stats }
+  return { total, byCategory: stats }
 }

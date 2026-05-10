@@ -14,9 +14,10 @@
  */
 
 import { useState, useTransition } from 'react'
-import { Plus, Play, RotateCcw } from 'lucide-react'
+import { Plus, Play, RotateCcw, ChevronDown } from 'lucide-react'
 import {
   deleteRisk,
+  getRisksForProjectPaginated,
   runMonteCarloForProject,
 } from '@/lib/actions/risks'
 import type { SerializedRisk } from '@/lib/risks/types'
@@ -28,17 +29,34 @@ import { MonteCarloChart } from './MonteCarloChart'
 
 type Props = {
   risks: SerializedRisk[]
+  /**
+   * P17-A · Pagination cursor-based. Si null no hay más páginas.
+   * Si presente, el botón "Cargar más" hará un round-trip al server.
+   */
+  initialNextCursor?: string | null
   projects: Array<{ id: string; name: string }>
   users: Array<{ id: string; name: string }>
   defaultProjectId: string | null
+  /**
+   * P17-A · projectId del filtro de URL (no necesariamente igual al
+   * defaultProjectId, que se infiere si solo hay un proyecto). Lo usamos
+   * al pedir la siguiente página para mantener el scope.
+   */
+  scopeProjectId?: string | null
 }
 
 export function RiskRegisterBoard({
-  risks,
+  risks: initialRisks,
+  initialNextCursor = null,
   projects,
   users,
   defaultProjectId,
+  scopeProjectId = null,
 }: Props) {
+  // P17-A · estado local para soportar "Cargar más" sin re-fetch del page.
+  const [risks, setRisks] = useState<SerializedRisk[]>(initialRisks)
+  const [nextCursor, setNextCursor] = useState<string | null>(initialNextCursor)
+  const [loadMoreError, setLoadMoreError] = useState<string | null>(null)
   const [cellSelection, setCellSelection] = useState<MatrixCellSelection>(null)
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editing, setEditing] = useState<SerializedRisk | null>(null)
@@ -96,6 +114,26 @@ export function RiskRegisterBoard({
   function handleResetSim() {
     setMcResult(null)
     setMcError(null)
+  }
+
+  function handleLoadMore() {
+    if (!nextCursor) return
+    setLoadMoreError(null)
+    startTransition(async () => {
+      try {
+        const next = await getRisksForProjectPaginated({
+          projectId: scopeProjectId,
+          limit: 50,
+          cursorId: nextCursor,
+        })
+        setRisks((prev) => [...prev, ...next.rows])
+        setNextCursor(next.nextCursor)
+      } catch (err) {
+        setLoadMoreError(
+          err instanceof Error ? err.message : 'Error al cargar más riesgos',
+        )
+      }
+    })
   }
 
   return (
@@ -157,6 +195,29 @@ export function RiskRegisterBoard({
         onEdit={handleEdit}
         onDelete={handleDelete}
       />
+
+      {/* P17-A · pagination "Cargar más" */}
+      {(nextCursor || loadMoreError) && (
+        <div className="flex flex-col items-center gap-2">
+          {loadMoreError && (
+            <p className="rounded border border-destructive/40 bg-destructive/10 px-3 py-1.5 text-xs text-destructive">
+              {loadMoreError}
+            </p>
+          )}
+          {nextCursor && (
+            <button
+              type="button"
+              onClick={handleLoadMore}
+              disabled={pending}
+              className="flex items-center gap-1 rounded border border-border bg-background px-3 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-accent disabled:cursor-not-allowed disabled:opacity-50"
+              data-testid="risk-load-more-btn"
+            >
+              <ChevronDown className="h-3.5 w-3.5" />
+              {pending ? 'Cargando…' : 'Cargar más riesgos'}
+            </button>
+          )}
+        </div>
+      )}
 
       <RiskFormDialog
         open={dialogOpen}

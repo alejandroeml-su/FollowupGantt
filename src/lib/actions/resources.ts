@@ -25,7 +25,7 @@
 
 import { z } from 'zod'
 import prisma from '@/lib/prisma'
-import { revalidatePath } from 'next/cache'
+import { revalidatePath, revalidateTag, unstable_cache } from 'next/cache'
 import { requireUser } from '@/lib/auth/get-current-user'
 import { requireProjectAccess } from '@/lib/auth/check-project-access'
 import {
@@ -63,6 +63,15 @@ export type ResourceErrorCode =
 
 function actionError(code: ResourceErrorCode, detail: string): never {
   throw new Error(`[${code}] ${detail}`)
+}
+
+// P17-A · catálogo de skills cacheado a nivel global. Cualquier mutación
+// (create/update/delete/upsertUserSkill) invalida vía revalidateTag.
+const TAG_CATALOG_SKILLS = 'catalog:skills'
+const SKILLS_REVALIDATE_SECONDS = 60
+
+async function invalidateSkillsCatalog(): Promise<void> {
+  revalidateTag(TAG_CATALOG_SKILLS, 'max')
 }
 
 function revalidateRoutes() {
@@ -209,22 +218,34 @@ function getUserSkillModel(): PrismaUserSkillModel {
 
 export async function listSkills(): Promise<SkillSummary[]> {
   await requireUser()
-  try {
-    const rows = await getSkillModel().findMany({
-      orderBy: [{ category: 'asc' }, { name: 'asc' }],
-      include: { _count: { select: { userSkills: true } } },
-    })
-    return rows.map((r) => ({
-      id: r.id,
-      name: r.name,
-      category: r.category,
-      userCount: r._count?.userSkills ?? 0,
-    }))
-  } catch {
-    // Si la migración aún no se aplicó, devolvemos lista vacía para que
-    // la UI no falle con [P2021] (table does not exist).
-    return []
-  }
+  // P17-A · catálogo de skills cacheado (TTL 60s). Las skills mutan
+  // pocas veces al día y se consultan en /resources, formularios de
+  // task assignment, filtros, etc. → high cache hit rate.
+  return unstable_cache(
+    async () => {
+      try {
+        const rows = await getSkillModel().findMany({
+          orderBy: [{ category: 'asc' }, { name: 'asc' }],
+          include: { _count: { select: { userSkills: true } } },
+        })
+        return rows.map((r) => ({
+          id: r.id,
+          name: r.name,
+          category: r.category,
+          userCount: r._count?.userSkills ?? 0,
+        }))
+      } catch {
+        // Si la migración aún no se aplicó, devolvemos lista vacía
+        // para que la UI no falle con [P2021] (table does not exist).
+        return []
+      }
+    },
+    ['catalog-skills'],
+    {
+      tags: [TAG_CATALOG_SKILLS],
+      revalidate: SKILLS_REVALIDATE_SECONDS,
+    },
+  )()
 }
 
 export async function createSkill(input: { name: string; category?: string }) {
@@ -240,6 +261,7 @@ export async function createSkill(input: { name: string; category?: string }) {
         category: parsed.data.category?.trim() || null,
       },
     })
+    await invalidateSkillsCatalog()
     revalidateRoutes()
     return { id: created.id }
   } catch (err) {
@@ -272,6 +294,7 @@ export async function renameSkill(input: {
   if (Object.keys(data).length === 0) return { ok: true }
   try {
     await getSkillModel().update({ where: { id: parsed.data.id }, data })
+    await invalidateSkillsCatalog()
     revalidateRoutes()
     return { ok: true }
   } catch (err) {
@@ -290,6 +313,7 @@ export async function deleteSkill(id: string) {
   }
   try {
     await getSkillModel().delete({ where: { id } })
+    await invalidateSkillsCatalog()
     revalidateRoutes()
     return { ok: true }
   } catch (err) {

@@ -13,7 +13,7 @@
 
 import prisma from '@/lib/prisma'
 import {
-  getProjectInsightSummary,
+  getProjectInsightSummariesBulk,
   getProjectRiskOverview,
 } from '@/lib/actions/insights'
 import {
@@ -33,18 +33,26 @@ export default async function InsightsPage(): Promise<React.JSX.Element> {
     orderBy: { name: 'asc' },
   })
 
-  const summaries: ProjectSummaryEntry[] = []
-  for (const p of projects) {
-    const s = await getProjectInsightSummary(p.id)
-    summaries.push({
+  // P17-A · N+1 fix: antes hacíamos un await por proyecto en loop.
+  // Ahora obtenemos todos los resúmenes en 2 queries.
+  const summaryRows = await getProjectInsightSummariesBulk(projects.map((p) => p.id))
+  const summaryById = new Map(summaryRows.map((s) => [s.projectId, s]))
+  const summaries: ProjectSummaryEntry[] = projects.map((p) => {
+    const s = summaryById.get(p.id) ?? {
+      categorization: 0,
+      delayRisk: 0,
+      nextAction: 0,
+      highRisk: 0,
+    }
+    return {
       id: p.id,
       name: p.name,
       categorization: s.categorization,
       delayRisk: s.delayRisk,
       nextAction: s.nextAction,
       highRisk: s.highRisk,
-    })
-  }
+    }
+  })
 
   const topRisks = await getProjectRiskOverview(10)
 

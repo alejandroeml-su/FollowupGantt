@@ -267,39 +267,89 @@ export async function bulkImportHolidays(input: BulkImportHolidaysInput) {
   })
   if (!cal) actionError('NOT_FOUND', 'calendario no existe')
 
-  let created = 0
-  let updated = 0
+  // P17-A · N+1 fix: la versión previa hacía 2 queries por fila
+  // (findUnique + update/create). Ahora cargamos los existentes en
+  // una sola query y aplicamos updates/creates en bulk vía
+  // `updateMany` por id e `createMany` con skipDuplicates.
+  const normalizedRows = input.rows.map((row) => ({
+    ...row,
+    date: toUtcMidnight(row.date),
+  }))
 
-  for (const row of input.rows) {
-    const date = toUtcMidnight(row.date)
-    const exists = await prisma.holiday.findUnique({
-      where: {
-        calendarId_date: {
-          calendarId: input.calendarId,
-          date,
-        },
-      },
-      select: { id: true },
-    })
+  const existingHolidays = await prisma.holiday.findMany({
+    where: {
+      calendarId: input.calendarId,
+      date: { in: normalizedRows.map((r) => r.date) },
+    },
+    select: { id: true, date: true },
+  })
+  const existingByDate = new Map<number, string>(
+    existingHolidays.map((h) => [h.date.getTime(), h.id]),
+  )
 
-    if (exists) {
-      await prisma.holiday.update({
-        where: { id: exists.id },
-        data: { name: row.name, recurring: row.recurring ?? false },
+  const toCreate: Array<{
+    calendarId: string
+    date: Date
+    name: string
+    recurring: boolean
+  }> = []
+  const toUpdate: Array<{
+    id: string
+    name: string
+    recurring: boolean
+  }> = []
+
+  for (const row of normalizedRows) {
+    const existingId = existingByDate.get(row.date.getTime())
+    if (existingId) {
+      toUpdate.push({
+        id: existingId,
+        name: row.name,
+        recurring: row.recurring ?? false,
       })
-      updated++
     } else {
-      await prisma.holiday.create({
-        data: {
-          calendarId: input.calendarId,
-          date,
-          name: row.name,
-          recurring: row.recurring ?? false,
-        },
+      toCreate.push({
+        calendarId: input.calendarId,
+        date: row.date,
+        name: row.name,
+        recurring: row.recurring ?? false,
       })
-      created++
     }
   }
+
+  // Bulk create (1 round-trip) y bulk updates en transacción.
+  await prisma.$transaction(async (tx) => {
+    if (toCreate.length > 0) {
+      await tx.holiday.createMany({ data: toCreate, skipDuplicates: true })
+    }
+    // updateMany no acepta diferentes data por row — agrupamos por
+    // (name, recurring) para minimizar round-trips. En el peor caso
+    // cae a M queries donde M = grupos únicos << N filas originales.
+    const updateGroups = new Map<
+      string,
+      { ids: string[]; name: string; recurring: boolean }
+    >()
+    for (const u of toUpdate) {
+      const key = `${u.name} ${u.recurring}`
+      const g = updateGroups.get(key)
+      if (g) g.ids.push(u.id)
+      else
+        updateGroups.set(key, {
+          ids: [u.id],
+          name: u.name,
+          recurring: u.recurring,
+        })
+    }
+    for (const g of updateGroups.values()) {
+      await tx.holiday.updateMany({
+        where: { id: { in: g.ids } },
+        data: { name: g.name, recurring: g.recurring },
+      })
+    }
+  })
+
+  const created = toCreate.length
+  const updated = toUpdate.length
 
   await recordAuditEventSafe({
     action: 'calendar.holidays_imported',
