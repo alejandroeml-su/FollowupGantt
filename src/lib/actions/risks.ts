@@ -28,7 +28,9 @@ import { z } from 'zod'
 import { revalidatePath } from 'next/cache'
 import { Prisma, type RiskStatus } from '@prisma/client'
 import prisma from '@/lib/prisma'
-import { evaluateRisk } from '@/lib/risks/risk-score'
+import { evaluateRisk, tierFromScore } from '@/lib/risks/risk-score'
+// Wave P17-B (API v2 / Webhooks v2) — dispatch fire-and-forget.
+import { dispatchEvent as dispatchV2Event } from '@/lib/webhooks-out/dispatcher'
 import {
   simulateProjectDuration,
   type MonteCarloResult,
@@ -214,7 +216,18 @@ export async function updateRisk(
 
   const current = await prisma.risk.findUnique({
     where: { id },
-    select: { id: true, status: true, closedAt: true },
+    select: {
+      id: true,
+      status: true,
+      closedAt: true,
+      probability: true,
+      impact: true,
+      title: true,
+      projectId: true,
+      // Wave P17-B — necesitamos el workspaceId del proyecto para emitir
+      // webhook v2 si la severidad cruza a HIGH/CRITICAL.
+      project: { select: { workspaceId: true } },
+    },
   })
   if (!current) actionError('RISK_NOT_FOUND', `Riesgo ${id} no existe`)
 
@@ -245,6 +258,36 @@ export async function updateRisk(
   }
 
   await prisma.risk.update({ where: { id }, data })
+
+  // Wave P17-B — emitir `risk.high_severity` solo si el tier ahora es
+  // HIGH o CRITICAL Y el tier anterior era LOW o MEDIUM (transición).
+  // Esto evita spam si un risk ya HIGH se actualiza con cambios menores.
+  try {
+    const newProbability =
+      p.probability !== undefined ? p.probability : current.probability
+    const newImpact = p.impact !== undefined ? p.impact : current.impact
+    const previousTier = tierFromScore(current.probability * current.impact)
+    const newTier = tierFromScore(newProbability * newImpact)
+    const wasHigh = previousTier === 'HIGH' || previousTier === 'CRITICAL'
+    const isHigh = newTier === 'HIGH' || newTier === 'CRITICAL'
+    if (!wasHigh && isHigh && current.project?.workspaceId) {
+      void dispatchV2Event({
+        workspaceId: current.project.workspaceId,
+        event: 'risk.high_severity',
+        payload: {
+          id: current.id,
+          title: current.title,
+          projectId: current.projectId,
+          probability: newProbability,
+          impact: newImpact,
+          severity: newTier,
+        },
+      })
+    }
+  } catch {
+    // No bloqueamos la operación si el dispatch falla.
+  }
+
   revalidateRisksRoutes()
 }
 
