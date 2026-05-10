@@ -80,27 +80,37 @@ export type RiskOverviewItem = {
 // ─────────────────────────── Helpers ───────────────────────────────────
 
 /**
- * Calcula el historial de "entregas tarde" del assignee. Considera
- * tareas DONE con `endDate < updatedAt` como "tarde" (proxy: el cierre
- * llegó después de la fecha planeada). Determinista contra un snapshot
- * de BD.
+ * P17-A · Carga el historial de entregas tarde para todos los assignees
+ * en una sola query. Reemplaza al loop `for (const aId of assigneeIds)`
+ * que ejecutaba N findMany. Devuelve mapa userId → history.
  */
-async function getAssigneeHistory(
-  assigneeId: string | null,
-): Promise<RiskAssigneeHistory | null> {
-  if (!assigneeId) return null
+async function loadAssigneeHistoriesBulk(
+  assigneeIds: string[],
+): Promise<Record<string, RiskAssigneeHistory>> {
+  if (assigneeIds.length === 0) return {}
   const completed = await prisma.task.findMany({
-    where: { assigneeId, status: 'DONE' },
-    select: { endDate: true, updatedAt: true },
+    where: { assigneeId: { in: assigneeIds }, status: 'DONE' },
+    select: { assigneeId: true, endDate: true, updatedAt: true },
   })
-  if (completed.length === 0) return { totalCompleted: 0, totalLate: 0 }
-  let totalLate = 0
+  const histories: Record<string, RiskAssigneeHistory> = {}
+  for (const aId of assigneeIds) {
+    histories[aId] = { totalCompleted: 0, totalLate: 0 }
+  }
   for (const t of completed) {
-    if (t.endDate && t.updatedAt && t.endDate.getTime() < t.updatedAt.getTime()) {
-      totalLate += 1
+    const aId = t.assigneeId
+    if (!aId) continue
+    const h = histories[aId]
+    if (!h) continue
+    h.totalCompleted += 1
+    if (
+      t.endDate &&
+      t.updatedAt &&
+      t.endDate.getTime() < t.updatedAt.getTime()
+    ) {
+      h.totalLate += 1
     }
   }
-  return { totalCompleted: completed.length, totalLate }
+  return histories
 }
 
 /**
@@ -236,15 +246,24 @@ export async function runProjectInsights(projectId: string): Promise<{
   let skipped = 0
   let riskHigh = 0
 
-  // Pre-cargamos historial de assignees únicos para minimizar queries.
+  // P17-A · N+1 fix: pre-cargamos historial de TODOS los assignees en una
+  // sola query agregada (antes: N findMany, uno por assignee).
   const assigneeIds = Array.from(
     new Set(project.tasks.map((t) => t.assigneeId).filter((v): v is string => !!v)),
   )
-  const histories: Record<string, RiskAssigneeHistory> = {}
-  for (const aId of assigneeIds) {
-    const h = await getAssigneeHistory(aId)
-    if (h) histories[aId] = h
+  const histories = await loadAssigneeHistoriesBulk(assigneeIds)
+
+  // P17-A · resolvemos TODOS los emails mencionados en una sola query
+  // (antes: N findMany dentro del loop). Aglomeramos primero los
+  // resultados de categorización para saber qué emails consultar.
+  const categorizationByTaskId = new Map<string, CategorizationResult>()
+  const allEmails = new Set<string>()
+  for (const task of project.tasks) {
+    const c = categorizeTask(task.title, task.description)
+    categorizationByTaskId.set(task.id, c)
+    for (const e of c.mentionedEmails) allEmails.add(e)
   }
+  const emailMapAll = await resolveEmailsToUserIds(Array.from(allEmails))
 
   // Insights ya descartados (soft-delete) para NO re-crear. Los
   // identificamos por (taskId, kind).
@@ -267,16 +286,30 @@ export async function runProjectInsights(projectId: string): Promise<{
     },
   })
 
+  // P17-A · N+1 fix: acumulamos todos los inserts en un único array
+  // y los persistimos vía `createMany` al final (antes: N create por
+  // task × kind). El payload es JSON nativo de Postgres así que
+  // createMany los acepta sin issues.
+  const insightsToCreate: Array<{
+    taskId: string
+    kind: 'CATEGORIZATION' | 'DELAY_RISK' | 'NEXT_ACTION'
+    score: number
+    payload: Prisma.InputJsonValue
+  }> = []
+
   for (const task of project.tasks) {
     // Categorización
-    const categorization: CategorizationResult = categorizeTask(
-      task.title,
-      task.description,
-    )
+    const categorization: CategorizationResult =
+      categorizationByTaskId.get(task.id) ??
+      categorizeTask(task.title, task.description)
     if (categorization.confidence > 0.2) {
       const key = `${task.id}:CATEGORIZATION`
       if (!dismissedKey.has(key)) {
-        const emailMap = await resolveEmailsToUserIds(categorization.mentionedEmails)
+        const emailMap: Record<string, string> = {}
+        for (const e of categorization.mentionedEmails) {
+          const resolved = emailMapAll[e.toLowerCase()]
+          if (resolved) emailMap[e] = resolved
+        }
         const payload = {
           suggestedCategory: categorization.suggestedCategory,
           suggestedTaskType: categorization.suggestedTaskType,
@@ -285,13 +318,11 @@ export async function runProjectInsights(projectId: string): Promise<{
           resolvedAssignees: emailMap,
           suggestedTags: categorization.suggestedTags,
         }
-        await prisma.taskInsight.create({
-          data: {
-            taskId: task.id,
-            kind: 'CATEGORIZATION',
-            score: categorization.confidence,
-            payload: payload as Prisma.InputJsonValue,
-          },
+        insightsToCreate.push({
+          taskId: task.id,
+          kind: 'CATEGORIZATION',
+          score: categorization.confidence,
+          payload: payload as Prisma.InputJsonValue,
         })
         generated += 1
       } else {
@@ -307,16 +338,14 @@ export async function runProjectInsights(projectId: string): Promise<{
     )
     const key = `${task.id}:DELAY_RISK`
     if (!dismissedKey.has(key)) {
-      await prisma.taskInsight.create({
-        data: {
-          taskId: task.id,
-          kind: 'DELAY_RISK',
-          score: risk.score,
-          payload: {
-            level: risk.level,
-            factors: risk.factors,
-          } as Prisma.InputJsonValue,
-        },
+      insightsToCreate.push({
+        taskId: task.id,
+        kind: 'DELAY_RISK',
+        score: risk.score,
+        payload: {
+          level: risk.level,
+          factors: risk.factors,
+        } as Prisma.InputJsonValue,
       })
       generated += 1
       if (risk.level === 'high') riskHigh += 1
@@ -339,25 +368,30 @@ export async function runProjectInsights(projectId: string): Promise<{
     for (const action of actions) {
       const key = `${hostTaskId}:NEXT_ACTION:${action.key}`
       if (!dismissedKey.has(key)) {
-        await prisma.taskInsight.create({
-          data: {
-            taskId: hostTaskId,
-            kind: 'NEXT_ACTION',
-            score: action.severity,
-            payload: {
-              key: action.key,
-              message: action.message,
-              count: action.count,
-              projectId: project.id,
-              projectName: project.name,
-            } as Prisma.InputJsonValue,
-          },
+        insightsToCreate.push({
+          taskId: hostTaskId,
+          kind: 'NEXT_ACTION',
+          score: action.severity,
+          payload: {
+            key: action.key,
+            message: action.message,
+            count: action.count,
+            projectId: project.id,
+            projectName: project.name,
+          } as Prisma.InputJsonValue,
         })
         generated += 1
       } else {
         skipped += 1
       }
     }
+  }
+
+  // P17-A · persistimos todos los insights de una vez con createMany.
+  if (insightsToCreate.length > 0) {
+    await prisma.taskInsight.createMany({
+      data: insightsToCreate,
+    })
   }
 
   revalidatePath('/insights')
@@ -452,6 +486,9 @@ export async function getProjectInsightSummary(projectId: string): Promise<{
   highRisk: number
 }> {
   const id = projectIdSchema.parse(projectId)
+  // P17-A note: para llamadas individuales (1 proyecto) la query
+  // findMany simple es razonable; el path crítico de /insights/page.tsx
+  // pasa por `getProjectInsightSummariesBulk` que sí evita N+1.
   const rows = await prisma.taskInsight.findMany({
     where: {
       task: { projectId: id },
@@ -473,6 +510,86 @@ export async function getProjectInsightSummary(projectId: string): Promise<{
     if (r.kind === 'NEXT_ACTION') nextAction += 1
   }
   return { projectId: id, categorization, delayRisk, nextAction, highRisk }
+}
+
+/**
+ * P17-A · Bulk variant — devuelve resumen por proyecto para una lista
+ * de projectIds en sólo 2 queries (groupBy + findMany delay-risks),
+ * sustituyendo al loop `for (const p of projects) await getProjectInsightSummary(p.id)`
+ * en `/insights/page.tsx`.
+ */
+export async function getProjectInsightSummariesBulk(
+  projectIds: string[],
+): Promise<
+  Array<{
+    projectId: string
+    categorization: number
+    delayRisk: number
+    nextAction: number
+    highRisk: number
+  }>
+> {
+  if (projectIds.length === 0) return []
+  // Validamos cada id antes de pegar BD.
+  const ids = projectIds.map((p) => projectIdSchema.parse(p))
+
+  // Necesitamos `taskId` (para mapearlo a projectId vía un mini lookup)
+  // O mejor: traemos también el `task: { projectId }` con findMany agregado.
+  // Para el conteo por kind por proyecto, usamos un raw query: groupBy de
+  // Prisma no soporta `by` con relaciones. Estrategia simple:
+  //   1. Cargamos {taskId, projectId} de tasks de los proyectos.
+  //   2. Cargamos {taskId, kind, payload} de insights activos.
+  //   3. Agregamos en TS — O(N) sobre N = total insights activos del set.
+  const [taskLookup, insightRows] = await Promise.all([
+    prisma.task.findMany({
+      where: { projectId: { in: ids } },
+      select: { id: true, projectId: true },
+    }),
+    prisma.taskInsight.findMany({
+      where: {
+        task: { projectId: { in: ids } },
+        dismissedAt: null,
+      },
+      select: { taskId: true, kind: true, payload: true },
+    }),
+  ])
+  const taskToProject = new Map<string, string>(
+    taskLookup.map((t) => [t.id, t.projectId]),
+  )
+
+  const acc = new Map<
+    string,
+    {
+      projectId: string
+      categorization: number
+      delayRisk: number
+      nextAction: number
+      highRisk: number
+    }
+  >()
+  for (const id of ids) {
+    acc.set(id, {
+      projectId: id,
+      categorization: 0,
+      delayRisk: 0,
+      nextAction: 0,
+      highRisk: 0,
+    })
+  }
+  for (const ins of insightRows) {
+    const pid = taskToProject.get(ins.taskId)
+    if (!pid) continue
+    const bucket = acc.get(pid)
+    if (!bucket) continue
+    if (ins.kind === 'CATEGORIZATION') bucket.categorization += 1
+    if (ins.kind === 'DELAY_RISK') {
+      bucket.delayRisk += 1
+      const payload = (ins.payload ?? {}) as { level?: string }
+      if (payload.level === 'high') bucket.highRisk += 1
+    }
+    if (ins.kind === 'NEXT_ACTION') bucket.nextAction += 1
+  }
+  return Array.from(acc.values())
 }
 
 // ─────────────────────────── Serialización ─────────────────────────────

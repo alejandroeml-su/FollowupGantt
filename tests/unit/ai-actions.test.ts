@@ -15,6 +15,7 @@ const insightFindMany = vi.fn()
 const insightFindUnique = vi.fn()
 const insightDeleteMany = vi.fn()
 const insightCreate = vi.fn()
+const insightCreateMany = vi.fn()
 const insightUpdate = vi.fn()
 
 vi.mock('@/lib/prisma', () => ({
@@ -34,6 +35,8 @@ vi.mock('@/lib/prisma', () => ({
       findUnique: (...args: unknown[]) => insightFindUnique(...args),
       deleteMany: (...args: unknown[]) => insightDeleteMany(...args),
       create: (...args: unknown[]) => insightCreate(...args),
+      // P17-A · runProjectInsights ahora persiste vía createMany batch.
+      createMany: (...args: unknown[]) => insightCreateMany(...args),
       update: (...args: unknown[]) => insightUpdate(...args),
     },
   },
@@ -53,6 +56,7 @@ beforeEach(() => {
   insightFindUnique.mockReset()
   insightDeleteMany.mockReset()
   insightCreate.mockReset()
+  insightCreateMany.mockReset()
   insightUpdate.mockReset()
 
   insightFindMany.mockResolvedValue([])
@@ -63,6 +67,11 @@ beforeEach(() => {
     dismissedAt: null,
     createdAt: new Date('2026-05-03T00:00:00Z'),
   }))
+  insightCreateMany.mockImplementation(
+    async ({ data }: { data: Array<Record<string, unknown>> }) => ({
+      count: Array.isArray(data) ? data.length : 0,
+    }),
+  )
   taskFindMany.mockResolvedValue([])
   userFindMany.mockResolvedValue([])
 })
@@ -99,12 +108,15 @@ describe('runProjectInsights', () => {
     })
     const result = await runProjectInsights('p1')
     expect(result.generated).toBeGreaterThan(0)
-    // Categorización (BUG) + DELAY_RISK + (al menos un NEXT_ACTION por
-    // overdue-stale ya que la task está vencida y sin actualizar > 7d).
-    expect(insightCreate).toHaveBeenCalled()
-    const kinds = insightCreate.mock.calls.map(
-      (c) => (c[0] as { data: { kind: string } }).data.kind,
-    )
+    // P17-A · Categorización (BUG) + DELAY_RISK + (al menos un NEXT_ACTION
+    // por overdue-stale). Ahora se persisten vía createMany batch.
+    expect(insightCreateMany).toHaveBeenCalledTimes(1)
+    const batched = (
+      insightCreateMany.mock.calls[0][0] as {
+        data: Array<{ kind: string }>
+      }
+    ).data
+    const kinds = batched.map((d) => d.kind)
     expect(kinds).toContain('CATEGORIZATION')
     expect(kinds).toContain('DELAY_RISK')
     expect(kinds).toContain('NEXT_ACTION')
@@ -137,9 +149,14 @@ describe('runProjectInsights', () => {
       { taskId: 't1', kind: 'CATEGORIZATION' },
     ])
     await runProjectInsights('p1')
-    const kinds = insightCreate.mock.calls.map(
-      (c) => (c[0] as { data: { kind: string } }).data.kind,
-    )
+    // P17-A · runProjectInsights ahora persiste todo en un solo
+    // createMany; el test verifica el batch combinado.
+    const batched = insightCreateMany.mock.calls[0]
+      ? ((insightCreateMany.mock.calls[0][0] as {
+          data: Array<{ kind: string }>
+        }).data ?? [])
+      : []
+    const kinds = batched.map((d) => d.kind)
     // CATEGORIZATION debe estar omitida; DELAY_RISK aún se crea.
     expect(kinds).not.toContain('CATEGORIZATION')
     expect(kinds).toContain('DELAY_RISK')

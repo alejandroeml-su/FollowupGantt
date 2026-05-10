@@ -1,12 +1,21 @@
 import Link from 'next/link'
 import { ArrowLeft, Users } from 'lucide-react'
-import { getAllocationForRange } from '@/lib/actions/allocation'
+import { getAllocationForRangePaginated } from '@/lib/actions/allocation'
 import { AllocationHeatmap } from '@/components/allocation/AllocationHeatmap'
 
 export const dynamic = 'force-dynamic'
 
+// P17-A · paginamos el heatmap por usuario para evitar cargar matrices
+// gigantes en organizaciones grandes. Tope inicial 50 usuarios; el
+// componente puede pedir más vía botón "Cargar más" (próxima R2).
+const ALLOC_USERS_PER_PAGE = 50
+
 export default async function PortfolioAllocationPage() {
-  const snapshots = await getAllocationForRange({ daysAhead: 28 })
+  const page = await getAllocationForRangePaginated({
+    daysAhead: 28,
+    limit: ALLOC_USERS_PER_PAGE,
+  })
+  const snapshots = page.snapshots
 
   const overAllocatedCount = snapshots.filter((s) => s.overAllocated).length
 
@@ -38,7 +47,14 @@ export default async function PortfolioAllocationPage() {
       </header>
 
       <div className="flex-1 overflow-auto p-6">
-        <div className="mx-auto max-w-7xl">
+        <div className="mx-auto max-w-7xl space-y-3">
+          {page.nextCursor && (
+            <p className="rounded border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
+              Mostrando los primeros {ALLOC_USERS_PER_PAGE} usuarios. Hay más
+              datos disponibles — la paginación cliente con cursor llegará en
+              R2.
+            </p>
+          )}
           <AllocationHeatmap snapshots={snapshots} />
         </div>
       </div>

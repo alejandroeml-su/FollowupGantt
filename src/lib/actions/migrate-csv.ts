@@ -144,6 +144,24 @@ export async function importTasksFromCsv(
   let imported = 0
   let skipped = 0
 
+  // P17-A · N+1 fix: agregamos todas las tasks válidas en un buffer
+  // y persistimos vía createMany (un solo round-trip a Postgres).
+  // Antes: N inserts secuenciales (uno por fila).
+  type TaskInsert = {
+    title: string
+    description: string | null
+    mnemonic: string
+    projectId: string
+    status: ReturnType<typeof mapStatus>
+    priority: ReturnType<typeof mapPriority>
+    type: 'AGILE_STORY'
+    assigneeId: string | null
+    storyPoints: number | null
+    tags: string[]
+    progress: number
+  }
+  const taskInserts: TaskInsert[] = []
+
   for (let i = 0; i < rows.length; i++) {
     const row = rows[i]
     const lineNum = i + 2 // +2 porque la línea 1 es header en el CSV
@@ -172,32 +190,52 @@ export async function importTasksFromCsv(
       }
     }
 
+    const mnemonic = `${prefix}-${baseCount + 1}`
+    taskInserts.push({
+      title,
+      description: row.description?.trim() || null,
+      mnemonic,
+      projectId,
+      status,
+      priority,
+      type: 'AGILE_STORY',
+      assigneeId,
+      storyPoints: storyPoints ?? null,
+      tags,
+      progress: status === 'DONE' ? 100 : 0,
+    })
+    imported++
+    baseCount++
+  }
+
+  if (taskInserts.length > 0) {
     try {
-      const mnemonic = `${prefix}-${baseCount + 1}`
-      await prisma.task.create({
-        data: {
-          title,
-          description: row.description?.trim() || null,
-          mnemonic,
-          projectId,
-          status,
-          priority,
-          type: 'AGILE_STORY',
-          assigneeId,
-          storyPoints: storyPoints ?? null,
-          tags,
-          progress: status === 'DONE' ? 100 : 0,
-        },
-      })
-      imported++
-      baseCount++
+      await prisma.task.createMany({ data: taskInserts })
     } catch (err) {
+      // Si el batch falla, caemos a inserción uno-a-uno para
+      // recuperar parcialmente y reportar errores fila a fila.
       warnings.push(
-        `Línea ${lineNum}: error al crear tarea — ${
+        `Batch create falló (${
           err instanceof Error ? err.message : String(err)
-        }`,
+        }); cayendo a inserción individual`,
       )
-      skipped++
+      let recovered = 0
+      let recoverSkipped = 0
+      for (let i = 0; i < taskInserts.length; i++) {
+        try {
+          await prisma.task.create({ data: taskInserts[i] })
+          recovered++
+        } catch (innerErr) {
+          warnings.push(
+            `Fila batch[${i}]: ${
+              innerErr instanceof Error ? innerErr.message : String(innerErr)
+            }`,
+          )
+          recoverSkipped++
+        }
+      }
+      imported = recovered
+      skipped += recoverSkipped
     }
   }
 
