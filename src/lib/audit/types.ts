@@ -129,6 +129,8 @@ export const KNOWN_AUDIT_ACTIONS = [
   'evm.snapshot_captured',
   // Wave P12 (PMI 100%) — Communications Plan
   'project.comms_plan_updated',
+  // Wave P16-B · Onboarding Kit (auto-seeding al crear proyecto SCRUM/HYBRID)
+  'project.onboarding_kit_seeded',
   // Wave P13 (RBAC visibilidad) — Intentos no autorizados
   'access.denied',
   'role.assigned',
@@ -234,6 +236,7 @@ export const ACTION_LABELS: Record<AuditAction, string> = {
   'lesson.deleted': 'Lesson Learned eliminada',
   'evm.snapshot_captured': 'EVM snapshot capturado',
   'project.comms_plan_updated': 'Communications Plan actualizado',
+  'project.onboarding_kit_seeded': 'Onboarding Kit sembrado al crear proyecto',
   'access.denied': 'Intento de acceso denegado',
   'role.assigned': 'Rol asignado a usuario',
   'role.revoked': 'Rol revocado de usuario',

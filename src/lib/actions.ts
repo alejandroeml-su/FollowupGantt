@@ -13,12 +13,14 @@ import { normalizeUserStory } from '@/lib/user-story/types'
 import { countPendingCriteria } from '@/lib/user-story/types'
 import { recordAuditEventSafe } from '@/lib/audit/events'
 import { nextProgressForStatus } from '@/lib/tasks/status-progress'
+import { seedOnboardingKit, shouldSeedKit } from '@/lib/onboarding/seed-kit'
 import type {
   TaskType,
   ProjectStatus,
   Priority,
   TaskStatus,
   DependencyType,
+  ProjectMethodology,
 } from '@prisma/client'
 import { serializeTask } from '@/lib/types'
 import type { SerializedTask } from '@/lib/types'
@@ -95,14 +97,45 @@ export async function createProject(formData: FormData) {
   const description = formData.get('description') as string || undefined
   const status = (formData.get('status') as string) || 'PLANNING'
   const areaId = formData.get('areaId') as string || undefined
+  // Wave P16-B · Onboarding Kit. La metodología por defecto coincide con
+  // el default de Prisma (HYBRID) para que el form legacy siga sembrando
+  // el kit ágil sin romper proyectos PMI puros (que sí han de pasar
+  // explícitamente methodology=PMI).
+  const methodologyRaw = (formData.get('methodology') as string | null) ?? 'HYBRID'
+  const methodology: ProjectMethodology =
+    methodologyRaw === 'SCRUM' || methodologyRaw === 'PMI' || methodologyRaw === 'HYBRID'
+      ? (methodologyRaw as ProjectMethodology)
+      : 'HYBRID'
 
   if (!name) throw new Error('El nombre del proyecto es requerido')
 
-  await prisma.project.create({
-    data: { name, description, status: status as ProjectStatus, areaId: areaId || null }
+  const created = await prisma.project.create({
+    data: {
+      name,
+      description,
+      status: status as ProjectStatus,
+      areaId: areaId || null,
+      methodology,
+    },
+    select: { id: true },
   })
+
+  // Wave P16-B · Auto-seed Onboarding Kit cuando aplica (SCRUM/HYBRID).
+  // Best-effort: si falla, no bloqueamos la creación del proyecto.
+  if (shouldSeedKit(methodology)) {
+    try {
+      await seedOnboardingKit({
+        projectId: created.id,
+        methodology,
+      })
+    } catch (err) {
+      console.error('[onboarding] seedOnboardingKit falló desde createProject', err)
+    }
+  }
+
   revalidatePath('/projects')
   revalidatePath('/')
+  revalidatePath(`/projects/${created.id}`)
 }
 
 export async function updateProject(formData: FormData) {
