@@ -40,7 +40,11 @@ export default async function UserMenu({
   const primaryRole = user.roles[0] ?? 'AGENTE'
 
   return (
-    <div data-testid="user-menu" className="flex flex-col gap-2">
+    <div
+      data-testid="user-menu"
+      data-tour-target="user-avatar"
+      className="flex flex-col gap-2"
+    >
       <div
         className="flex items-center gap-3 rounded-lg bg-accent/40 border border-border/50 px-2 py-2"
         title={collapsed ? `${user.name} — ${primaryRole}` : undefined}

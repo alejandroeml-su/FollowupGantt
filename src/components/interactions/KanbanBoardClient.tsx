@@ -310,7 +310,10 @@ export function KanbanBoardClient({
         onDragStart={handleDragStart}
         onDragEnd={handleDragEnd}
       >
-        <div className="flex h-full items-start gap-6 overflow-x-auto overflow-y-hidden p-8">
+        {/* Wave P16-C · mobile-first: padding más compacto en mobile,
+            scroll-snap para que el swipe horizontal "encaje" en columnas
+            (mejora drástica vs scroll libre con columnas a medias). */}
+        <div className="flex h-full items-start gap-3 overflow-x-auto overflow-y-hidden p-3 snap-x snap-mandatory md:gap-6 md:p-8">
           {columns.map((col) => {
             const prefs = columnPrefs[col.id] ?? {}
             return (
@@ -461,8 +464,13 @@ function BoardColumn({
       ref={setNodeRef}
       style={accent ? ({ ['--col-accent' as string]: accent }) : undefined}
       className={clsx(
-        'flex h-full shrink-0 flex-col rounded-xl border bg-subtle/80 transition-[width]',
-        collapsed ? 'w-12 items-center' : 'w-80',
+        // Wave P16-C · mobile: ancho 85vw para que muestre la siguiente
+        // columna parcialmente (descubre el swipe). En desktop conservamos
+        // el ancho fijo de 320px.
+        'flex h-full shrink-0 flex-col rounded-xl border bg-subtle/80 transition-[width] snap-center',
+        collapsed
+          ? 'w-12 items-center'
+          : 'w-[85vw] max-w-[320px] md:w-80 md:max-w-none',
         isOver
           ? 'border-indigo-500 ring-2 ring-indigo-500/40'
           : 'border-border',

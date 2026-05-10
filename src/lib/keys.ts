@@ -6,6 +6,18 @@ export const SHORTCUTS = {
   NEW_TASK: 't',
   COMMAND_PALETTE: '/',
   SHORTCUTS_OVERLAY: 'shift+/',
+  // Wave P16-C — atajos globales adicionales (estilo Linear / GitHub):
+  //  · cmd+k / ctrl+k → Command Palette (alias del `/` original).
+  //  · cmd+/ / ctrl+/ → toggle sidebar collapse (rápido para esconder
+  //    el panel y enfocarse en el contenido sin perder el mouse).
+  //  · cmd+shift+n → modal "Nueva tarea" (atajo para creación rápida
+  //    sin tener que navegar al botón en cada vista).
+  //  · cmd+? / ? → overlay de atajos (alias de `shift+/`, más
+  //    descubrible por usuarios mac que esperan `cmd+?`).
+  COMMAND_PALETTE_K: 'mod+k',
+  TOGGLE_SIDEBAR: 'mod+/',
+  NEW_TASK_MODAL: 'mod+shift+n',
+  SHORTCUTS_OVERLAY_HELP: 'mod+/?',
 
   // Navegación dentro de una vista
   FOCUS_DOWN: 'down',
@@ -14,6 +26,15 @@ export const SHORTCUTS = {
   EXPAND: 'right',
   OPEN_DRAWER: 'enter',
   CLOSE: 'escape',
+
+  // Atajos rápidos para cambiar de vista (g + letra, estilo gmail/linear).
+  GOTO_LIST: 'g l',
+  GOTO_KANBAN: 'g k',
+  GOTO_GANTT: 'g g',
+  GOTO_CALENDAR: 'g c',
+  GOTO_TABLE: 'g t',
+  GOTO_TIMELINE: 'g i',
+  GOTO_BRAIN: 'g b',
 
   // Acciones inline sobre la tarea con foco
   EDIT_TITLE: 'e',
