@@ -68,6 +68,8 @@ export type SerializedInsight = {
 }
 
 export type RiskOverviewItem = {
+  /** ID del TaskInsight de origen (Wave R-360 — necesario para promover). */
+  insightId: string
   taskId: string
   taskTitle: string
   projectId: string
@@ -430,6 +432,7 @@ export async function getProjectRiskOverview(
     orderBy: { score: 'desc' },
     take: cap,
     select: {
+      id: true,
       score: true,
       payload: true,
       task: {
@@ -448,6 +451,7 @@ export async function getProjectRiskOverview(
         ? payload.level
         : 'low'
     return {
+      insightId: row.id,
       taskId: row.task.id,
       taskTitle: row.task.title,
       projectId: row.task.project.id,
