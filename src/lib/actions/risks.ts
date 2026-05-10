@@ -31,6 +31,8 @@ import prisma from '@/lib/prisma'
 import { evaluateRisk, tierFromScore } from '@/lib/risks/risk-score'
 // Wave P17-B (API v2 / Webhooks v2) — dispatch fire-and-forget.
 import { dispatchEvent as dispatchV2Event } from '@/lib/webhooks-out/dispatcher'
+// Wave P18-C — Automation rule engine triggers.
+import { dispatchEvent as dispatchAutomationEvent } from '@/lib/actions/automation'
 import {
   simulateProjectDuration,
   type MonteCarloResult,
@@ -276,6 +278,20 @@ export async function updateRisk(
         event: 'risk.high_severity',
         payload: {
           id: current.id,
+          title: current.title,
+          projectId: current.projectId,
+          probability: newProbability,
+          impact: newImpact,
+          severity: newTier,
+        },
+      })
+    }
+    // Wave P18-C — paralelo · trigger automation rules en la misma transición.
+    if (!wasHigh && isHigh) {
+      void dispatchAutomationEvent('risk.high_severity', {
+        triggeredBy: `risk:${current.id}`,
+        data: {
+          riskId: current.id,
           title: current.title,
           projectId: current.projectId,
           probability: newProbability,

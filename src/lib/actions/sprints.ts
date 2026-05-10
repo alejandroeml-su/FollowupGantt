@@ -20,6 +20,8 @@
 import { z } from 'zod'
 import prisma from '@/lib/prisma'
 import { revalidatePath } from 'next/cache'
+// Wave P18-C — Automation rule engine triggers.
+import { dispatchEvent as dispatchAutomationEvent } from '@/lib/actions/automation'
 import {
   FIBONACCI_STORY_POINTS,
   computeBurndown,
@@ -152,6 +154,12 @@ export async function startSprint(sprintId: string): Promise<{ ok: true }> {
     data: { status: 'ACTIVE', startedAt: new Date() },
   })
 
+  // Wave P18-C — trigger automation rules (sprint.started).
+  void dispatchAutomationEvent('sprint.started', {
+    triggeredBy: `sprint:${sprintId}`,
+    data: { sprintId },
+  })
+
   revalidateSprintViews()
   return { ok: true as const }
 }
@@ -194,6 +202,12 @@ export async function endSprint(
       endedAt: new Date(),
       velocityActual,
     },
+  })
+
+  // Wave P18-C — trigger automation rules (sprint.completed).
+  void dispatchAutomationEvent('sprint.completed', {
+    triggeredBy: `sprint:${sprintId}`,
+    data: { sprintId, velocityActual },
   })
 
   revalidateSprintViews()

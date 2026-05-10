@@ -30,6 +30,8 @@ import {
 } from '@prisma/client'
 import prisma from '@/lib/prisma'
 import { recordAuditEventSafe } from '@/lib/audit/events'
+// Wave P18-C — Automation rule engine triggers.
+import { dispatchEvent as dispatchAutomationEvent } from '@/lib/actions/automation'
 
 // ───────────────────────── Errores tipados ─────────────────────────
 
@@ -313,6 +315,19 @@ export async function createDefect(input: CreateDefectInput): Promise<{ id: stri
     },
   })
 
+  // Wave P18-C — trigger automation rules cuando se reporta un defect CRITICAL.
+  if ((data.severity ?? 'MAJOR') === 'CRITICAL') {
+    void dispatchAutomationEvent('defect.critical', {
+      triggeredBy: `defect:${created.id}`,
+      data: {
+        defectId: created.id,
+        projectId: data.projectId,
+        title: data.title,
+        taskId: data.taskId ?? null,
+      },
+    })
+  }
+
   revalidateQualityRoutes(data.projectId)
   return created
 }
@@ -333,6 +348,9 @@ export async function updateDefect(input: UpdateDefectInput): Promise<void> {
       id: true,
       projectId: true,
       status: true,
+      severity: true,
+      title: true,
+      taskId: true,
       resolvedAt: true,
     },
   })
@@ -370,6 +388,21 @@ export async function updateDefect(input: UpdateDefectInput): Promise<void> {
     before: { status: current.status },
     after: { status: p.status ?? current.status },
   })
+
+  // Wave P18-C — trigger automation rules cuando un defect pasa a CRITICAL
+  // (transición de severity, no en cada update). Evita spam si ya era CRITICAL.
+  if (p.severity === 'CRITICAL' && current.severity !== 'CRITICAL') {
+    void dispatchAutomationEvent('defect.critical', {
+      triggeredBy: `defect:${p.id}`,
+      data: {
+        defectId: p.id,
+        projectId: current.projectId,
+        title: current.title,
+        taskId: current.taskId,
+        previousSeverity: current.severity,
+      },
+    })
+  }
 
   revalidateQualityRoutes(current.projectId)
 }
