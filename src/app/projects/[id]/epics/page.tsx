@@ -44,6 +44,7 @@ export default async function ProjectEpicsPage({ params }: PageProps) {
     plannedEndDate: e.plannedEndDate?.toISOString() ?? null,
     taskCount: e._count.tasks,
     archivedAt: e.archivedAt?.toISOString() ?? null,
+    releaseId: e.releases[0]?.releaseId ?? null,
   }))
 
   return (

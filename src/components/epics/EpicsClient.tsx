@@ -32,6 +32,7 @@ export type EpicSerialized = {
   plannedEndDate: string | null
   taskCount: number
   archivedAt: string | null
+  releaseId: string | null
 }
 
 type Props = {
@@ -222,6 +223,8 @@ export default function EpicsClient({ project, epics, users, releases = [] }: Pr
           onClose={() => setEditing(null)}
           projectId={project.id}
           users={users}
+          releases={releases}
+          defaultReleaseId={editing.releaseId}
           initial={{
             id: editing.id,
             name: editing.name,

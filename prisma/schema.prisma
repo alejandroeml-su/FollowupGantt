@@ -3446,7 +3446,6 @@ enum BrainInsightStatus {
   APPLIED
   DISMISSED
 }
-
 // ─────────────────────────────────────────────────────────────
 // Wave P17-C · Self-Service Admin — GlobalTemplate
 //

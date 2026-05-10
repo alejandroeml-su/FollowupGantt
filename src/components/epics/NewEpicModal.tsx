@@ -142,6 +142,9 @@ export function NewEpicModal({
             ownerId: ownerId || null,
             plannedStartDate: plannedStartDate || null,
             plannedEndDate: plannedEndDate || null,
+            // Wave P9 follow-up — re-asociación del Release.
+            // `""` significa desasociar; un id asocia (servidor valida).
+            releaseId: releaseId || null,
           })
           toast.success('Epic actualizada')
           onSuccess?.(initial.id)
@@ -316,11 +319,12 @@ export function NewEpicModal({
             </div>
           </div>
 
-          {/* Selector Release · regla ágil "Épicas se asignan a un Release" */}
-          {!isEdit && epicReleases.length > 0 && (
+          {/* Selector Release · regla ágil "Épicas se asignan a un Release".
+              Disponible en create y edit · permite re-asociar / desasociar. */}
+          {epicReleases.length > 0 && (
             <div className="space-y-1.5">
               <label htmlFor="epic-release" className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                Asociar a Release
+                Release <span className="text-destructive">*</span>
               </label>
               <select
                 id="epic-release"
@@ -328,7 +332,7 @@ export function NewEpicModal({
                 onChange={(e) => setReleaseId(e.target.value)}
                 className="w-full rounded-md border border-border bg-input px-3 py-2 text-sm text-input-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-ring"
               >
-                <option value="">— Sin Release (no recomendado) —</option>
+                <option value="">— Sin Release —</option>
                 {epicReleases.map((r) => (
                   <option key={r.id} value={r.id}>
                     {r.name} ({r.version})
@@ -336,11 +340,17 @@ export function NewEpicModal({
                 ))}
               </select>
               <p className="text-[10px] text-muted-foreground">
-                ✨ Definición ágil: las Épicas se asignan a un Release según
-                qué tan importantes sean. La asociación es opcional pero
-                recomendada para trazabilidad.
+                ✨ Regla ágil: cada Epic pertenece a un Release según su
+                importancia. Cambiar este valor mueve la Epic al Release
+                seleccionado (o la desasocia si eliges "Sin Release").
               </p>
             </div>
+          )}
+          {epicReleases.length === 0 && (
+            <p className="text-[11px] text-amber-300/80 bg-amber-500/10 border border-amber-500/30 rounded-md px-3 py-2">
+              ⚠️ Este proyecto no tiene Releases con scopeMode=EPIC. Crea
+              uno desde la sección Releases para poder asociar Épicas.
+            </p>
           )}
         </div>
 
