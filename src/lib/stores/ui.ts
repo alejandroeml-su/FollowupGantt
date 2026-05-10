@@ -66,6 +66,19 @@ type UIState = {
    * workspace por defecto del usuario (resuelto en server).
    */
   activeWorkspaceId: string | null
+  /**
+   * Wave P16-C · Atajo global `cmd+shift+n` — timestamp del último
+   * disparo. Las vistas con `<NewTaskButton/>` montadas pueden
+   * subscribirse a este selector para abrir su modal cuando cambia.
+   * `null` = nunca solicitado en esta sesión. NO persistido (in-memory).
+   */
+  newTaskRequestedAt: number | null
+  /**
+   * Wave P16-C · Onboarding tour overlay. Decoupled del onboarding wizard
+   * de creación de workspace para que el tour pueda ejecutarse cualquier
+   * cantidad de veces (incluyendo "Reiniciar tour" desde profile).
+   */
+  onboardingTourOpen: boolean
 
   toggleSelection: (id: string, additive?: boolean) => void
   /**
@@ -95,6 +108,10 @@ type UIState = {
   setActiveView: (surface: SavedViewSurface, viewId: string | null) => void
   clearActiveView: (surface: SavedViewSurface) => void
   setActiveWorkspaceId: (workspaceId: string | null) => void
+  /** Wave P16-C — emite el "tick" para abrir el modal Nueva tarea. */
+  requestNewTask: () => void
+  /** Wave P16-C — abre/cierra el onboarding tour overlay custom. */
+  toggleOnboardingTour: (open?: boolean) => void
 }
 
 export const useUIStore = create<UIState>()(
@@ -121,6 +138,8 @@ export const useUIStore = create<UIState>()(
         table: null,
       },
       activeWorkspaceId: null,
+      newTaskRequestedAt: null,
+      onboardingTourOpen: false,
 
       toggleSelection: (id, additive = false) =>
         set((s) => {
@@ -210,6 +229,9 @@ export const useUIStore = create<UIState>()(
         })),
       setActiveWorkspaceId: (workspaceId) =>
         set({ activeWorkspaceId: workspaceId }),
+      requestNewTask: () => set({ newTaskRequestedAt: Date.now() }),
+      toggleOnboardingTour: (open) =>
+        set((s) => ({ onboardingTourOpen: open ?? !s.onboardingTourOpen })),
     }),
     {
       name: 'followup-ui',

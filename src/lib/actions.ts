@@ -1,7 +1,7 @@
 'use server'
 
 import prisma from '@/lib/prisma'
-import { revalidatePath } from 'next/cache'
+import { revalidatePath, revalidateTag, unstable_cache } from 'next/cache'
 import { after } from 'next/server'
 import { sendMentionNotification } from '@/lib/email/mention-notification'
 import { invalidateCpmCache } from '@/lib/scheduling/invalidate'
@@ -13,12 +13,18 @@ import { normalizeUserStory } from '@/lib/user-story/types'
 import { countPendingCriteria } from '@/lib/user-story/types'
 import { recordAuditEventSafe } from '@/lib/audit/events'
 import { nextProgressForStatus } from '@/lib/tasks/status-progress'
+import { seedOnboardingKit, shouldSeedKit } from '@/lib/onboarding/seed-kit'
+// Wave P17-B (API v2 / Webhooks v2) — dispatch fire-and-forget.
+import { dispatchEvent as dispatchV2Event } from '@/lib/webhooks-out/dispatcher'
+// Wave P17-D (Observability APM) — RED metrics wrapper.
+import { withMetrics } from '@/lib/observability/metrics'
 import type {
   TaskType,
   ProjectStatus,
   Priority,
   TaskStatus,
   DependencyType,
+  ProjectMethodology,
 } from '@prisma/client'
 import { serializeTask } from '@/lib/types'
 import type { SerializedTask } from '@/lib/types'
@@ -41,6 +47,26 @@ function revalidateTaskViews() {
 }
 
 // =============================================
+// P17-A · Cache strategy
+// =============================================
+//
+// Catálogos globales (gerencias, áreas, proyectos, usuarios) se leen en
+// muchas vistas y mutan poco. Los envolvemos en `unstable_cache` con
+// TTL 60s y un tag por catálogo para invalidación selectiva tras
+// cualquier mutación. Patron stale-while-revalidate ('max') consistente
+// con el resto del repo (audit.ts, notifications.ts).
+const CATALOG_REVALIDATE_SECONDS = 60
+const TAG_CATALOG_GERENCIAS = 'catalog:gerencias'
+const TAG_CATALOG_AREAS = 'catalog:areas'
+const TAG_CATALOG_PROJECTS = 'catalog:projects'
+const TAG_CATALOG_USERS = 'catalog:users'
+
+async function invalidateCatalog(tag: string): Promise<void> {
+  // Profile 'max' = stale-while-revalidate (deprecation-safe en Next 16).
+  revalidateTag(tag, 'max')
+}
+
+// =============================================
 // CRUD: GERENCIAS
 // =============================================
 
@@ -51,6 +77,7 @@ export async function createGerencia(formData: FormData) {
   if (!name) throw new Error('Nombre de la gerencia es requerido')
 
   await prisma.gerencia.create({ data: { name: name.toUpperCase(), description } })
+  await invalidateCatalog(TAG_CATALOG_GERENCIAS)
   revalidatePath('/gerencias')
   revalidatePath('/projects')
 }
@@ -66,6 +93,7 @@ export async function updateGerencia(formData: FormData) {
     where: { id },
     data: { name: name.toUpperCase(), description }
   })
+  await invalidateCatalog(TAG_CATALOG_GERENCIAS)
   revalidatePath('/gerencias')
   revalidatePath('/projects')
 }
@@ -75,15 +103,27 @@ export async function deleteGerencia(formData: FormData) {
   if (!id) throw new Error('ID es requerido')
 
   await prisma.gerencia.delete({ where: { id } })
+  await invalidateCatalog(TAG_CATALOG_GERENCIAS)
   revalidatePath('/gerencias')
   revalidatePath('/projects')
 }
 
 export async function getGerencias() {
-  return prisma.gerencia.findMany({
-    include: { areas: true },
-    orderBy: { name: 'asc' }
-  })
+  // P17-A · cacheado con tags `catalog:gerencias` + `catalog:areas`
+  // (la query incluye areas; cualquier mutación de áreas también
+  // invalida esta entrada). TTL 60s + stale-while-revalidate.
+  return unstable_cache(
+    async () =>
+      prisma.gerencia.findMany({
+        include: { areas: true },
+        orderBy: { name: 'asc' },
+      }),
+    ['catalog-gerencias'],
+    {
+      tags: [TAG_CATALOG_GERENCIAS, TAG_CATALOG_AREAS],
+      revalidate: CATALOG_REVALIDATE_SECONDS,
+    },
+  )()
 }
 
 // =============================================
@@ -95,14 +135,46 @@ export async function createProject(formData: FormData) {
   const description = formData.get('description') as string || undefined
   const status = (formData.get('status') as string) || 'PLANNING'
   const areaId = formData.get('areaId') as string || undefined
+  // Wave P16-B · Onboarding Kit. La metodología por defecto coincide con
+  // el default de Prisma (HYBRID) para que el form legacy siga sembrando
+  // el kit ágil sin romper proyectos PMI puros (que sí han de pasar
+  // explícitamente methodology=PMI).
+  const methodologyRaw = (formData.get('methodology') as string | null) ?? 'HYBRID'
+  const methodology: ProjectMethodology =
+    methodologyRaw === 'SCRUM' || methodologyRaw === 'PMI' || methodologyRaw === 'HYBRID'
+      ? (methodologyRaw as ProjectMethodology)
+      : 'HYBRID'
 
   if (!name) throw new Error('El nombre del proyecto es requerido')
 
-  await prisma.project.create({
-    data: { name, description, status: status as ProjectStatus, areaId: areaId || null }
+  const created = await prisma.project.create({
+    data: {
+      name,
+      description,
+      status: status as ProjectStatus,
+      areaId: areaId || null,
+      methodology,
+    },
+    select: { id: true },
   })
+
+  // Wave P16-B · Auto-seed Onboarding Kit cuando aplica (SCRUM/HYBRID).
+  // Best-effort: si falla, no bloqueamos la creación del proyecto.
+  if (shouldSeedKit(methodology)) {
+    try {
+      await seedOnboardingKit({
+        projectId: created.id,
+        methodology,
+      })
+    } catch (err) {
+      console.error('[onboarding] seedOnboardingKit falló desde createProject', err)
+    }
+  }
+
+  await invalidateCatalog(TAG_CATALOG_PROJECTS)
   revalidatePath('/projects')
   revalidatePath('/')
+  revalidatePath(`/projects/${created.id}`)
 }
 
 export async function updateProject(formData: FormData) {
@@ -113,10 +185,33 @@ export async function updateProject(formData: FormData) {
 
   if (!id || !name) throw new Error('ID y nombre son requeridos')
 
-  await prisma.project.update({
+  // Wave P17-B — leemos el status previo para detectar cambio y emitir
+  // webhook v2 `project.status_changed` solo si efectivamente cambió.
+  const before = await prisma.project.findUnique({
     where: { id },
-    data: { name, description, status: status as ProjectStatus }
+    select: { status: true, workspaceId: true },
   })
+
+  const updated = await prisma.project.update({
+    where: { id },
+    data: { name, description, status: status as ProjectStatus },
+    select: { id: true, name: true, status: true, workspaceId: true },
+  })
+
+  if (before && before.workspaceId && before.status !== updated.status) {
+    void dispatchV2Event({
+      workspaceId: before.workspaceId,
+      event: 'project.status_changed',
+      payload: {
+        project: { id: updated.id, name: updated.name },
+        previousStatus: before.status,
+        newStatus: updated.status,
+      },
+    })
+  }
+
+  // Wave P17-A — invalida cache de catálogo de proyectos.
+  await invalidateCatalog(TAG_CATALOG_PROJECTS)
   revalidatePath('/projects')
   revalidatePath('/')
 }
@@ -126,6 +221,7 @@ export async function deleteProject(formData: FormData) {
   if (!id) throw new Error('ID es requerido')
 
   await prisma.project.delete({ where: { id } })
+  await invalidateCatalog(TAG_CATALOG_PROJECTS)
   revalidatePath('/projects')
   revalidatePath('/')
 }
@@ -182,6 +278,7 @@ function parseReferenceUrlFromFormData(formData: FormData): string | null {
 }
 
 export async function createTask(formData: FormData) {
+  return withMetrics('action.createTask', async () => {
   const title = formData.get('title') as string
   const projectId = formData.get('projectId') as string
   const status = (formData.get('status') as string) || 'TODO'
@@ -236,6 +333,7 @@ export async function createTask(formData: FormData) {
   }
 
   // Generar mnemónico automático: PRIM-1, INFRA-1...
+  // Wave P17-B: incluimos `workspaceId` para emitir webhook v2.
   const project = await prisma.project.findUnique({ where: { id: projectId } })
   const prefix = project?.name.split(' ').map(w => w[0]).join('').substring(0, 4).toUpperCase() || 'TASK'
   const count = await prisma.task.count({ where: { projectId } })
@@ -270,6 +368,20 @@ export async function createTask(formData: FormData) {
     after: created,
     metadata: { projectId, parentId: parentId || null },
   })
+  // Wave P17-B — Webhook v2 fire-and-forget (`task.created`).
+  if (project?.workspaceId) {
+    void dispatchV2Event({
+      workspaceId: project.workspaceId,
+      event: 'task.created',
+      payload: {
+        id: created.id,
+        title: created.title,
+        mnemonic: created.mnemonic,
+        status: created.status,
+        projectId,
+      },
+    })
+  }
   invalidateCpmCache(projectId)
   revalidatePath('/list')
   revalidatePath('/kanban')
@@ -278,9 +390,11 @@ export async function createTask(formData: FormData) {
   revalidatePath('/workload')
   revalidatePath('/mindmaps')
   revalidatePath('/dashboards')
+  })
 }
 
 export async function updateTask(formData: FormData) {
+  return withMetrics('action.updateTask', async () => {
   const id = formData.get('id') as string
   const title = formData.get('title') as string
   const status = formData.get('status') as string
@@ -437,9 +551,11 @@ export async function updateTask(formData: FormData) {
   revalidatePath('/workload')
   revalidatePath('/mindmaps')
   revalidatePath('/goals')
+  })
 }
 
 export async function deleteTask(formData: FormData) {
+  return withMetrics('action.deleteTask', async () => {
   const id = formData.get('id') as string
   if (!id) throw new Error('ID es requerido')
 
@@ -464,6 +580,7 @@ export async function deleteTask(formData: FormData) {
   revalidatePath('/table')
   revalidatePath('/workload')
   revalidatePath('/mindmaps')
+  })
 }
 
 export async function addDependency(formData: FormData) {
@@ -517,6 +634,7 @@ export async function updateTaskStatus(
   status: string,
   options?: { force?: boolean },
 ) {
+  return withMetrics('action.updateTaskStatus', async () => {
   const newStatus = status as TaskStatus
   // Snapshot antes para audit + history. Sin user context aquí (este action
   // se llama desde drag&drop sin formData de userRoles), así que actorId=null.
@@ -592,6 +710,7 @@ export async function updateTaskStatus(
   revalidatePath('/table')
   revalidatePath('/gantt')
   revalidatePath('/goals')
+  })
 }
 
 // =============================================
@@ -606,14 +725,15 @@ export async function createUser(formData: FormData) {
   if (!name || !email) throw new Error('Nombre y email son requeridos')
 
   await prisma.user.create({
-    data: { 
-      name, 
-      email, 
+    data: {
+      name,
+      email,
       roles: {
         create: roleIds.map(roleId => ({ roleId }))
       }
     }
   })
+  await invalidateCatalog(TAG_CATALOG_USERS)
   revalidatePath('/workload')
   revalidatePath('/settings/users')
 }
@@ -732,6 +852,7 @@ export async function deleteUser(formData: FormData) {
   if (!id) throw new Error('ID es requerido')
 
   await prisma.user.delete({ where: { id } })
+  await invalidateCatalog(TAG_CATALOG_USERS)
   revalidatePath('/workload')
   revalidatePath('/settings/users')
 }
@@ -749,6 +870,8 @@ export async function createArea(formData: FormData) {
   if (!gerenciaId) throw new Error('Gerencia es requerida')
 
   await prisma.area.create({ data: { name, description, gerenciaId } })
+  await invalidateCatalog(TAG_CATALOG_AREAS)
+  await invalidateCatalog(TAG_CATALOG_GERENCIAS)
   revalidatePath('/projects')
   revalidatePath('/gerencias')
 }
@@ -765,6 +888,8 @@ export async function updateArea(formData: FormData) {
   if (gerenciaId) data.gerenciaId = gerenciaId
 
   await prisma.area.update({ where: { id }, data })
+  await invalidateCatalog(TAG_CATALOG_AREAS)
+  await invalidateCatalog(TAG_CATALOG_GERENCIAS)
   revalidatePath('/projects')
   revalidatePath('/gerencias')
 }
@@ -774,6 +899,8 @@ export async function deleteArea(formData: FormData) {
   if (!id) throw new Error('ID es requerido')
 
   await prisma.area.delete({ where: { id } })
+  await invalidateCatalog(TAG_CATALOG_AREAS)
+  await invalidateCatalog(TAG_CATALOG_GERENCIAS)
   revalidatePath('/projects')
   revalidatePath('/gerencias')
 }
@@ -811,25 +938,61 @@ export async function createSprint(formData: FormData) {
 // =============================================
 
 export async function getProjects() {
-  return prisma.project.findMany({ orderBy: { name: 'asc' } })
+  // P17-A · catálogo de proyectos cacheado (TTL 60s, tag catalog:projects).
+  // Se invalida explícitamente desde createProject/updateProject/deleteProject.
+  return unstable_cache(
+    async () => prisma.project.findMany({ orderBy: { name: 'asc' } }),
+    ['catalog-projects'],
+    {
+      tags: [TAG_CATALOG_PROJECTS],
+      revalidate: CATALOG_REVALIDATE_SECONDS,
+    },
+  )()
 }
 
 export async function getUsers() {
-  return prisma.user.findMany({ orderBy: { name: 'asc' } })
+  // P17-A · catálogo de usuarios cacheado (TTL 60s, tag catalog:users).
+  return unstable_cache(
+    async () => prisma.user.findMany({ orderBy: { name: 'asc' } }),
+    ['catalog-users'],
+    {
+      tags: [TAG_CATALOG_USERS],
+      revalidate: CATALOG_REVALIDATE_SECONDS,
+    },
+  )()
 }
 
 export async function getAreas() {
-  return prisma.area.findMany({
-    include: { gerencia: true },
-    orderBy: { name: 'asc' }
-  })
+  // P17-A · catálogo de áreas cacheado (TTL 60s).
+  return unstable_cache(
+    async () =>
+      prisma.area.findMany({
+        include: { gerencia: true },
+        orderBy: { name: 'asc' },
+      }),
+    ['catalog-areas'],
+    {
+      tags: [TAG_CATALOG_AREAS, TAG_CATALOG_GERENCIAS],
+      revalidate: CATALOG_REVALIDATE_SECONDS,
+    },
+  )()
 }
 
 export async function getAreasByGerencia(gerenciaId: string) {
-  return prisma.area.findMany({
-    where: { gerenciaId },
-    orderBy: { name: 'asc' }
-  })
+  // P17-A · cacheado por gerenciaId (clave varía con el argumento). Se
+  // invalida con cualquier evento que afecte el catálogo de áreas.
+  return unstable_cache(
+    async () =>
+      prisma.area.findMany({
+        where: { gerenciaId },
+        orderBy: { name: 'asc' },
+      }),
+    ['catalog-areas-by-gerencia', gerenciaId],
+    {
+      tags: [TAG_CATALOG_AREAS],
+      revalidate: CATALOG_REVALIDATE_SECONDS,
+    },
+  )()
 }
 
 // =============================================

@@ -14,6 +14,7 @@
 
 import { getDocsTree, getDoc, type SerializedDoc } from '@/lib/actions/docs'
 import { DocsBoard } from '@/components/docs/DocsBoard'
+import { getCurrentUserPresence } from '@/lib/auth/get-current-user-presence'
 
 export const dynamic = 'force-dynamic'
 
@@ -26,6 +27,10 @@ export default async function DocsPage({
 }) {
   const sp = await searchParams
   const tree = await getDocsTree()
+  // Wave P16-A · Equipo A — Identidad del usuario para presence + cursor
+  // sharing en el editor. Si la sesión expiró (null) el editor renderiza
+  // igual sin realtime.
+  const currentUser = await getCurrentUserPresence()
 
   let selectedDoc: SerializedDoc | null = null
   if (sp.id) {
@@ -39,7 +44,11 @@ export default async function DocsPage({
 
   return (
     <div className="flex h-full flex-col bg-background">
-      <DocsBoard tree={tree} selectedDoc={selectedDoc} />
+      <DocsBoard
+        tree={tree}
+        selectedDoc={selectedDoc}
+        currentUser={currentUser}
+      />
     </div>
   )
 }

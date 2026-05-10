@@ -13,12 +13,17 @@
 
 import { ShieldAlert } from 'lucide-react'
 import prisma from '@/lib/prisma'
-import { getRisksForProject } from '@/lib/actions/risks'
+import { getRisksForProjectPaginated } from '@/lib/actions/risks'
 import { RiskRegisterBoard } from '@/components/risks/RiskRegisterBoard'
 
 export const dynamic = 'force-dynamic'
 
 type SP = Promise<{ projectId?: string }>
+
+// P17-A · página de riesgos ahora usa pagination cursor-based.
+// La carga inicial trae 50 riesgos; el botón "Cargar más" del board
+// lleva el cursor al siguiente request server-side.
+const INITIAL_RISKS_LIMIT = 50
 
 export default async function RisksPage({
   searchParams,
@@ -28,8 +33,8 @@ export default async function RisksPage({
   const sp = await searchParams
   const projectId = sp.projectId ?? null
 
-  const [risks, users, projects] = await Promise.all([
-    getRisksForProject(projectId),
+  const [page, users, projects] = await Promise.all([
+    getRisksForProjectPaginated({ projectId, limit: INITIAL_RISKS_LIMIT }),
     prisma.user.findMany({
       select: { id: true, name: true },
       orderBy: { name: 'asc' },
@@ -59,10 +64,12 @@ export default async function RisksPage({
       </p>
 
       <RiskRegisterBoard
-        risks={risks}
+        risks={page.rows}
+        initialNextCursor={page.nextCursor}
         projects={projects}
         users={users}
         defaultProjectId={defaultProjectId}
+        scopeProjectId={projectId}
       />
     </main>
   )

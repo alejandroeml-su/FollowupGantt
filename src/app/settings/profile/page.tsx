@@ -13,6 +13,7 @@
 
 import { getCurrentUser } from '@/lib/auth'
 import { ProfilePushSection } from '@/components/profile/ProfilePushSection'
+import { RestartTourButton } from '@/components/onboarding/RestartTourButton'
 
 export const dynamic = 'force-dynamic'
 
@@ -62,6 +63,26 @@ export default async function ProfilePage() {
           </section>
 
           <ProfilePushSection userId={user.id} />
+
+          <section
+            data-testid="profile-tour-section"
+            aria-labelledby="profile-tour-title"
+            className="rounded-2xl border border-border bg-card p-6"
+          >
+            <h2
+              id="profile-tour-title"
+              className="text-lg font-semibold text-foreground"
+            >
+              Tour de bienvenida
+            </h2>
+            <p className="mt-1 text-sm text-muted-foreground">
+              ¿Quieres volver a ver el recorrido guiado de Sync? Reinicia el
+              tour en cualquier momento.
+            </p>
+            <div className="mt-4">
+              <RestartTourButton />
+            </div>
+          </section>
 
           <section
             data-testid="profile-future-section"

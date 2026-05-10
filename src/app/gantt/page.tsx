@@ -266,18 +266,21 @@ export default async function GanttTimeline({
 
   return (
     <div className="flex h-full flex-col bg-background transition-colors duration-300">
-      <header className="flex shrink-0 items-center justify-between border-b border-border bg-card/50 px-8 py-4">
+      {/* Wave P16-C · mobile-first: header pasa a stack vertical en <md
+          (evita desbordar la barra con 5+ controles en pantallas pequeñas)
+          y reduce padding. */}
+      <header className="flex shrink-0 flex-col gap-3 border-b border-border bg-card/50 px-4 py-3 md:flex-row md:items-center md:justify-between md:px-8 md:py-4">
         <div>
           <GlobalBreadcrumbs />
-          <h1 className="mt-1 text-xl font-semibold text-foreground">
+          <h1 className="mt-1 text-lg font-semibold text-foreground md:text-xl">
             Cronograma · Drag horizontal y resize
           </h1>
-          <p className="mt-1 text-xs text-muted-foreground">
+          <p className="mt-1 hidden text-xs text-muted-foreground md:block">
             Arrastra el cuerpo para desplazar; los bordes para redimensionar.
             Teclado: ←/→ desplaza, Shift+← /→ cambia fin, Alt+← /→ cambia inicio.
           </p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-2 md:gap-3">
           <ViewSwitcher />
           <div className="flex items-center rounded-md bg-muted p-1">
             <Link

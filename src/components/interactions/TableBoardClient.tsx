@@ -109,23 +109,24 @@ export function TableBoardClient({
 
   return (
     <>
-      <header className="flex h-16 shrink-0 items-center justify-between border-b border-border px-8 bg-subtle/50">
+      {/* Wave P16-C · mobile-first: stack vertical en <md, padding flexible. */}
+      <header className="flex shrink-0 flex-col gap-2 border-b border-border bg-subtle/50 px-4 py-3 md:h-16 md:flex-row md:items-center md:justify-between md:gap-3 md:px-8 md:py-0">
         <div>
-          <h1 className="text-xl font-semibold text-white flex items-center gap-2">
+          <h1 className="text-base font-semibold text-white flex items-center gap-2 md:text-xl">
             <TableIcon className="h-5 w-5 text-indigo-400" />
             Inventario General de Tareas
           </h1>
-          <p className="mt-1 text-xs text-muted-foreground">Metadatos, jerarquía y reportería técnica</p>
+          <p className="mt-1 hidden text-xs text-muted-foreground md:block">Metadatos, jerarquía y reportería técnica</p>
         </div>
-        <div className="flex items-center gap-3">
-          <div className="relative">
+        <div className="flex flex-wrap items-center gap-2 md:gap-3">
+          <div className="relative w-full md:w-auto">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <input 
-              type="text" 
-              placeholder="Buscar por título, proyecto o ID..." 
+            <input
+              type="text"
+              placeholder="Buscar por título, proyecto o ID..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="w-80 rounded-md border border-border bg-card py-1.5 pl-9 pr-3 text-sm text-white focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-ring transition-all"
+              className="w-full rounded-md border border-border bg-card py-1.5 pl-9 pr-3 text-sm text-white focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-ring transition-all md:w-80"
             />
           </div>
           <button className="flex items-center gap-2 rounded-md bg-secondary px-3 py-1.5 text-sm font-medium text-foreground/90 hover:bg-secondary/80 transition-colors border border-border">
@@ -168,7 +169,9 @@ export function TableBoardClient({
         epics={epics}
       />
 
-      <div className="flex-1 overflow-auto p-6">
+      {/* Wave P16-C · mobile-first: padding reducido en mobile, table
+          interna ya tiene `overflow-x-auto` (scroll horizontal correcto). */}
+      <div className="flex-1 overflow-auto p-3 md:p-6">
         <div className="rounded-xl border border-border bg-card shadow-sm overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full text-left text-sm text-foreground/90 border-collapse">

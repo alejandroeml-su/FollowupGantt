@@ -6,23 +6,45 @@
  * Sesión sincrona con 3 columnas por miembro: I did / I will / Blockers.
  * Botón "Levantar como Impediment" promueve un blocker a Impediment
  * formal.
+ *
+ * Wave P14e (HU-12.5 refinements):
+ *   - Panel "Impediments activos del sprint" con acciones inline:
+ *     iniciar (OPEN→IN_PROGRESS), resolver, escalar.
+ *   - Panel "Improvement Items pendientes del proyecto" con marcado
+ *     DONE inline · vencidos resaltados en rojo.
+ *   - Header con KPIs vivos: impediments activos / improvements vencidos.
+ *   - El Scrum Master ve todo lo crítico del sprint en una sola pantalla.
  */
 
 import { useMemo, useState, useTransition } from 'react'
 import {
+  ArrowUpRight,
   CalendarClock,
+  Check,
   CheckCircle2,
+  Lightbulb,
   Send,
+  ShieldAlert,
   Sparkles,
   TriangleAlert,
+  Zap,
 } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import {
   createDailyScrum,
   type DailyScrumEntry,
 } from '@/lib/actions/daily-scrum'
-import { createImpediment } from '@/lib/actions/impediments'
+import {
+  createImpediment,
+  updateImpedimentStatus,
+} from '@/lib/actions/impediments'
+import { updateImprovementStatus } from '@/lib/actions/improvements'
 import { toast } from '@/components/interactions/Toaster'
+import type {
+  ImpedimentSeverity,
+  ImpedimentStatus,
+  ImprovementStatus,
+} from '@prisma/client'
 
 type TeamMember = { id: string; name: string }
 
@@ -34,12 +56,45 @@ type DailyScrum = {
   facilitator: { id: string; name: string } | null
 }
 
+type ImpedimentRow = {
+  id: string
+  title: string
+  severity: ImpedimentSeverity
+  status: ImpedimentStatus
+  ownerName: string | null
+  raisedAt: Date | string
+}
+
+type ImprovementRow = {
+  id: string
+  title: string
+  status: ImprovementStatus
+  dueDate: Date | string | null
+  /** Calculado en server (Date.now impuro en React 19 client render). */
+  isOverdue: boolean
+  ownerName: string | null
+  sprintName: string | null
+}
+
 type Props = {
   sprintId: string
   sprintName: string
+  /** Wave P14e — projectId opcional para link a tracker completo. */
+  projectId?: string
   team: TeamMember[]
   recent: DailyScrum[]
+  /** Wave P14e — Impediments activos del sprint (pre-cargados). */
+  impediments?: ImpedimentRow[]
+  /** Wave P14e — Improvement Items pendientes del proyecto. */
+  improvements?: ImprovementRow[]
   currentUser: { id: string; name: string } | null
+}
+
+const SEV_TONE: Record<ImpedimentSeverity, string> = {
+  LOW: 'text-zinc-300 border-zinc-500/30 bg-zinc-500/5',
+  MEDIUM: 'text-amber-300 border-amber-500/30 bg-amber-500/5',
+  HIGH: 'text-orange-300 border-orange-500/40 bg-orange-500/10',
+  CRITICAL: 'text-rose-200 border-rose-500/50 bg-rose-500/15',
 }
 
 function readEntries(data: unknown): DailyScrumEntry[] {
@@ -59,8 +114,11 @@ function readEntries(data: unknown): DailyScrumEntry[] {
 export function DailyScrumClient({
   sprintId,
   sprintName,
+  projectId,
   team,
   recent,
+  impediments = [],
+  improvements = [],
   currentUser,
 }: Props) {
   const [entries, setEntries] = useState<DailyScrumEntry[]>(() =>
@@ -126,6 +184,83 @@ export function DailyScrumClient({
     })
   }
 
+  // ─── Wave P14e · acciones inline ─────────────────────────────────
+
+  // El flag `isOverdue` se calcula en server para no usar Date.now() en render
+  // (React 19 strict purity rule).
+  const overdueImprovementCount = useMemo(
+    () => improvements.filter((i) => i.isOverdue).length,
+    [improvements],
+  )
+
+  const handleStartImpediment = (id: string) => {
+    startTransition(async () => {
+      try {
+        await updateImpedimentStatus({
+          id,
+          status: 'IN_PROGRESS',
+          actorId: currentUser?.id,
+        })
+        toast.success('Impediment en progreso')
+        router.refresh()
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : 'Error')
+      }
+    })
+  }
+
+  const handleResolveImpediment = (id: string) => {
+    const note = window.prompt(
+      '¿Cómo se resolvió? (notas para Lessons Learned, opcional)',
+    )
+    startTransition(async () => {
+      try {
+        await updateImpedimentStatus({
+          id,
+          status: 'RESOLVED',
+          resolutionNotes: note?.trim() || undefined,
+          actorId: currentUser?.id,
+        })
+        toast.success('Impediment resuelto')
+        router.refresh()
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : 'Error')
+      }
+    })
+  }
+
+  const handleEscalateImpediment = (id: string) => {
+    startTransition(async () => {
+      try {
+        await updateImpedimentStatus({
+          id,
+          status: 'ESCALATED',
+          actorId: currentUser?.id,
+        })
+        toast.success('Impediment escalado fuera del equipo')
+        router.refresh()
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : 'Error')
+      }
+    })
+  }
+
+  const handleCompleteImprovement = (id: string) => {
+    startTransition(async () => {
+      try {
+        await updateImprovementStatus({
+          id,
+          status: 'DONE',
+          actorId: currentUser?.id,
+        })
+        toast.success('Improvement cerrado')
+        router.refresh()
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : 'Error')
+      }
+    })
+  }
+
   const promoteBlocker = (entry: DailyScrumEntry, memberName: string) => {
     if (!entry.blockers.trim()) return
     startTransition(async () => {
@@ -162,7 +297,7 @@ export function DailyScrumClient({
               Sync diario · &quot;¿Qué hice? · ¿Qué haré? · ¿Qué me bloquea?&quot;
             </p>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3">
             <div className="rounded-lg border border-border bg-card/60 px-3 py-2 text-center">
               <div className="text-xs text-muted-foreground">Updates</div>
               <div className="text-xl font-bold text-foreground">
@@ -185,9 +320,199 @@ export function DailyScrumClient({
                 {totalBlockers}
               </div>
             </div>
+            {/* Wave P14e — KPIs vivos cross-area */}
+            <div
+              className={`rounded-lg border px-3 py-2 text-center ${
+                impediments.length > 0
+                  ? 'border-orange-500/40 bg-orange-500/10'
+                  : 'border-border bg-card/60'
+              }`}
+            >
+              <div className="text-xs text-muted-foreground">Impediments</div>
+              <div
+                className={`text-xl font-bold ${
+                  impediments.length > 0 ? 'text-orange-300' : 'text-foreground'
+                }`}
+              >
+                {impediments.length}
+              </div>
+            </div>
+            <div
+              className={`rounded-lg border px-3 py-2 text-center ${
+                overdueImprovementCount > 0
+                  ? 'border-rose-500/40 bg-rose-500/10'
+                  : 'border-border bg-card/60'
+              }`}
+            >
+              <div className="text-xs text-muted-foreground">
+                Improvements vencidos
+              </div>
+              <div
+                className={`text-xl font-bold ${
+                  overdueImprovementCount > 0
+                    ? 'text-rose-300'
+                    : 'text-foreground'
+                }`}
+              >
+                {overdueImprovementCount}
+              </div>
+            </div>
           </div>
         </div>
       </header>
+
+      {/* ═══════════════ Wave P14e · Panel Impediments activos ═══════════════ */}
+      {impediments.length > 0 && (
+        <section className="rounded-xl border border-orange-500/30 bg-orange-500/5 p-4">
+          <header className="mb-3 flex flex-wrap items-center justify-between gap-2">
+            <h2 className="flex items-center gap-2 text-sm font-semibold text-foreground">
+              <ShieldAlert className="h-4 w-4 text-orange-400" />
+              Impediments activos · {impediments.length}
+            </h2>
+            {projectId && (
+              <a
+                href={`/projects/${projectId}/impediments`}
+                className="text-xs font-medium text-orange-300 hover:text-orange-200"
+              >
+                Ver tracker completo →
+              </a>
+            )}
+          </header>
+          <ul className="divide-y divide-border/40">
+            {impediments.map((imp) => (
+              <li
+                key={imp.id}
+                className="flex flex-wrap items-start gap-2 py-2"
+              >
+                <span
+                  className={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-medium ${SEV_TONE[imp.severity]}`}
+                >
+                  {imp.severity}
+                </span>
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm font-medium text-foreground">
+                    {imp.title}
+                  </div>
+                  <div className="text-[11px] text-muted-foreground">
+                    {imp.ownerName ? `Owner: ${imp.ownerName} · ` : ''}
+                    Status: <span className="font-medium">{imp.status}</span>
+                  </div>
+                </div>
+                <div className="flex items-center gap-1">
+                  {imp.status === 'OPEN' && (
+                    <button
+                      type="button"
+                      onClick={() => handleStartImpediment(imp.id)}
+                      disabled={isPending}
+                      className="inline-flex items-center gap-1 rounded-md bg-amber-500/20 px-2 py-1 text-[11px] font-medium text-amber-200 hover:bg-amber-500/30 disabled:opacity-50"
+                      title="Iniciar trabajo"
+                    >
+                      <Zap className="h-3 w-3" /> Iniciar
+                    </button>
+                  )}
+                  {imp.status !== 'ESCALATED' && (
+                    <button
+                      type="button"
+                      onClick={() => handleEscalateImpediment(imp.id)}
+                      disabled={isPending}
+                      className="inline-flex items-center gap-1 rounded-md bg-fuchsia-500/15 px-2 py-1 text-[11px] font-medium text-fuchsia-300 hover:bg-fuchsia-500/25 disabled:opacity-50"
+                      title="Escalar fuera del equipo"
+                    >
+                      <ArrowUpRight className="h-3 w-3" /> Escalar
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => handleResolveImpediment(imp.id)}
+                    disabled={isPending}
+                    className="inline-flex items-center gap-1 rounded-md bg-emerald-500/20 px-2 py-1 text-[11px] font-medium text-emerald-200 hover:bg-emerald-500/30 disabled:opacity-50"
+                    title="Marcar como resuelto"
+                  >
+                    <Check className="h-3 w-3" /> Resolver
+                  </button>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
+      {/* ═══════════════ Wave P14e · Panel Improvement Items ═══════════════ */}
+      {improvements.length > 0 && (
+        <section className="rounded-xl border border-cyan-500/30 bg-cyan-500/5 p-4">
+          <header className="mb-3 flex flex-wrap items-center justify-between gap-2">
+            <h2 className="flex items-center gap-2 text-sm font-semibold text-foreground">
+              <Lightbulb className="h-4 w-4 text-cyan-400" />
+              Improvement Items pendientes · {improvements.length}
+              {overdueImprovementCount > 0 && (
+                <span className="rounded-full bg-rose-500/20 px-2 py-0.5 text-[10px] font-medium text-rose-200">
+                  {overdueImprovementCount} vencidos
+                </span>
+              )}
+            </h2>
+            {projectId && (
+              <a
+                href={`/projects/${projectId}/improvements`}
+                className="text-xs font-medium text-cyan-300 hover:text-cyan-200"
+              >
+                Ver kanban completo →
+              </a>
+            )}
+          </header>
+          <ul className="divide-y divide-border/40">
+            {improvements.slice(0, 8).map((imp) => {
+              const overdue = imp.isOverdue
+              return (
+                <li
+                  key={imp.id}
+                  className="flex flex-wrap items-start gap-2 py-2"
+                >
+                  <span
+                    className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium ${
+                      imp.status === 'IN_PROGRESS'
+                        ? 'bg-amber-500/20 text-amber-200'
+                        : 'bg-zinc-500/20 text-zinc-300'
+                    }`}
+                  >
+                    {imp.status}
+                  </span>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm font-medium text-foreground">
+                      {imp.title}
+                    </div>
+                    <div className="text-[11px] text-muted-foreground">
+                      {imp.ownerName ? `Owner: ${imp.ownerName}` : 'Sin owner'}
+                      {imp.sprintName ? ` · de ${imp.sprintName}` : ''}
+                      {imp.dueDate ? (
+                        <>
+                          {' · '}
+                          <span className={overdue ? 'text-rose-300 font-medium' : ''}>
+                            Vence {new Date(imp.dueDate).toLocaleDateString('es-MX')}
+                            {overdue ? ' (vencido)' : ''}
+                          </span>
+                        </>
+                      ) : null}
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handleCompleteImprovement(imp.id)}
+                    disabled={isPending}
+                    className="inline-flex items-center gap-1 rounded-md bg-emerald-500/20 px-2 py-1 text-[11px] font-medium text-emerald-200 hover:bg-emerald-500/30 disabled:opacity-50"
+                  >
+                    <CheckCircle2 className="h-3 w-3" /> Marcar DONE
+                  </button>
+                </li>
+              )
+            })}
+            {improvements.length > 8 && (
+              <li className="py-2 text-center text-[11px] text-muted-foreground">
+                + {improvements.length - 8} más en el kanban completo
+              </li>
+            )}
+          </ul>
+        </section>
+      )}
 
       <div className="grid gap-4">
         {team.map((member) => {

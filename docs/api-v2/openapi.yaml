@@ -1,0 +1,303 @@
+openapi: 3.0.3
+info:
+  title: Sync Public API
+  description: |
+    API REST pública v2 de Sync (FollowupGantt). Workspace-scoped con scopes
+    granulares y rate limiting (60 req/min, 1000 req/hora por API key).
+
+    Auth: `Authorization: Bearer sk_<prefix>_<secret>`. Crea API keys desde
+    `Settings → API Keys`.
+
+    Webhooks: configura subscriptions desde `Settings → Webhooks v2`. Los
+    POST llegan firmados con HMAC-SHA256 en el header `X-Signature-256`.
+  version: 2.0.0
+  contact:
+    name: Unidad de Transformación Digital — Complejo Avante
+servers:
+  - url: /api/v2
+    description: Production
+security:
+  - bearerAuth: []
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: sk_<prefix>_<secret>
+  schemas:
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code:
+              type: string
+              enum:
+                - INVALID_INPUT
+                - INVALID_KEY
+                - INSUFFICIENT_SCOPE
+                - NOT_FOUND
+                - RATE_LIMITED
+                - INTERNAL_ERROR
+              example: INVALID_KEY
+            message:
+              type: string
+    Meta:
+      type: object
+      properties:
+        cursor:
+          type: string
+          nullable: true
+          description: Cursor para la siguiente página (id del último item).
+        total:
+          type: integer
+          description: Total de filas que matchean el filtro (sin paginar).
+    Project:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        description: { type: string, nullable: true }
+        status:
+          type: string
+          enum: [PLANNING, ACTIVE, ON_HOLD, COMPLETED]
+        methodology:
+          type: string
+          enum: [SCRUM, PMI, HYBRID]
+        areaId: { type: string, nullable: true }
+        managerId: { type: string, nullable: true }
+        cpi: { type: number, nullable: true }
+        spi: { type: number, nullable: true }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    ProjectDetail:
+      allOf:
+        - $ref: '#/components/schemas/Project'
+        - type: object
+          properties:
+            phases:
+              type: array
+              items:
+                type: object
+                properties:
+                  id: { type: string }
+                  name: { type: string }
+                  order: { type: integer }
+            tasksCount:
+              type: integer
+    TaskCreate:
+      type: object
+      required: [title]
+      properties:
+        title: { type: string, maxLength: 200 }
+        description: { type: string, nullable: true, maxLength: 4000 }
+        status:
+          type: string
+          enum: [TODO, IN_PROGRESS, REVIEW, DONE]
+        priority:
+          type: string
+          enum: [LOW, MEDIUM, HIGH, CRITICAL]
+        type:
+          type: string
+          enum: [AGILE_STORY, PMI_TASK, ITIL_TICKET]
+        parentId: { type: string, nullable: true }
+        assigneeId: { type: string, nullable: true }
+        startDate: { type: string, format: date-time, nullable: true }
+        endDate: { type: string, format: date-time, nullable: true }
+        storyPoints: { type: integer, nullable: true }
+    Task:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        title: { type: string }
+        mnemonic: { type: string, nullable: true }
+        status: { type: string }
+        priority: { type: string }
+        type: { type: string }
+        projectId: { type: string }
+        parentId: { type: string, nullable: true }
+        assigneeId: { type: string, nullable: true }
+        startDate: { type: string, format: date-time, nullable: true }
+        endDate: { type: string, format: date-time, nullable: true }
+        createdAt: { type: string, format: date-time }
+    Risk:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        projectId: { type: string }
+        title: { type: string }
+        description: { type: string, nullable: true }
+        probability: { type: integer, minimum: 1, maximum: 5 }
+        impact: { type: integer, minimum: 1, maximum: 5 }
+        score: { type: integer, minimum: 1, maximum: 25 }
+        severity:
+          type: string
+          enum: [LOW, MEDIUM, HIGH, CRITICAL]
+        status:
+          type: string
+          enum: [OPEN, MITIGATING, ACCEPTED, CLOSED]
+        ownerId: { type: string, nullable: true }
+        mitigation: { type: string, nullable: true }
+        taskId: { type: string, nullable: true }
+        detectedAt: { type: string, format: date-time }
+        closedAt: { type: string, format: date-time, nullable: true }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+  responses:
+    Unauthorized:
+      description: API key ausente, inválida, expirada o revocada.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    Forbidden:
+      description: API key sin el scope requerido para el endpoint.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    NotFound:
+      description: Recurso no encontrado en el workspace de la API key.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    TooManyRequests:
+      description: Rate limit excedido (60 req/min o 1000 req/hora).
+      headers:
+        Retry-After:
+          schema: { type: integer }
+          description: Segundos hasta que la ventana se libere.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+paths:
+  /projects:
+    get:
+      summary: Lista proyectos del workspace
+      description: |
+        Paginación cursor (`?cursor=<id>&limit=<n>`). Filtros opcionales por
+        `status` y `methodology`. Requiere scope `read:projects`.
+      parameters:
+        - name: cursor
+          in: query
+          schema: { type: string }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100, default: 50 }
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [PLANNING, ACTIVE, ON_HOLD, COMPLETED]
+        - name: methodology
+          in: query
+          schema:
+            type: string
+            enum: [SCRUM, PMI, HYBRID]
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/Project' }
+                  meta: { $ref: '#/components/schemas/Meta' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+  /projects/{id}:
+    get:
+      summary: Detalle de proyecto con phases + count de tasks
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/ProjectDetail' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+  /projects/{id}/tasks:
+    post:
+      summary: Crea una task en el proyecto
+      description: |
+        Requiere scope `write:tasks`. Despacha el webhook v2 `task.created`
+        a las subscriptions activas del workspace.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/TaskCreate' }
+      responses:
+        '201':
+          description: Task creada
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/Task' }
+        '400':
+          description: Body inválido
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+  /risks:
+    get:
+      summary: Lista riesgos del workspace con tier (severity) calculado
+      description: |
+        El campo `severity` se computa server-side a partir de
+        `probability × impact` (matriz PMBOK 5×5). Requiere scope `read:risks`.
+      parameters:
+        - name: cursor
+          in: query
+          schema: { type: string }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100, default: 50 }
+        - name: projectId
+          in: query
+          schema: { type: string, format: uuid }
+        - name: severity
+          in: query
+          schema:
+            type: string
+            enum: [LOW, MEDIUM, HIGH, CRITICAL]
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/Risk' }
+                  meta: { $ref: '#/components/schemas/Meta' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }

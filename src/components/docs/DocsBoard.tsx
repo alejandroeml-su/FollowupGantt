@@ -21,10 +21,18 @@ import {
   deleteDoc,
   restoreDoc,
 } from '@/lib/actions/docs'
+import type { CurrentUserPresence } from '@/lib/auth/get-current-user-presence'
 
 type Props = {
   tree: DocTreeNode[]
   selectedDoc: SerializedDoc | null
+  /**
+   * Wave P16-A · Equipo A — Identidad del usuario activo, drilled desde el
+   * Server Component padre. Necesaria para presence + cursor sharing en el
+   * `DocEditor`. Si es `null` (sesión expirada) el editor degrada sin
+   * realtime, no rompe.
+   */
+  currentUser?: CurrentUserPresence | null
 }
 
 function flattenForParents(tree: DocTreeNode[]): { id: string; title: string }[] {
@@ -44,7 +52,7 @@ function flattenForParents(tree: DocTreeNode[]): { id: string; title: string }[]
   return out
 }
 
-export function DocsBoard({ tree, selectedDoc }: Props) {
+export function DocsBoard({ tree, selectedDoc, currentUser = null }: Props) {
   const router = useRouter()
   const [createOpen, setCreateOpen] = useState(false)
   const [createParent, setCreateParent] = useState<string | null>(null)
@@ -116,6 +124,8 @@ export function DocsBoard({ tree, selectedDoc }: Props) {
               initialContent={selectedDoc.content}
               onSave={handleSave}
               readOnly={selectedDoc.isArchived}
+              initialUpdatedAt={selectedDoc.updatedAt}
+              currentUser={currentUser}
             />
             <DocVersionsHistory
               docId={selectedDoc.id}
