@@ -130,6 +130,8 @@ const menuGroups: RouteGroup[] = [
     routes: [
       { name: 'sidebar.items.pmiCharter', path: '/pmi/charter', icon: FileText },
       { name: 'sidebar.items.pmiStakeholders', path: '/pmi/stakeholders', icon: Users2 },
+      // Wave P18-A — Quality Inspections + Defect tracking.
+      { name: 'sidebar.items.pmiQuality', path: '/pmi/quality', icon: CheckSquare },
       { name: 'sidebar.items.pmiChangeRequests', path: '/pmi/change-requests', icon: GitMerge },
       { name: 'sidebar.items.pmiProcurement', path: '/procurement', icon: Briefcase },
       // Wave P12 (PMI 100%) — EVM curva-S + Lessons Learned + Comm Plan.

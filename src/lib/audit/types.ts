@@ -161,6 +161,13 @@ export const KNOWN_AUDIT_ACTIONS = [
   // Permisos
   'permission.granted',
   'permission.revoked',
+  // Wave P18-A — Quality Inspections + Defect Tracking (PMI 100%).
+  'inspection.created',
+  'inspection.updated',
+  'inspection.deleted',
+  'defect.created',
+  'defect.updated',
+  'defect.deleted',
 ] as const
 
 export type AuditAction = (typeof KNOWN_AUDIT_ACTIONS)[number]
@@ -277,6 +284,13 @@ export const ACTION_LABELS: Record<AuditAction, string> = {
   'export.downloaded': 'Exportación descargada',
   'permission.granted': 'Permiso otorgado',
   'permission.revoked': 'Permiso revocado',
+  // Wave P18-A
+  'inspection.created': 'Inspección de calidad creada',
+  'inspection.updated': 'Inspección de calidad actualizada',
+  'inspection.deleted': 'Inspección de calidad eliminada',
+  'defect.created': 'Defecto reportado',
+  'defect.updated': 'Defecto actualizado',
+  'defect.deleted': 'Defecto eliminado',
 }
 
 // ───────────────────────── Tipos de entidad ─────────────────────────
