@@ -593,6 +593,8 @@ model Project {
   /// Wave P12 — Lessons Learned + EVM snapshots + Improvement Items relations.
   lessonsLearned   LessonLearned[]
   evmSnapshots     EVMSnapshot[]
+  /// Wave P15 — Insights generados por Avante Brain AI.
+  brainInsights    BrainInsight[]
   improvementItems ImprovementItem[]
 
   // Relaciones
@@ -3247,4 +3249,63 @@ model EVMSnapshot {
   createdAt DateTime @default(now())
 
   @@index([projectId, snapshotDate])
+}
+
+// ═════════════════════════════════════════════════════════════════════
+// Wave P15 (Brain Project Insights AI ampliado)
+// ═════════════════════════════════════════════════════════════════════
+
+/// Wave P15 — Insight generado por Avante Brain AI sobre un proyecto.
+///
+/// Cubre 3 categorías:
+///   - FORECAST: predicción cuantitativa (sprint completion, ROI, milestone)
+///   - RECOMMENDATION: acción sugerida (re-allocation, scope cut, dep unblock)
+///   - ANOMALY: alerta detectada (stale tasks, SP outliers, escalation needed)
+///
+/// El usuario puede `Aplicar` (status → APPLIED · puede crear Risk/Task/
+/// Improvement según `relatedAction`) o `Descartar` (status → DISMISSED).
+/// Los aplicados/descartados se excluyen de futuras generaciones para no
+/// duplicar (mismo dedupe que Risk Register · Wave P14c).
+model BrainInsight {
+  id        String  @id @default(uuid())
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  kind     BrainInsightKind
+  title    String
+  body     String
+  severity BrainInsightSeverity @default(MEDIUM)
+
+  /// Acción sugerida estructurada (opcional). Shape:
+  ///   { type: 'create_risk' | 'create_improvement' | 'create_task' | 'none',
+  ///     payload: object }
+  relatedAction Json?
+
+  status      BrainInsightStatus @default(NEW)
+  appliedAt   DateTime?
+  dismissedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([projectId, kind, status])
+  @@index([createdAt])
+}
+
+enum BrainInsightKind {
+  FORECAST
+  RECOMMENDATION
+  ANOMALY
+}
+
+enum BrainInsightSeverity {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+enum BrainInsightStatus {
+  NEW
+  APPLIED
+  DISMISSED
 }
