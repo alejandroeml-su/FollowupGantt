@@ -27,10 +27,20 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Check, Loader2, AlertCircle, Eye, Pencil } from 'lucide-react'
 import { DocPreview } from './DocPreview'
+import DocPresenceBar from './DocPresenceBar'
+import DocCursorOverlay from './DocCursorOverlay'
 import { SoftLockProvider } from '@/components/realtime-locks/SoftLockProvider'
 import { EditingByBanner } from '@/components/realtime-locks/EditingByBanner'
 import { ConflictDialog } from '@/components/realtime-locks/ConflictDialog'
 import { useDocEditLock } from '@/components/realtime-locks/useDocEditLock'
+import { useBroadcast } from '@/lib/realtime/use-broadcast'
+import {
+  CURSOR_THROTTLE_MS,
+  colorForUser,
+  docChannelTopic,
+  shouldEmitCursor,
+  type DocCursorPayload,
+} from '@/lib/realtime/doc-presence'
 
 type Props = {
   /** Doc id — usado por el padre para forzar re-mount via key={docId}. */
@@ -123,6 +133,53 @@ export function DocEditor({
   const lastSavedRef = useRef({ title: initialTitle, content: initialContent })
   const onSaveRef = useRef(onSave)
 
+  // Wave P16-A — Cursor sharing live.
+  // El textareaRef sirve a) al overlay de cursores remotos para medir
+  // posiciones, y b) a los handlers locales para leer `selectionStart` y
+  // emitir el caret a peers via broadcast.
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null)
+  const cursorTopic = useMemo(() => docChannelTopic(docId), [docId])
+  const cursorBroadcast = useBroadcast<DocCursorPayload>(
+    currentUser ? cursorTopic : null,
+    'cursor:move',
+  )
+  const cursorThrottleRef = useRef({ lastAt: 0 })
+  const myColor = useMemo(
+    () => (currentUser ? colorForUser(currentUser.userId).hex : '#000'),
+    [currentUser],
+  )
+  const myUserId = currentUser?.userId ?? null
+
+  // Tomamos sólo el último mensaje para el overlay; el buffer FIFO interno
+  // de useBroadcast no nos sirve aquí — el overlay agrupa por userId.
+  const latestCursor = useMemo(() => {
+    const list = cursorBroadcast.messages
+    return list.length > 0 ? list[list.length - 1] : null
+  }, [cursorBroadcast.messages])
+
+  const sendRef = useRef(cursorBroadcast.send)
+  useEffect(() => {
+    sendRef.current = cursorBroadcast.send
+  }, [cursorBroadcast.send])
+
+  const emitCaret = useCallback(
+    (caret: number) => {
+      if (!currentUser) return
+      const now = Date.now()
+      if (!shouldEmitCursor(cursorThrottleRef.current, now, CURSOR_THROTTLE_MS)) {
+        return
+      }
+      void sendRef.current({
+        userId: currentUser.userId,
+        name: currentUser.name,
+        color: myColor,
+        caret,
+        emittedAt: new Date(now).toISOString(),
+      })
+    },
+    [currentUser, myColor],
+  )
+
   // Mantener `onSaveRef.current` apuntando al último prop. Hacerlo dentro
   // de un useEffect (no en render directo) cumple `react-hooks/refs`.
   useEffect(() => {
@@ -180,6 +237,15 @@ export function DocEditor({
     const next = e.target.value
     setContent(next)
     scheduleSave(title, next)
+    // Emitir caret tras edición. `selectionStart` ya refleja la nueva pos
+    // post-typing (React onChange dispara post-state-DOM-update).
+    emitCaret(e.target.selectionStart ?? 0)
+  }
+
+  function handleSelectionEvent(
+    e: React.SyntheticEvent<HTMLTextAreaElement>,
+  ): void {
+    emitCaret(e.currentTarget.selectionStart ?? 0)
   }
 
   return (
@@ -240,6 +306,10 @@ export function DocEditor({
           </button>
         </div>
 
+        <div className="flex items-center gap-3">
+          {currentUser ? (
+            <DocPresenceBar docId={docId} currentUser={currentUser} />
+          ) : null}
         <div
           className="flex items-center gap-2 text-[11px]"
           data-testid="doc-editor-status"
@@ -271,6 +341,7 @@ export function DocEditor({
             <span className="text-muted-foreground">Listo</span>
           )}
         </div>
+        </div>
       </div>
 
       {/* Body */}
@@ -286,15 +357,29 @@ export function DocEditor({
             disabled={readOnly}
           />
           {view === 'edit' ? (
-            <textarea
-              className="min-h-[60vh] w-full resize-none rounded border border-border bg-card/30 p-3 font-mono text-sm leading-relaxed text-foreground outline-none focus:border-primary disabled:opacity-60"
-              value={content}
-              onChange={handleContentChange}
-              placeholder="# Empieza a escribir en markdown…"
-              data-testid="doc-editor-textarea"
-              disabled={readOnly}
-              spellCheck={false}
-            />
+            // Wave P16-A — wrapper `relative` para alojar `DocCursorOverlay`
+            // sobre el textarea sin desplazar el layout. El overlay usa
+            // `pointer-events:none`, así que no interfiere con la edición.
+            <div className="relative">
+              <textarea
+                ref={textareaRef}
+                className="min-h-[60vh] w-full resize-none rounded border border-border bg-card/30 p-3 font-mono text-sm leading-relaxed text-foreground outline-none focus:border-primary disabled:opacity-60"
+                value={content}
+                onChange={handleContentChange}
+                onSelect={handleSelectionEvent}
+                onClick={handleSelectionEvent}
+                onKeyUp={handleSelectionEvent}
+                placeholder="# Empieza a escribir en markdown…"
+                data-testid="doc-editor-textarea"
+                disabled={readOnly}
+                spellCheck={false}
+              />
+              <DocCursorOverlay
+                textareaRef={textareaRef}
+                latest={latestCursor}
+                myUserId={myUserId}
+              />
+            </div>
           ) : (
             <DocPreview content={content} />
           )}
