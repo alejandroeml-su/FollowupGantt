@@ -1,10 +1,41 @@
 import Link from 'next/link'
 import { ArrowLeft, CalendarClock } from 'lucide-react'
+import type { ImprovementStatus } from '@prisma/client'
 import prisma from '@/lib/prisma'
 import { DailyScrumClient } from '@/components/daily-scrum/DailyScrumClient'
 import { listDailyScrums } from '@/lib/actions/daily-scrum'
+import { listImpediments } from '@/lib/actions/impediments'
+import { listImprovements } from '@/lib/actions/improvements'
 import { getCurrentUserPresence } from '@/lib/auth/get-current-user-presence'
 import { notFound } from 'next/navigation'
+
+// Wave P14e — Helper async aislado · puede usar Date.now() sin chocar
+// con react-hooks/purity (que solo aplica a renders sync).
+async function buildImprovementsPayload(
+  items: Array<{
+    id: string
+    title: string
+    status: ImprovementStatus
+    dueDate: Date | null
+    owner: { id: string; name: string } | null
+    retrospective: { id: string; title: string; sprint: { id: string; name: string } } | null
+  }>,
+) {
+  const nowMs = Date.now()
+  return items.map((i) => ({
+    id: i.id,
+    title: i.title,
+    status: i.status,
+    dueDate: i.dueDate,
+    isOverdue: !!(
+      i.dueDate &&
+      i.status !== 'DONE' &&
+      i.dueDate.getTime() < nowMs
+    ),
+    ownerName: i.owner?.name ?? null,
+    sprintName: i.retrospective?.sprint.name ?? null,
+  }))
+}
 
 export const dynamic = 'force-dynamic'
 
@@ -58,14 +89,31 @@ export default async function ProjectDailyScrumPage({ params }: PageProps) {
     )
   }
 
-  const recent = await listDailyScrums({
-    sprintId: activeSprint.id,
-    limit: 10,
-  })
+  // Wave P14e (HU-12.5 refinements) — cargar Impediments del sprint +
+  // Improvement Items del proyecto en paralelo para mostrarlos como
+  // contexto vivo en el Daily Scrum widget.
+  const [recent, impedimentsAll, improvementsAll] = await Promise.all([
+    listDailyScrums({ sprintId: activeSprint.id, limit: 10 }),
+    listImpediments({ sprintId: activeSprint.id }),
+    listImprovements({ projectId: project.id }),
+  ])
+
+  // Solo activos (OPEN/IN_PROGRESS/ESCALATED) para el panel del daily.
+  const activeImpediments = impedimentsAll.filter(
+    (i) => i.status === 'OPEN' || i.status === 'IN_PROGRESS' || i.status === 'ESCALATED',
+  )
+  const pendingImprovements = improvementsAll.filter(
+    (i) => i.status === 'OPEN' || i.status === 'IN_PROGRESS',
+  )
 
   const team = project.assignments
     .map((a) => a.user)
     .filter((u, i, arr) => arr.findIndex((x) => x.id === u.id) === i)
+
+  // Wave P14e — calcular `isOverdue` server-side (Date.now() impuro en
+  // client render React 19). Esta función async server-side puede usar
+  // funciones impuras sin restricción.
+  const improvementsPayload = await buildImprovementsPayload(pendingImprovements)
 
   return (
     <div className="flex h-full flex-col bg-background">
@@ -87,6 +135,7 @@ export default async function ProjectDailyScrumPage({ params }: PageProps) {
         <DailyScrumClient
           sprintId={activeSprint.id}
           sprintName={activeSprint.name}
+          projectId={project.id}
           team={team}
           recent={recent.map((d) => ({
             id: d.id,
@@ -95,6 +144,15 @@ export default async function ProjectDailyScrumPage({ params }: PageProps) {
             notes: d.notes,
             facilitator: d.facilitator,
           }))}
+          impediments={activeImpediments.map((i) => ({
+            id: i.id,
+            title: i.title,
+            severity: i.severity,
+            status: i.status,
+            ownerName: i.owner?.name ?? null,
+            raisedAt: i.raisedAt,
+          }))}
+          improvements={improvementsPayload}
           currentUser={
             currentUser
               ? { id: currentUser.userId, name: currentUser.name }
