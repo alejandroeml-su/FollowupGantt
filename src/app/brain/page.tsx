@@ -5,9 +5,10 @@ import { Sparkles } from 'lucide-react';
 import { KnowledgeChat } from '@/components/brain/KnowledgeChat';
 import { ProjectManagerAI } from '@/components/brain/ProjectManagerAI';
 import { ProjectInsightsAI } from '@/components/brain/ProjectInsightsAI';
+import { StrategistAI } from '@/components/brain/StrategistAI';
 import { WriterAI } from '@/components/brain/WriterAI';
 
-type Tab = 'knowledge' | 'pm' | 'insights' | 'writer';
+type Tab = 'knowledge' | 'pm' | 'insights' | 'strategist' | 'writer';
 
 export default function BrainAIPage() {
   const [activeTab, setActiveTab] = useState<Tab>('knowledge');
@@ -32,6 +33,9 @@ export default function BrainAIPage() {
           <TabButton active={activeTab === 'insights'} onClick={() => setActiveTab('insights')}>
             Project Insights AI
           </TabButton>
+          <TabButton active={activeTab === 'strategist'} onClick={() => setActiveTab('strategist')}>
+            Strategist AI
+          </TabButton>
           <TabButton active={activeTab === 'writer'} onClick={() => setActiveTab('writer')}>
             Writer AI
           </TabButton>
@@ -46,6 +50,7 @@ export default function BrainAIPage() {
           {activeTab === 'knowledge' && <KnowledgeChat />}
           {activeTab === 'pm' && <ProjectManagerAI />}
           {activeTab === 'insights' && <ProjectInsightsAI />}
+          {activeTab === 'strategist' && <StrategistAI />}
           {activeTab === 'writer' && <WriterAI />}
         </div>
       </div>
