@@ -14,6 +14,7 @@ import { countPendingCriteria } from '@/lib/user-story/types'
 import { recordAuditEventSafe } from '@/lib/audit/events'
 import { nextProgressForStatus } from '@/lib/tasks/status-progress'
 import { seedOnboardingKit, shouldSeedKit } from '@/lib/onboarding/seed-kit'
+import { withMetrics } from '@/lib/observability/metrics'
 import type {
   TaskType,
   ProjectStatus,
@@ -215,6 +216,7 @@ function parseReferenceUrlFromFormData(formData: FormData): string | null {
 }
 
 export async function createTask(formData: FormData) {
+  return withMetrics('action.createTask', async () => {
   const title = formData.get('title') as string
   const projectId = formData.get('projectId') as string
   const status = (formData.get('status') as string) || 'TODO'
@@ -311,9 +313,11 @@ export async function createTask(formData: FormData) {
   revalidatePath('/workload')
   revalidatePath('/mindmaps')
   revalidatePath('/dashboards')
+  })
 }
 
 export async function updateTask(formData: FormData) {
+  return withMetrics('action.updateTask', async () => {
   const id = formData.get('id') as string
   const title = formData.get('title') as string
   const status = formData.get('status') as string
@@ -470,9 +474,11 @@ export async function updateTask(formData: FormData) {
   revalidatePath('/workload')
   revalidatePath('/mindmaps')
   revalidatePath('/goals')
+  })
 }
 
 export async function deleteTask(formData: FormData) {
+  return withMetrics('action.deleteTask', async () => {
   const id = formData.get('id') as string
   if (!id) throw new Error('ID es requerido')
 
@@ -497,6 +503,7 @@ export async function deleteTask(formData: FormData) {
   revalidatePath('/table')
   revalidatePath('/workload')
   revalidatePath('/mindmaps')
+  })
 }
 
 export async function addDependency(formData: FormData) {
@@ -550,6 +557,7 @@ export async function updateTaskStatus(
   status: string,
   options?: { force?: boolean },
 ) {
+  return withMetrics('action.updateTaskStatus', async () => {
   const newStatus = status as TaskStatus
   // Snapshot antes para audit + history. Sin user context aquí (este action
   // se llama desde drag&drop sin formData de userRoles), así que actorId=null.
@@ -625,6 +633,7 @@ export async function updateTaskStatus(
   revalidatePath('/table')
   revalidatePath('/gantt')
   revalidatePath('/goals')
+  })
 }
 
 // =============================================

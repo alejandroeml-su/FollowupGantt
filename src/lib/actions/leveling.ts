@@ -27,6 +27,7 @@ import {
   DEFAULT_WORKDAYS_BITMASK,
   type WorkCalendarLike,
 } from '@/lib/scheduling/work-calendar'
+import { withMetrics } from '@/lib/observability/metrics'
 
 // ───────────────────────── Errores tipados ─────────────────────────
 
@@ -317,6 +318,7 @@ export async function getHardDeadlineCheck(
 export async function computeLevelingPlan(
   projectId: string,
 ): Promise<SerializableLevelingPlan> {
+  return withMetrics('action.computeLevelingPlan', async () => {
   if (!projectId) actionError('INVALID_INPUT', 'projectId requerido')
 
   const baseInput = await loadCpmInputForProject(projectId)
@@ -366,6 +368,7 @@ export async function computeLevelingPlan(
 
   const tasksById = new Map(meta.tasks.map((t) => [t.id, t]))
   return serializeLevelingPlan(plan, tasksById)
+  })
 }
 
 /**
@@ -376,6 +379,7 @@ export async function computeLevelingPlan(
 export async function applyLevelingPlan(
   rawInput: unknown,
 ): Promise<{ ok: true; updated: number }> {
+  return withMetrics('action.applyLevelingPlan', async () => {
   const parsed = applyPlanSchema.safeParse(rawInput)
   if (!parsed.success) {
     actionError(
@@ -422,5 +426,6 @@ export async function applyLevelingPlan(
   revalidatePath('/workload')
 
   return { ok: true as const, updated: updated.length }
+  })
 }
 

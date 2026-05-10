@@ -2,6 +2,7 @@
 
 import prisma from '@/lib/prisma'
 import { revalidatePath } from 'next/cache'
+import { withMetrics } from '@/lib/observability/metrics'
 
 // Códigos de error serializables para que el cliente adapte la UI.
 // Los errores de action en Next.js se propagan por su `.message`, así que
@@ -74,6 +75,7 @@ export async function moveTaskToColumn(
   afterId: string | null = null,
   opts: { wipLimit?: number | null; enforceStatus?: string | null } = {},
 ) {
+  return withMetrics('action.moveTaskToColumn', async () => {
   if (!taskId) actionError('INVALID_TARGET', 'taskId requerido')
 
   // WIP enforcement: si la columna tiene wipLimit y el status objetivo está
@@ -107,6 +109,7 @@ export async function moveTaskToColumn(
 
   revalidateAllBoards()
   return { ok: true as const, position }
+  })
 }
 
 /**

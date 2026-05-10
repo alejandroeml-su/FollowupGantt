@@ -36,6 +36,7 @@ import {
   type SuggestProjectInput,
   type SuggestTaskInput,
 } from '@/lib/ai'
+import { withMetrics } from '@/lib/observability/metrics'
 
 // ─────────────────────────── Errores tipados ───────────────────────────
 
@@ -194,6 +195,7 @@ export async function runProjectInsights(projectId: string): Promise<{
   skipped: number
   riskHigh: number
 }> {
+  return withMetrics('action.runProjectInsights', async () => {
   const id = projectIdSchema.parse(projectId)
 
   const project = await prisma.project.findUnique({
@@ -361,6 +363,7 @@ export async function runProjectInsights(projectId: string): Promise<{
   revalidatePath('/insights')
   revalidatePath(`/projects/${id}`)
   return { generated, skipped, riskHigh }
+  })
 }
 
 /**
