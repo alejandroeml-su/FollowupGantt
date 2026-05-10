@@ -38,6 +38,7 @@ const TYPE_LABEL: Record<NotificationType, string> = {
   BASELINE_CAPTURED: 'Línea base',
   DEPENDENCY_VIOLATION: 'Dependencia',
   IMPORT_COMPLETED: 'Import',
+  AUTOMATION: 'Automatización',
 }
 
 function iconFor(type: NotificationType) {

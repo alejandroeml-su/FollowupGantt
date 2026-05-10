@@ -70,4 +70,19 @@ export const prismaActionAdapter: ActionAdapter = {
     })
     return { taskId: action.taskId, userId: action.userId }
   },
+
+  // Wave P18-B — notificación in-app del sistema de automatización.
+  async notify(action) {
+    const notif = await prisma.notification.create({
+      data: {
+        userId: action.userId,
+        type: 'AUTOMATION',
+        title: action.title.slice(0, 200),
+        body: action.body ? action.body.slice(0, 500) : null,
+        link: action.href ?? null,
+      },
+      select: { id: true },
+    })
+    return { notificationId: notif.id }
+  },
 }

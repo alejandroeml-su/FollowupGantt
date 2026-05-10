@@ -430,6 +430,8 @@ function RuleBuilder(props: {
                           return { kind, taskId: '', field: 'status', value: 'DONE' }
                         case 'assignUser':
                           return { kind, taskId: '', userId: '' }
+                        case 'notify':
+                          return { kind, userId: '', title: 'Notificación' }
                       }
                     }),
                   )

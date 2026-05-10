@@ -54,6 +54,14 @@ export const actionSchema = z.discriminatedUnion('kind', [
     taskId: z.string().min(1),
     userId: z.string().min(1),
   }),
+  // Wave P18-B
+  z.object({
+    kind: z.literal('notify'),
+    userId: z.string().min(1),
+    title: z.string().min(1).max(200),
+    body: z.string().max(500).optional(),
+    href: z.string().max(500).optional(),
+  }),
 ])
 
 export const ruleShapeSchema = z.object({

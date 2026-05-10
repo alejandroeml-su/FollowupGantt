@@ -16,6 +16,8 @@ import { nextProgressForStatus } from '@/lib/tasks/status-progress'
 import { seedOnboardingKit, shouldSeedKit } from '@/lib/onboarding/seed-kit'
 // Wave P17-B (API v2 / Webhooks v2) — dispatch fire-and-forget.
 import { dispatchEvent as dispatchV2Event } from '@/lib/webhooks-out/dispatcher'
+// Wave P18-B (Automation rule engine) — trigger rules tras mutaciones.
+import { dispatchEvent as dispatchAutomationEvent } from '@/lib/actions/automation'
 // Wave P17-D (Observability APM) — RED metrics wrapper.
 import { withMetrics } from '@/lib/observability/metrics'
 import type {
@@ -382,6 +384,19 @@ export async function createTask(formData: FormData) {
       },
     })
   }
+  // Wave P18-B — Automation rule engine fire-and-forget (`task.created`).
+  void dispatchAutomationEvent('task.created', {
+    triggeredBy: `task:${created.id}`,
+    data: {
+      task: {
+        id: created.id,
+        title: created.title,
+        status: created.status,
+        projectId,
+      },
+      projectId,
+    },
+  })
   invalidateCpmCache(projectId)
   revalidatePath('/list')
   revalidatePath('/kanban')
@@ -672,6 +687,15 @@ export async function updateTaskStatus(
       entityId: id,
       before: { status: before.status, progress: before.progress },
       after: { status, progress: nextProgress },
+    })
+    // Wave P18-B — automation rules sobre cambio de status.
+    void dispatchAutomationEvent('status.changed', {
+      triggeredBy: `task:${id}`,
+      data: {
+        task: { id, status: newStatus, progress: nextProgress },
+        oldStatus: before.status,
+        newStatus,
+      },
     })
     // También TaskHistory para que el tab "Historial" lo refleje.
     try {
