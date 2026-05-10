@@ -111,7 +111,11 @@ describe('TaskChecklistSection', () => {
       ]),
     ])
     render(<TaskChecklistSection taskId="t1" />)
-    await waitFor(() => expect(screen.getByText('1/2')).toBeInTheDocument())
+    await waitFor(() =>
+      expect(screen.getByTestId('task-checklist-progress-cl-1')).toHaveTextContent(
+        /1\/2/,
+      ),
+    )
   })
 
   it('crea una nueva checklist al click en "Nueva checklist"', async () => {

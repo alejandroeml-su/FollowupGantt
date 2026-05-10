@@ -271,10 +271,13 @@ describe('wbsSchema · validación', () => {
     expect(wbsSchema.safeParse(bad).success).toBe(false)
   })
 
-  it('rechaza fase sin tasks', () => {
+  it('acepta fase sin tasks (límite 1+ vía system prompt)', () => {
+    // Wave P14b: Anthropic structured output rechaza minItems · phases.tasks
+    // ahora es `z.array(...)` sin `.min(1)`. El system prompt + post-LLM
+    // sanitization se encargan de descartar fases vacías.
     const bad = structuredClone(sampleWBS)
     bad.phases[0].tasks = []
-    expect(wbsSchema.safeParse(bad).success).toBe(false)
+    expect(wbsSchema.safeParse(bad).success).toBe(true)
   })
 })
 

@@ -57,13 +57,15 @@ describe('ImproveDescriptionSchema', () => {
     expect(r.success).toBe(false)
   })
 
-  it('rechaza más de 8 criterios', () => {
+  it('acepta arrays con cualquier longitud (límite 8 vía system prompt)', () => {
+    // Wave P14b: Anthropic structured output rechaza maxItems · el límite
+    // de 8 criterios se enforced en el system prompt y heurística.
     const r = ImproveDescriptionSchema.safeParse({
       improvedDescription: 'Una descripción razonablemente larga.',
       acceptanceCriteria: Array.from({ length: 9 }, (_, i) => `crit ${i}`),
       risks: [],
     })
-    expect(r.success).toBe(false)
+    expect(r.success).toBe(true)
   })
 })
 
