@@ -75,6 +75,8 @@ enum NotificationType {
   BASELINE_CAPTURED
   DEPENDENCY_VIOLATION
   IMPORT_COMPLETED
+  /// Wave P18-B — notificación generada por una AutomationRule.
+  AUTOMATION
 }
 
 // Ola P2 · Equipo P2-1 — Vistas guardadas multi-surface.
