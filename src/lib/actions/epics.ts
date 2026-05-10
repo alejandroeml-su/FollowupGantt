@@ -148,6 +148,14 @@ export type UpdateEpicInput = {
   ownerId?: string | null
   plannedStartDate?: string | null
   plannedEndDate?: string | null
+  /**
+   * Wave P9 follow-up — re-asociación a Release vía M2M `ReleaseEpic`.
+   *  - `undefined`: no tocar la asociación (default).
+   *  - `null` o `""`: desasociar de cualquier Release.
+   *  - string: asociar a ese Release (debe pertenecer al mismo proyecto y
+   *    tener `scopeMode=EPIC`). Una Epic = un Release activo (regla ágil).
+   */
+  releaseId?: string | null
 }
 
 export async function updateEpic(input: UpdateEpicInput) {
@@ -155,7 +163,7 @@ export async function updateEpic(input: UpdateEpicInput) {
 
   const before = await prisma.epic.findUnique({
     where: { id: input.id },
-    select: { name: true, status: true, color: true },
+    select: { name: true, status: true, color: true, projectId: true },
   })
   if (!before) throw new Error('[NOT_FOUND] epic no existe')
 
@@ -186,6 +194,42 @@ export async function updateEpic(input: UpdateEpicInput) {
   }
 
   const updated = await prisma.epic.update({ where: { id: input.id }, data })
+
+  // Wave P9 follow-up — re-asociación a Release. Estrategia: borrar todas
+  // las asociaciones existentes y crear la nueva (Epic vive en un solo
+  // Release activo a la vez). Si releaseId es null/"" desasocia.
+  if (input.releaseId !== undefined) {
+    if (input.releaseId) {
+      const release = await prisma.release.findUnique({
+        where: { id: input.releaseId },
+        select: { projectId: true, scopeMode: true },
+      })
+      if (!release) throw new Error('[NOT_FOUND] release no existe')
+      if (release.projectId !== before.projectId) {
+        throw new Error('[INVALID_ASSIGNMENT] el Release pertenece a otro proyecto')
+      }
+      if (release.scopeMode !== 'EPIC') {
+        throw new Error(
+          '[INVALID_ASSIGNMENT] el Release no acepta Epics (scopeMode != EPIC)',
+        )
+      }
+      await prisma.releaseEpic.deleteMany({ where: { epicId: input.id } })
+      const last = await prisma.releaseEpic.findFirst({
+        where: { releaseId: input.releaseId },
+        orderBy: { position: 'desc' },
+        select: { position: true },
+      })
+      await prisma.releaseEpic.create({
+        data: {
+          releaseId: input.releaseId,
+          epicId: input.id,
+          position: (last?.position ?? -1) + 1,
+        },
+      })
+    } else {
+      await prisma.releaseEpic.deleteMany({ where: { epicId: input.id } })
+    }
+  }
 
   await recordAuditEventSafe({
     action: 'epic.updated',
@@ -298,6 +342,11 @@ export async function listEpicsForProject(projectId: string) {
     include: {
       owner: { select: { id: true, name: true, email: true } },
       _count: { select: { tasks: { where: { archivedAt: null } } } },
+      // Wave P9 follow-up — Release asociado (uno solo activo por Epic).
+      releases: {
+        select: { releaseId: true },
+        take: 1,
+      },
     },
   })
 }
