@@ -29,6 +29,11 @@ import {
   wbsSchema,
   type WBSTask,
 } from '@/lib/ai/wbs/wbs-schema'
+import {
+  seedOnboardingKit,
+  shouldSeedKit,
+  type SeededKit,
+} from '@/lib/onboarding/seed-kit'
 
 // ─────────────────────────── Errores tipados ───────────────────────────
 
@@ -74,6 +79,12 @@ export interface ApplyWBSResult {
   /** Mapa title → taskId (post-suffix) por si la UI quiere navegar tras crear. */
   titleToId: Record<string, string>
   warnings: string[]
+  /**
+   * Wave P16-B · Onboarding Kit. Sólo presente cuando se creó un proyecto
+   * nuevo con methodology SCRUM/HYBRID. `null` si el caller pasó
+   * `projectId` (proyecto existente) o si la metodología es PMI.
+   */
+  onboardingKit: SeededKit | null
 }
 
 // ─────────────────────────── Action ────────────────────────────────────
@@ -259,6 +270,32 @@ export async function applyGeneratedWBS(input: ApplyWBSInput): Promise<ApplyWBSR
       }
     }
 
+    // 6. Wave P16-B · Onboarding Kit (auto-seeding) — sólo al CREAR un
+    //    proyecto nuevo y si methodology ∈ {SCRUM, HYBRID}. El helper es
+    //    idempotente y respeta contenido pre-existente. Lo invocamos
+    //    dentro de la misma `tx` para que falle atómicamente si algo va
+    //    mal sin dejar el proyecto a medio sembrar.
+    let onboardingKit: SeededKit | null = null
+    const effectiveMethodology = methodology ?? 'HYBRID'
+    if (projectCreated && shouldSeedKit(effectiveMethodology)) {
+      try {
+        onboardingKit = await seedOnboardingKit({
+          projectId: project.id,
+          methodology: effectiveMethodology,
+          actorId: managerId ?? user.id,
+          tx,
+        })
+      } catch (err) {
+        // El kit no debe romper la creación del proyecto: lo registramos
+        // como warning y seguimos. El proyecto queda válido aunque sin kit.
+        warnings.push(
+          `Onboarding Kit no aplicado: ${
+            err instanceof Error ? err.message : String(err)
+          }`,
+        )
+      }
+    }
+
     return {
       projectId: project.id,
       projectCreated,
@@ -267,6 +304,7 @@ export async function applyGeneratedWBS(input: ApplyWBSInput): Promise<ApplyWBSR
       dependencyCount,
       riskCount,
       titleToId: Object.fromEntries(titleToId),
+      onboardingKit,
     }
   })
 
