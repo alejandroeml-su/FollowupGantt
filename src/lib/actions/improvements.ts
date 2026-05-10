@@ -3,12 +3,17 @@
 /**
  * Wave P12 (Scrum 100%) — Improvement Items (Retro Action Items
  * con tracking cross-sprint).
+ *
+ * Wave P18 hardening — TODAS las queries pasan por
+ * `withRlsContextFromSession()` para activar la RLS restrictiva
+ * `ImprovementItem_member_only` (solo miembros del proyecto pueden
+ * leer/escribir filas).
  */
 
 import { revalidatePath } from 'next/cache'
 import type { ImprovementStatus } from '@prisma/client'
-import prisma from '@/lib/prisma'
 import { recordAuditEventSafe } from '@/lib/audit/events'
+import { withRlsContextFromSession } from '@/lib/db/with-rls-context'
 
 function revalidateScopes(projectId: string) {
   revalidatePath(`/projects/${projectId}`)
@@ -22,23 +27,25 @@ export async function listImprovements(input: {
   status?: ImprovementStatus
 }) {
   if (!input.projectId) throw new Error('[INVALID_INPUT] projectId requerido')
-  return prisma.improvementItem.findMany({
-    where: {
-      projectId: input.projectId,
-      status: input.status,
-    },
-    include: {
-      owner: { select: { id: true, name: true } },
-      retrospective: {
-        select: {
-          id: true,
-          title: true,
-          sprint: { select: { id: true, name: true } },
+  return withRlsContextFromSession((tx) =>
+    tx.improvementItem.findMany({
+      where: {
+        projectId: input.projectId,
+        status: input.status,
+      },
+      include: {
+        owner: { select: { id: true, name: true } },
+        retrospective: {
+          select: {
+            id: true,
+            title: true,
+            sprint: { select: { id: true, name: true } },
+          },
         },
       },
-    },
-    orderBy: [{ status: 'asc' }, { createdAt: 'desc' }],
-  })
+      orderBy: [{ status: 'asc' }, { createdAt: 'desc' }],
+    }),
+  )
 }
 
 export async function createImprovement(input: {
@@ -53,17 +60,19 @@ export async function createImprovement(input: {
   if (!input.projectId) throw new Error('[INVALID_INPUT] projectId requerido')
   if (!input.title?.trim()) throw new Error('[INVALID_INPUT] title requerido')
 
-  const created = await prisma.improvementItem.create({
-    data: {
-      projectId: input.projectId,
-      title: input.title.trim(),
-      description: input.description?.trim() || null,
-      ownerId: input.ownerId || null,
-      retrospectiveId: input.retrospectiveId || null,
-      dueDate: input.dueDate ? new Date(input.dueDate) : null,
-      status: 'OPEN',
-    },
-  })
+  const created = await withRlsContextFromSession((tx) =>
+    tx.improvementItem.create({
+      data: {
+        projectId: input.projectId,
+        title: input.title.trim(),
+        description: input.description?.trim() || null,
+        ownerId: input.ownerId || null,
+        retrospectiveId: input.retrospectiveId || null,
+        dueDate: input.dueDate ? new Date(input.dueDate) : null,
+        status: 'OPEN',
+      },
+    }),
+  )
 
   await recordAuditEventSafe({
     action: 'improvement.created',
@@ -83,19 +92,20 @@ export async function updateImprovementStatus(input: {
   closeNotes?: string
   actorId?: string
 }) {
-  const before = await prisma.improvementItem.findUnique({
-    where: { id: input.id },
-  })
-  if (!before) throw new Error('[NOT_FOUND] improvement no existe')
+  const result = await withRlsContextFromSession(async (tx) => {
+    const before = await tx.improvementItem.findUnique({ where: { id: input.id } })
+    if (!before) throw new Error('[NOT_FOUND] improvement no existe')
 
-  const isClosing = input.status === 'DONE' || input.status === 'CANCELLED'
-  const updated = await prisma.improvementItem.update({
-    where: { id: input.id },
-    data: {
-      status: input.status,
-      closeNotes: input.closeNotes?.trim() || before.closeNotes,
-      closedAt: isClosing ? new Date() : null,
-    },
+    const isClosing = input.status === 'DONE' || input.status === 'CANCELLED'
+    const updated = await tx.improvementItem.update({
+      where: { id: input.id },
+      data: {
+        status: input.status,
+        closeNotes: input.closeNotes?.trim() || before.closeNotes,
+        closedAt: isClosing ? new Date() : null,
+      },
+    })
+    return { before, updated }
   })
 
   const action =
@@ -106,12 +116,12 @@ export async function updateImprovementStatus(input: {
     entityType: 'improvement',
     entityId: input.id,
     actorId: input.actorId,
-    before: { status: before.status },
-    after: { status: updated.status },
+    before: { status: result.before.status },
+    after: { status: result.updated.status },
   })
 
-  revalidateScopes(before.projectId)
-  return updated
+  revalidateScopes(result.before.projectId)
+  return result.updated
 }
 
 export async function updateImprovement(input: {
@@ -122,24 +132,27 @@ export async function updateImprovement(input: {
   dueDate?: string | null
   actorId?: string
 }) {
-  const before = await prisma.improvementItem.findUnique({
-    where: { id: input.id },
-  })
-  if (!before) throw new Error('[NOT_FOUND] improvement no existe')
+  const result = await withRlsContextFromSession(async (tx) => {
+    const before = await tx.improvementItem.findUnique({
+      where: { id: input.id },
+    })
+    if (!before) throw new Error('[NOT_FOUND] improvement no existe')
 
-  const updated = await prisma.improvementItem.update({
-    where: { id: input.id },
-    data: {
-      title: input.title?.trim() ?? before.title,
-      description: input.description?.trim() ?? before.description,
-      ownerId: input.ownerId === undefined ? before.ownerId : input.ownerId,
-      dueDate:
-        input.dueDate === undefined
-          ? before.dueDate
-          : input.dueDate === null
-            ? null
-            : new Date(input.dueDate),
-    },
+    const updated = await tx.improvementItem.update({
+      where: { id: input.id },
+      data: {
+        title: input.title?.trim() ?? before.title,
+        description: input.description?.trim() ?? before.description,
+        ownerId: input.ownerId === undefined ? before.ownerId : input.ownerId,
+        dueDate:
+          input.dueDate === undefined
+            ? before.dueDate
+            : input.dueDate === null
+              ? null
+              : new Date(input.dueDate),
+      },
+    })
+    return { before, updated }
   })
 
   await recordAuditEventSafe({
@@ -149,25 +162,31 @@ export async function updateImprovement(input: {
     actorId: input.actorId,
   })
 
-  revalidateScopes(before.projectId)
-  return updated
+  revalidateScopes(result.before.projectId)
+  return result.updated
 }
 
 export async function deleteImprovement(input: { id: string; actorId?: string }) {
-  const before = await prisma.improvementItem.findUnique({
-    where: { id: input.id },
+  const projectId = await withRlsContextFromSession(async (tx) => {
+    const before = await tx.improvementItem.findUnique({
+      where: { id: input.id },
+      select: { projectId: true },
+    })
+    if (!before) return null
+    await tx.improvementItem.delete({ where: { id: input.id } })
+    return before.projectId
   })
-  if (!before) return { ok: true }
-  await prisma.improvementItem.delete({ where: { id: input.id } })
-  revalidateScopes(before.projectId)
+  if (projectId) revalidateScopes(projectId)
   return { ok: true }
 }
 
 export async function getImprovementMetrics(input: { projectId: string }) {
-  const items = await prisma.improvementItem.findMany({
-    where: { projectId: input.projectId },
-    select: { status: true, createdAt: true, closedAt: true, dueDate: true },
-  })
+  const items = await withRlsContextFromSession((tx) =>
+    tx.improvementItem.findMany({
+      where: { projectId: input.projectId },
+      select: { status: true, createdAt: true, closedAt: true, dueDate: true },
+    }),
+  )
   const total = items.length
   const open = items.filter((i) => i.status === 'OPEN').length
   const inProgress = items.filter((i) => i.status === 'IN_PROGRESS').length
