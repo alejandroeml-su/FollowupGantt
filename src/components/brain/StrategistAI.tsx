@@ -20,6 +20,7 @@ import {
 } from 'lucide-react'
 import { clsx } from 'clsx'
 import { loadStrategistReport } from '@/lib/brain/strategist/actions'
+import { ScenarioPlanner } from './ScenarioPlanner'
 
 type Report = Awaited<ReturnType<typeof loadStrategistReport>>
 
@@ -107,6 +108,9 @@ export function StrategistAI() {
               Generado: {new Date(report.generatedAt).toLocaleString('es-MX')}
             </span>
           </section>
+
+          {/* Wave P19-B · Predictive scenarios + auto-balancing */}
+          <ScenarioPlanner />
 
           {/* Resource contention */}
           <Section
