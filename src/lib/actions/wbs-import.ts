@@ -34,6 +34,7 @@ import {
   shouldSeedKit,
   type SeededKit,
 } from '@/lib/onboarding/seed-kit'
+import { withMetrics } from '@/lib/observability/metrics'
 
 // ─────────────────────────── Errores tipados ───────────────────────────
 
@@ -90,6 +91,7 @@ export interface ApplyWBSResult {
 // ─────────────────────────── Action ────────────────────────────────────
 
 export async function applyGeneratedWBS(input: ApplyWBSInput): Promise<ApplyWBSResult> {
+  return withMetrics('action.applyGeneratedWBS', async () => {
   const user = await requireUser()
 
   const parsed = applyInputSchema.safeParse(input)
@@ -314,6 +316,7 @@ export async function applyGeneratedWBS(input: ApplyWBSInput): Promise<ApplyWBSR
   revalidatePath('/gantt')
 
   return { ...result, warnings }
+  })
 }
 
 // ─────────────────────────── Helpers ───────────────────────────────────

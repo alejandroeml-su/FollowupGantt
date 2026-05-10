@@ -277,6 +277,12 @@ model User {
   apiTokens ApiToken[]
   webhooks  Webhook[]
 
+  // Wave P17-B · Equipo B — API pública v2 + Webhooks v2 (auditoría de creación;
+  // las credenciales pertenecen al workspace, NO al usuario, así que aquí
+  // mantenemos la relación con SetNull para preservar histórico).
+  createdApiKeys              ApiKey[]              @relation("ApiKeyCreator")
+  createdWebhookSubscriptions WebhookSubscription[] @relation("WebhookSubscriptionCreator")
+
   // Ola P2 · Equipo P2-5 — Docs / Wikis. Un usuario puede ser autor original
   // de un doc, último editor (último que pasó por `updateDoc`) y autor de
   // versiones intermedias del histórico.
@@ -2115,6 +2121,10 @@ model Workspace {
   // Wave P11-PMI (HU-12.4) — Procurement (Vendor catálogo del workspace)
   vendors Vendor[]
 
+  // Wave P17-B · Equipo B — API pública v2 + Webhooks v2 (workspace-scoped).
+  apiKeys              ApiKey[]
+  webhookSubscriptions WebhookSubscription[]
+
   /// Wave P17-C — Plantillas globales clonadas/asociadas a este workspace.
   globalTemplates GlobalTemplate[]
 
@@ -2243,6 +2253,121 @@ model Webhook {
 
   @@index([userId])
   @@index([active])
+}
+
+// ─────────────────────────────────────────────────────────────
+// Módulo API Pública v2 + Webhooks v2 (Wave P17-B · Equipo B)
+//
+// Evolución de los `ApiToken`/`Webhook` v1 con foco enterprise:
+//   - Workspace-scoped (vs user-scoped en v1) — permite issuing por
+//     integración corporativa (SAP, Power BI, etc.) sin atar la credencial
+//     al usuario individual.
+//   - `ApiKey.scopes string[]` (no Json) → indexable + queryable.
+//   - `WebhookSubscription` separa metadatos (url, secret, events) del
+//     histórico de entregas (`WebhookDelivery`). Permite auditoría +
+//     reintentos puntuales sin perder contexto.
+//   - Retry exponencial 1s/5s/30s en dispatcher con auto-disable tras 10
+//     fallos consecutivos (cumple SLO de receptores tolerantes a fallos).
+//
+// Decisiones documentadas:
+//   D-API-V2-1: `hashedKey` usa SHA-256 hex (consistente con ApiToken v1).
+//               Argon2/PBKDF2 está sobre-engineered para credenciales que
+//               ya son random 256-bit; el coste asimétrico aplica a
+//               passwords low-entropy.
+//   D-API-V2-2: `scopes` es `text[]` Postgres (no Json) para permitir
+//               futuro filtrado server-side por contains (`scopes @> ['read:projects']`).
+//   D-API-V2-3: Rate limit es in-memory por instancia. Stateless es
+//               aceptable para MVP — si la app se escala horizontal y
+//               60req/min × N instancias se vuelve un problema, migrar a
+//               Redis/Upstash (deuda registrada).
+//   D-API-V2-4: `WebhookDelivery.payload` se persiste para reintentos
+//               manuales y forensics. TTL 30 días via cron (no implementado
+//               aún; deuda).
+//   D-API-V2-5: `WebhookSubscription.failureCount` se incrementa por
+//               delivery fallida (todos los reintentos agotados); NO por
+//               cada reintento individual. Se resetea al primer 2xx.
+// ─────────────────────────────────────────────────────────────
+
+model ApiKey {
+  id           String    @id @default(uuid())
+  // Etiqueta descriptiva: "Integración SAP S/4HANA producción".
+  name         String
+  // Primeros 8 chars del key para mostrar en lista sin exponer el resto.
+  // El formato canónico del key plano es `sk_<prefix>_<secret>`; el `prefix`
+  // aquí es solo el segmento aleatorio (8 chars), no incluye `sk_`.
+  prefix       String
+  // Hash SHA-256 (hex) del key plano completo. NUNCA almacenamos plaintext.
+  hashedKey    String    @unique
+  // Array de scopes Postgres-native: ["read:projects","write:tasks"].
+  // Ver `src/lib/api/v2-scopes.ts` para el catálogo válido.
+  scopes       String[]
+  // Workspace owner. Cascade: borrar workspace purga sus keys.
+  workspaceId  String
+  workspace    Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  // Usuario que creó la key (auditoría). SetNull preserva la key si el
+  // usuario es eliminado (la integración sigue funcionando).
+  createdById  String?
+  createdBy    User?     @relation("ApiKeyCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  lastUsedAt   DateTime?
+  expiresAt    DateTime?
+  revokedAt    DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([workspaceId])
+  @@index([prefix])
+  @@index([revokedAt])
+}
+
+model WebhookSubscription {
+  id             String    @id @default(uuid())
+  workspaceId    String
+  workspace      Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  // URL https del receptor. Validación http(s) en server action.
+  url            String
+  // Secret hex 32 bytes. Usado por dispatcher para HMAC SHA-256 sobre body.
+  secret         String
+  // Array de eventTypes Postgres-native:
+  // ["task.created","risk.high_severity","project.status_changed"].
+  events         String[]
+  active         Boolean   @default(true)
+  lastDeliveryAt DateTime?
+  // Counter de fallos consecutivos. Resetea a 0 con primer 2xx. Si llega
+  // a 10, dispatcher marca `active=false` automáticamente.
+  failureCount   Int       @default(0)
+  // Usuario creador (auditoría). SetNull para preservar histórico.
+  createdById    String?
+  createdBy      User?     @relation("WebhookSubscriptionCreator", fields: [createdById], references: [id], onDelete: SetNull)
+
+  deliveries WebhookDelivery[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([workspaceId])
+  @@index([active])
+}
+
+model WebhookDelivery {
+  id             String              @id @default(uuid())
+  subscriptionId String
+  subscription   WebhookSubscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+  // Tipo de evento que disparó el delivery.
+  event          String
+  // Payload JSON completo enviado al receptor. Permite re-emisión manual
+  // desde la UI sin tener que reconstruir el snapshot.
+  payload        Json
+  // HTTP status devuelto por el receptor (null si timeout/red).
+  responseStatus Int?
+  // Body de respuesta (truncado a ~2KB en el dispatcher).
+  responseBody   String?
+  attemptedAt    DateTime            @default(now())
+  // Cuántos reintentos llevamos para este delivery (0 = primer intento).
+  retryCount     Int                 @default(0)
+
+  @@index([subscriptionId, attemptedAt])
+  @@index([event])
 }
 
 // ─────────────────────────────────────────────────────────────

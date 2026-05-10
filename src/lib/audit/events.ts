@@ -25,6 +25,7 @@ import {
   type AuditErrorCode,
   type RecordAuditEventInput,
 } from './types'
+import { withMetrics } from '@/lib/observability/metrics'
 
 // ───────────────────────── Errores tipados ─────────────────────────
 
@@ -151,12 +152,14 @@ export async function recordAuditEvent(
 export async function recordAuditEventSafe(
   input: RecordAuditEventInput,
 ): Promise<void> {
-  try {
-    await recordAuditEvent(input)
-  } catch (err) {
-    // No reemplazamos por logger formal aún (el repo no tiene uno);
-    // mantenemos el mismo patrón que `notifications.createNotification`
-    // en sus callers.
-    console.error('[Audit] recordAuditEventSafe failed', err)
-  }
+  return withMetrics('action.recordAuditEventSafe', async () => {
+    try {
+      await recordAuditEvent(input)
+    } catch (err) {
+      // No reemplazamos por logger formal aún (el repo no tiene uno);
+      // mantenemos el mismo patrón que `notifications.createNotification`
+      // en sus callers.
+      console.error('[Audit] recordAuditEventSafe failed', err)
+    }
+  })
 }
