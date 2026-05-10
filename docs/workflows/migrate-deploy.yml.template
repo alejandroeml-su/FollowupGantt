@@ -1,0 +1,88 @@
+name: Prisma Migrate Deploy
+
+# Wave P14d (Hardening Pre-POC) — aplica migrations a Supabase prod
+# automáticamente cuando un PR con cambios en `prisma/migrations/**`
+# se mergea a master. Previene incidente "Project.X does not exist"
+# que pasó en sesión 2026-05-09 (deploy Vercel rompió porque las
+# migrations P11-Scrum/P11-PMI/P12 nunca se aplicaron).
+#
+# Setup operacional:
+#   1. Configurar secret `DATABASE_URL` en GitHub Settings → Secrets:
+#      postgresql://postgres.<ref>:<password>@<region>.pooler.supabase.com:6543/postgres
+#   2. Usar el connection pool (port 6543) o direct connection (5432).
+#   3. Si la migration es destructiva, taggear con [skip migrate] en el
+#      commit message para que el job no corra.
+
+on:
+  push:
+    branches:
+      - master
+    paths:
+      - 'prisma/migrations/**'
+      - 'prisma/schema.prisma'
+  workflow_dispatch: # permite trigger manual desde la UI
+
+concurrency:
+  # Evita aplicar migrations en paralelo si hay merges back-to-back.
+  group: prisma-migrate-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  migrate:
+    name: Apply migrations to Supabase
+    runs-on: ubuntu-latest
+    if: "!contains(github.event.head_commit.message, '[skip migrate]')"
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci --prefer-offline --no-audit
+
+      - name: Generate Prisma client
+        run: npx prisma generate
+
+      - name: Show pending migrations (dry-run)
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: |
+          if [ -z "$DATABASE_URL" ]; then
+            echo "❌ DATABASE_URL secret no configurado · skip migrate"
+            echo "   Configurar en Settings → Secrets → Actions"
+            exit 1
+          fi
+          echo "::group::Pending migrations"
+          npx prisma migrate status || true
+          echo "::endgroup::"
+
+      - name: Deploy migrations to production
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: |
+          echo "::group::Applying migrations"
+          npx prisma migrate deploy
+          echo "::endgroup::"
+
+      - name: Verify schema sync
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: |
+          echo "::group::Final migration status"
+          npx prisma migrate status
+          echo "::endgroup::"
+
+      - name: Notify on failure
+        if: failure()
+        run: |
+          echo "::error::Migration failed. Manual intervention required:"
+          echo "::error::1. Revisar logs arriba"
+          echo "::error::2. Aplicar manualmente via MCP apply_migration"
+          echo "::error::3. Resolver conflictos en migration_lock.toml si los hay"
