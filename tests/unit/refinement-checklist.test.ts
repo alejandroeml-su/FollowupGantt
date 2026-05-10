@@ -39,20 +39,28 @@ describe('SuggestChecklistSchema', () => {
     expect(ok.success).toBe(true)
   })
 
-  it('rechaza menos de 3 items', () => {
+  it('valida la forma de cada item (text + optional)', () => {
     const r = SuggestChecklistSchema.safeParse({
-      items: [{ text: 'Solo uno', optional: false }],
+      items: [{ text: 'ok', optional: 'no-bool' }],
     })
     expect(r.success).toBe(false)
   })
 
-  it('rechaza más de 7 items', () => {
-    const items = Array.from({ length: 8 }, (_, i) => ({
-      text: `Item ${i}`,
-      optional: false,
-    }))
-    const r = SuggestChecklistSchema.safeParse({ items })
-    expect(r.success).toBe(false)
+  it('acepta arrays con cualquier longitud (límite 3-7 vía system prompt + heurística)', () => {
+    // Wave P14b: Anthropic structured output rechaza minItems/maxItems en
+    // arrays · el límite 3-7 se enforced en el system prompt y por la
+    // heurística de fallback (ver `suggestChecklistHeuristic`).
+    const oneItem = SuggestChecklistSchema.safeParse({
+      items: [{ text: 'Solo uno', optional: false }],
+    })
+    expect(oneItem.success).toBe(true)
+    const eightItems = SuggestChecklistSchema.safeParse({
+      items: Array.from({ length: 8 }, (_, i) => ({
+        text: `Item ${i}`,
+        optional: false,
+      })),
+    })
+    expect(eightItems.success).toBe(true)
   })
 })
 

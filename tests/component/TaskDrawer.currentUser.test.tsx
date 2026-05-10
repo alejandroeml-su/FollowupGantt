@@ -179,8 +179,12 @@ function readDrilledCurrentUser(): {
   userId: string | null
   name: string | null
 } {
-  const stub = screen.queryByTestId('task-drawer-content-stub')
-  if (!stub) return { userId: null, name: null }
+  // Tras un re-render dentro del mismo test pueden quedar 2 stubs vivos
+  // (cada `render()` de RTL deja su DOM hasta el cleanup automático). Tomamos
+  // el último que es el del re-render con drawerTaskId activo.
+  const stubs = screen.queryAllByTestId('task-drawer-content-stub')
+  if (stubs.length === 0) return { userId: null, name: null }
+  const stub = stubs[stubs.length - 1]
   return {
     userId: stub.getAttribute('data-current-user-id'),
     name: stub.getAttribute('data-current-user-name'),

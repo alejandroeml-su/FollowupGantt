@@ -80,7 +80,7 @@ describe('WBSGeneratorDialog', () => {
   it('llama generateWBSFromBrief y muestra preview con los datos', async () => {
     generateMock.mockResolvedValue(wbsResult)
     const user = userEvent.setup()
-    render(<WBSGeneratorDialog open onOpenChange={() => {}} />)
+    render(<WBSGeneratorDialog open onOpenChange={() => {}} targetProjectId="p-1" />)
 
     const textarea = screen.getByLabelText(/Brief del proyecto/i)
     await user.type(textarea, 'Implementar un CRM con módulo de ventas y soporte')
@@ -99,7 +99,7 @@ describe('WBSGeneratorDialog', () => {
   it('muestra mensaje de error cuando la action lanza', async () => {
     generateMock.mockRejectedValue(new Error('[INVALID_INPUT] mal'))
     const user = userEvent.setup()
-    render(<WBSGeneratorDialog open onOpenChange={() => {}} />)
+    render(<WBSGeneratorDialog open onOpenChange={() => {}} targetProjectId="p-1" />)
     const textarea = screen.getByLabelText(/Brief del proyecto/i)
     await user.type(textarea, 'Implementar CRM con módulo de ventas')
     await user.click(screen.getByRole('button', { name: /^Generar$/i }))
@@ -120,7 +120,7 @@ describe('WBSGeneratorDialog', () => {
       warnings: [],
     })
     const user = userEvent.setup()
-    render(<WBSGeneratorDialog open onOpenChange={() => {}} />)
+    render(<WBSGeneratorDialog open onOpenChange={() => {}} targetProjectId="p-1" />)
     await user.type(
       screen.getByLabelText(/Brief del proyecto/i),
       'Implementar CRM con módulo de ventas y soporte',
@@ -139,7 +139,7 @@ describe('WBSGeneratorDialog', () => {
   it('botón Descartar regresa al estado idle', async () => {
     generateMock.mockResolvedValue(wbsResult)
     const user = userEvent.setup()
-    render(<WBSGeneratorDialog open onOpenChange={() => {}} />)
+    render(<WBSGeneratorDialog open onOpenChange={() => {}} targetProjectId="p-1" />)
     await user.type(
       screen.getByLabelText(/Brief del proyecto/i),
       'Implementar CRM con módulo de ventas y soporte',
@@ -162,7 +162,7 @@ describe('WBSGeneratorDialog', () => {
       llmError: 'timeout',
     })
     const user = userEvent.setup()
-    render(<WBSGeneratorDialog open onOpenChange={() => {}} />)
+    render(<WBSGeneratorDialog open onOpenChange={() => {}} targetProjectId="p-1" />)
     await user.type(
       screen.getByLabelText(/Brief del proyecto/i),
       'Implementar CRM con módulo de ventas',
@@ -179,7 +179,7 @@ describe('WBSGeneratorDialog', () => {
       warnings: ['Dependencia rota: A → B'],
     })
     const user = userEvent.setup()
-    render(<WBSGeneratorDialog open onOpenChange={() => {}} />)
+    render(<WBSGeneratorDialog open onOpenChange={() => {}} targetProjectId="p-1" />)
     await user.type(
       screen.getByLabelText(/Brief del proyecto/i),
       'Implementar CRM con módulo de ventas',
