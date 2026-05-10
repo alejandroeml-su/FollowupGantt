@@ -115,6 +115,13 @@ describe('useChannel', () => {
   it('captura error en CHANNEL_ERROR', async () => {
     const { result } = renderHook(() => useChannel('project:abc'))
     const ch = fakeClient!.__channels[0]
+    // El hook hace setInternal diferido con setTimeout(0) para cumplir la
+    // regla `react-hooks/set-state-in-effect`. Si invocamos el callback de
+    // subscribe ANTES de que ese timeout flushee, el reset inicial
+    // sobrescribiría el error. Esperamos un microtask antes de disparar.
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 0))
+    })
     const fail = new Error('boom')
     await act(async () => {
       ch.__subscribeCb?.('CHANNEL_ERROR', fail)
