@@ -5,7 +5,10 @@
   "installCommand": "npm install",
   "outputDirectory": ".next",
   "crons": [
-    { "path": "/api/cron/currency-rates", "schedule": "0 6 * * *" },
-    { "path": "/api/cron/daily-standup",  "schedule": "0 8 * * 1-5" }
+    { "path": "/api/cron/currency-rates",     "schedule": "0 6 * * *" },
+    { "path": "/api/cron/daily-standup",      "schedule": "0 8 * * 1-5" },
+    { "path": "/api/cron/refresh-allocation", "schedule": "0 4 * * 1" },
+    { "path": "/api/cron/calendar-sync",      "schedule": "0 */6 * * *" },
+    { "path": "/api/cron/recurrence",         "schedule": "5 0 * * *" }
   ]
 }
