@@ -14,6 +14,7 @@ import {
 } from '@/lib/scheduling/baseline-snapshot'
 import { createNotification } from '@/lib/actions/notifications'
 import { requireProjectAccess } from '@/lib/auth/check-project-access'
+import { withMetrics } from '@/lib/observability/metrics'
 
 // ───────────────────────── Errores tipados ─────────────────────────
 
@@ -172,6 +173,7 @@ export async function getBaselineSnapshot(
 export async function captureBaseline(
   input: CaptureBaselineInput,
 ): Promise<{ id: string; version: number }> {
+  return withMetrics('action.captureBaseline', async () => {
   const parsed = captureInputSchema.safeParse(input)
   if (!parsed.success) {
     actionError(
@@ -301,4 +303,5 @@ export async function captureBaseline(
   }
 
   return created
+  })
 }
