@@ -318,6 +318,11 @@ model User {
   // `SetNull` en RiskAction.ownerId preserva el plan aunque cambie de dueño.
   riskActionsOwned RiskAction[] @relation("RiskActionOwner")
 
+  // Wave P18-A · Quality Inspections + Defect Tracking
+  inspectionsAsInspector QualityInspection[] @relation("InspectionInspector")
+  defectsOwned           Defect[]             @relation("DefectOwner")
+  defectsReported        Defect[]             @relation("DefectReporter")
+
   // Wave P8 · Equipo P8-5 — Calendar sync (Google + Microsoft + ICS).
   // Conexiones por provider (Google Calendar, MS Graph, ICS feed). Un
   // usuario puede tener hasta una conexión por provider (constraint
@@ -666,6 +671,10 @@ model Project {
   // los riesgos son metadata viva del proyecto y no deben sobrevivir a su
   // borrado (a diferencia de baselines o docs).
   risks Risk[]
+
+  // Wave P18-A · Quality Inspections + Defect Tracking.
+  qualityInspections QualityInspection[]
+  defects            Defect[]
 
   // Ola P8 · Equipo P8-3 · Cost Management.
   // Presupuesto base del proyecto (BAC) y moneda. Si NULL, los reportes de
@@ -1063,6 +1072,10 @@ model Task {
 
   /// Wave P14c — Riesgos asociados a esta tarea (Brain AI register).
   risks Risk[] @relation("TaskRisks")
+
+  /// Wave P18-A · Quality Inspections + Defect Tracking.
+  inspections QualityInspection[] @relation("TaskInspections")
+  defects     Defect[]             @relation("TaskDefects")
 
   // Módulo ITIL (SLA Management)
   slaResponseLimit   DateTime? // Límite de tiempo para responder
@@ -2841,6 +2854,111 @@ model RiskAction {
 //
 // Consumidores: `sync-engine.ts`, `ics-export.ts`, cron `/api/cron/calendar-sync`.
 // ─────────────────────────────────────────────────────────────────
+
+// ─────────────────────────────────────────────────────────────────
+// Wave P18-A · Quality Inspections + Defect Tracking (PMI 100%)
+//
+// Cierra el gap de PMBOK 6/7 "Quality Management": procesos formales de
+// inspección/auditoría de entregables + tracking de defectos detectados.
+// Sin estos artefactos visibles, Sync mantenía PMI en ~98% (compliance
+// "demo-ready"). Esta wave sube a 100% riguroso.
+// ─────────────────────────────────────────────────────────────────
+
+enum InspectionType {
+  CODE_REVIEW
+  TEST_REVIEW
+  DESIGN_REVIEW
+  AUDIT
+  WALKTHROUGH
+}
+
+enum InspectionResult {
+  PENDING
+  PASS
+  PASS_WITH_DEFECTS
+  FAIL
+}
+
+model QualityInspection {
+  id        String  @id @default(uuid())
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  /// Tarea o entregable bajo inspección (opcional).
+  taskId String?
+  task   Task?   @relation("TaskInspections", fields: [taskId], references: [id], onDelete: SetNull)
+
+  type   InspectionType
+  result InspectionResult @default(PENDING)
+
+  inspectorId String?
+  inspector   User?   @relation("InspectionInspector", fields: [inspectorId], references: [id], onDelete: SetNull)
+
+  scheduledAt DateTime?
+  completedAt DateTime?
+
+  /// Array libre [{ text, done, notes? }] validado en server action.
+  checklist Json?
+  summary   String?
+
+  defects Defect[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([projectId, result])
+  @@index([taskId])
+  @@index([inspectorId])
+}
+
+enum DefectSeverity {
+  CRITICAL
+  MAJOR
+  MINOR
+  TRIVIAL
+}
+
+enum DefectStatus {
+  OPEN
+  IN_REVIEW
+  FIXED
+  WONT_FIX
+  DUPLICATE
+}
+
+model Defect {
+  id        String  @id @default(uuid())
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  inspectionId String?
+  inspection   QualityInspection? @relation(fields: [inspectionId], references: [id], onDelete: SetNull)
+
+  taskId String?
+  task   Task?   @relation("TaskDefects", fields: [taskId], references: [id], onDelete: SetNull)
+
+  title       String
+  description String?
+  severity    DefectSeverity @default(MAJOR)
+  status      DefectStatus   @default(OPEN)
+
+  ownerId String?
+  owner   User?   @relation("DefectOwner", fields: [ownerId], references: [id], onDelete: SetNull)
+
+  reporterId String?
+  reporter   User?   @relation("DefectReporter", fields: [reporterId], references: [id], onDelete: SetNull)
+
+  resolvedAt DateTime?
+  resolution String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([projectId, status, severity])
+  @@index([inspectionId])
+  @@index([taskId])
+  @@index([ownerId, status])
+}
 
 enum CalendarProvider {
   GOOGLE
