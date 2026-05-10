@@ -307,20 +307,24 @@ export function ListBoardClient({
             visibleCount={visibleItems.length}
           />
         ) : (
-          <div className="flex items-center bg-secondary/20 px-4 py-1.5 text-[11px]">
+          <div className="flex items-center bg-secondary/20 px-3 py-1.5 text-[11px] md:px-4">
             <span className="rounded border border-indigo-500/20 bg-indigo-500/10 px-2 py-0.5 font-semibold text-indigo-400">
               {visibleItems.length} de {items.length} tareas
               {showGroups && ` · ${groups.length} grupos`}
             </span>
-            <span className="ml-auto text-[10px] text-muted-foreground">
+            <span className="ml-auto hidden text-[10px] text-muted-foreground md:inline">
               Shift + / atajos · / buscar · T nueva tarea
             </span>
           </div>
         )}
 
-        {/* Column headers — sticky con grid alineado a las filas */}
-        <div className="sticky top-0 z-10 grid grid-cols-12 items-center gap-4 border-b border-border bg-muted/70 px-4 py-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground backdrop-blur">
-          <div className="col-span-4 flex items-center gap-2">
+        {/* Column headers — sticky con grid alineado a las filas.
+            Wave P16-C · mobile-first: en <md ocultamos las columnas
+            secundarias (asignado, fecha, prioridad, id) y dejamos solo
+            "Tarea" + "Estado" para que el grid no se rompa en pantallas
+            estrechas. El detalle completo se ve en el TaskDrawer. */}
+        <div className="sticky top-0 z-10 grid grid-cols-6 items-center gap-2 border-b border-border bg-muted/70 px-3 py-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground backdrop-blur md:grid-cols-12 md:gap-4 md:px-4">
+          <div className="col-span-4 flex items-center gap-2 md:col-span-4">
             <input
               type="checkbox"
               checked={
@@ -340,11 +344,11 @@ export function ListBoardClient({
             />
             <span>Tarea</span>
           </div>
-          <div className="col-span-2">Asignado</div>
-          <div className="col-span-2">Estado</div>
-          <div className="col-span-2">Fecha límite</div>
-          <div className="col-span-1 text-center">Prioridad</div>
-          <div className="col-span-1 text-center">ID</div>
+          <div className="hidden md:col-span-2 md:block">Asignado</div>
+          <div className="col-span-2 md:col-span-2">Estado</div>
+          <div className="hidden md:col-span-2 md:block">Fecha límite</div>
+          <div className="hidden md:col-span-1 md:block md:text-center">Prioridad</div>
+          <div className="hidden md:col-span-1 md:block md:text-center">ID</div>
         </div>
 
         {visibleItems.length === 0 && (
@@ -525,7 +529,10 @@ function Row({
             }
           }}
           className={clsx(
-            'group grid cursor-pointer grid-cols-12 items-center gap-4 border-l-2 border-b border-b-border/40 px-4 py-2.5 text-sm transition-all',
+            // Wave P16-C · mobile-first: en <md usamos grid-cols-6 (Tarea
+            // 4col + Estado 2col) y ocultamos asignado/fecha/prioridad/id.
+            // En md+ recuperamos la grilla 12-col completa.
+            'group grid cursor-pointer grid-cols-6 items-center gap-2 border-l-2 border-b border-b-border/40 px-3 py-3 text-sm transition-all md:grid-cols-12 md:gap-4 md:px-4 md:py-2.5',
             focused
               ? 'border-l-indigo-400 bg-secondary/80 outline-2 outline-indigo-400'
               : selected
@@ -534,7 +541,7 @@ function Row({
           )}
         >
           <div
-            className="col-span-4 flex items-center"
+            className="col-span-4 flex items-center md:col-span-4"
             style={{ paddingLeft: `${level * 1.5}rem` }}
           >
             {/* Checkbox de multi-selección. Click directo NO abre el drawer
@@ -640,8 +647,15 @@ function Row({
             </div>
           </div>
 
-          {/* Wave P9 follow-up — celdas editables inline */}
-          <div className="col-span-2" onClick={(e) => e.stopPropagation()}>
+          {/* Wave P9 follow-up — celdas editables inline.
+              Wave P16-C · mobile: ocultamos columnas secundarias en <md
+              para que la fila quepa sin scroll horizontal. La edición
+              completa está disponible vía drawer (tap → drawer) que
+              renderiza el selector vertical. */}
+          <div
+            className="hidden md:col-span-2 md:block"
+            onClick={(e) => e.stopPropagation()}
+          >
             <AssigneeSelector
               taskId={task.id}
               currentAssignee={task.assignee ?? null}
@@ -649,11 +663,17 @@ function Row({
             />
           </div>
 
-          <div className="col-span-2" onClick={(e) => e.stopPropagation()}>
+          <div
+            className="col-span-2 md:col-span-2"
+            onClick={(e) => e.stopPropagation()}
+          >
             <StatusSelector taskId={task.id} currentStatus={task.status} />
           </div>
 
-          <div className="col-span-2" onClick={(e) => e.stopPropagation()}>
+          <div
+            className="hidden md:col-span-2 md:block"
+            onClick={(e) => e.stopPropagation()}
+          >
             <DueDateSelector
               taskId={task.id}
               currentEndDate={task.endDate ?? null}
@@ -661,7 +681,7 @@ function Row({
           </div>
 
           <div
-            className="col-span-1 flex justify-center"
+            className="hidden md:col-span-1 md:flex md:justify-center"
             onClick={(e) => e.stopPropagation()}
           >
             <PrioritySelector
@@ -670,7 +690,7 @@ function Row({
             />
           </div>
 
-          <div className="col-span-1 flex justify-center text-xs text-muted-foreground">
+          <div className="hidden md:col-span-1 md:flex md:justify-center text-xs text-muted-foreground">
             #{task.id.substring(0, 4)}
           </div>
         </div>

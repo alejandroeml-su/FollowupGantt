@@ -1,8 +1,9 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Plus } from 'lucide-react'
 import { TaskCreationModal } from './TaskCreationModal'
+import { useUIStore } from '@/lib/stores/ui'
 import type { SerializedTask } from '@/lib/types'
 import type {
   PhaseOption,
@@ -36,6 +37,19 @@ export function NewTaskButton({
   label = 'Nueva Tarea',
 }: Props) {
   const [open, setOpen] = useState(false)
+  const requestedAt = useUIStore((s) => s.newTaskRequestedAt)
+  // Wave P16-C — atajo global `cmd+shift+n` dispara `requestNewTask()`
+  // bumpeando `newTaskRequestedAt`. Cualquier `<NewTaskButton/>` montado
+  // en la página abre su modal en la siguiente render. Si hay varios
+  // botones (raro), todos abren — el primero que cierra "consume" el
+  // request (vía `lastSeenRef`), el resto se ignora.
+  const lastSeenRef = useRef<number | null>(null)
+  useEffect(() => {
+    if (!requestedAt) return
+    if (lastSeenRef.current === requestedAt) return
+    lastSeenRef.current = requestedAt
+    setOpen(true)
+  }, [requestedAt])
 
   const classes =
     variant === 'primary'
@@ -46,7 +60,8 @@ export function NewTaskButton({
     <>
       <button
         onClick={() => setOpen(true)}
-        className={`flex items-center gap-2 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${classes}`}
+        data-tour-target="new-task"
+        className={`flex items-center gap-2 rounded-md px-3 py-1.5 text-sm font-medium transition-colors min-h-[44px] sm:min-h-0 ${classes}`}
       >
         <Plus className="h-4 w-4" />
         {label}

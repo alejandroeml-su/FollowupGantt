@@ -367,8 +367,12 @@ export default function Sidebar({
       <div className={twMerge(
         clsx(
           "fixed inset-y-0 left-0 z-50 flex flex-col bg-card text-foreground border-r border-border transition-all duration-300 ease-in-out lg:static lg:translate-x-0",
-          // En mobile siempre usamos ancho pleno (w-72). En desktop (lg) respetamos colapso.
-          "w-72",
+          // Wave P16-C · mobile: usamos ancho casi-full (max(85vw, 18rem))
+          // para que el drawer se sienta como un panel completo y NO deje
+          // un slice del contenido principal asomando por el lado derecho
+          // (el backdrop ya bloquea interacción, pero la franja visible
+          // distrae). En desktop (lg) respetamos colapso (16/72).
+          "w-[min(85vw,20rem)]",
           collapsed ? "lg:w-16" : "lg:w-72",
           mobileOpen ? "translate-x-0" : "-translate-x-full"
         )
@@ -644,6 +648,15 @@ function NavLink({
   const Icon = route.icon;
   const label = t(route.name);
 
+  // Wave P16-C — anchors para el OnboardingTour. Marcamos el item Brain
+  // y Proyectos para que el overlay pueda apuntar al elemento correcto.
+  const tourTarget =
+    route.path === '/brain'
+      ? 'brain-link'
+      : route.path === '/projects'
+        ? 'new-project'
+        : undefined
+
   return (
     <Link
       href={route.path}
@@ -651,6 +664,7 @@ function NavLink({
       title={collapsed ? label : undefined}
       aria-label={collapsed ? label : undefined}
       aria-current={isActive ? 'page' : undefined}
+      data-tour-target={tourTarget}
       className={twMerge(
         clsx(
           'group flex items-center rounded-lg transition-all duration-200',

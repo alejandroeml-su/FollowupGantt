@@ -178,8 +178,8 @@ export function TimelineBoardClient({
 
   return (
     <div className="flex h-full flex-col">
-      {/* Toolbar */}
-      <div className="flex shrink-0 flex-wrap items-center gap-3 border-b border-border bg-card px-6 py-3">
+      {/* Toolbar — Wave P16-C · stack vertical en mobile, padding compacto. */}
+      <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-border bg-card px-3 py-2 md:gap-3 md:px-6 md:py-3">
         <div className="flex items-center gap-1.5">
           <CalendarIcon className="h-4 w-4 text-indigo-400" />
           <span className="text-sm font-semibold text-foreground">
@@ -270,8 +270,10 @@ export function TimelineBoardClient({
         </div>
       </div>
 
-      {/* Canvas con scroll vertical */}
+      {/* Canvas con scroll vertical (y horizontal en mobile, donde el
+          timeline necesita un mínimo ~720px para ser legible). */}
       <div className="flex-1 overflow-auto">
+        <div className="min-w-[720px] md:min-w-0">
         {groups.length === 0 ? (
           <div className="mx-auto mt-10 max-w-md rounded-xl border border-dashed border-border bg-card p-10 text-center">
             <h2 className="text-base font-semibold text-foreground">
@@ -356,6 +358,7 @@ export function TimelineBoardClient({
             )
           })
         )}
+        </div>
       </div>
 
       {/* Leyenda */}
