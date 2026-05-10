@@ -10,6 +10,12 @@ export const AUTOMATION_EVENTS = [
   'task.created',
   'status.changed',
   'form.submitted',
+  // Wave P18-B — eventos enterprise para "Si X → Entonces Y" amplio.
+  'task.assignee_changed',
+  'defect.critical',
+  'risk.high_severity',
+  'sprint.started',
+  'sprint.completed',
 ] as const
 
 export type AutomationEvent = (typeof AUTOMATION_EVENTS)[number]
@@ -36,6 +42,8 @@ export const ACTION_KINDS = [
   'sendWebhook',
   'updateField',
   'assignUser',
+  // Wave P18-B — notificación in-app.
+  'notify',
 ] as const
 
 export type ActionKind = (typeof ACTION_KINDS)[number]
@@ -65,6 +73,15 @@ export type AutomationAction =
       kind: 'assignUser'
       taskId: string
       userId: string
+    }
+  | {
+      // Wave P18-B — manda Notification in-app a un usuario o equipo.
+      kind: 'notify'
+      userId: string
+      title: string
+      body?: string
+      /** URL relativa para deep-link al hacer click. */
+      href?: string
     }
 
 export interface AutomationTrigger {

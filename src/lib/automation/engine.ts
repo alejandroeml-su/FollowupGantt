@@ -138,6 +138,10 @@ export interface ActionAdapter {
   assignUser: (
     payload: Extract<AutomationAction, { kind: 'assignUser' }>,
   ) => Promise<{ taskId: string; userId: string }>
+  // Wave P18-B
+  notify: (
+    payload: Extract<AutomationAction, { kind: 'notify' }>,
+  ) => Promise<{ notificationId: string }>
 }
 
 export async function runRuleActions(
@@ -167,6 +171,11 @@ export async function runRuleActions(
         case 'assignUser': {
           const out = await adapter.assignUser(action)
           results.push({ kind: 'assignUser', ok: true, output: out })
+          break
+        }
+        case 'notify': {
+          const out = await adapter.notify(action)
+          results.push({ kind: 'notify', ok: true, output: out })
           break
         }
       }

@@ -75,6 +75,8 @@ enum NotificationType {
   BASELINE_CAPTURED
   DEPENDENCY_VIOLATION
   IMPORT_COMPLETED
+  /// Wave P18-B — notificación generada por una AutomationRule.
+  AUTOMATION
 }
 
 // Ola P2 · Equipo P2-1 — Vistas guardadas multi-surface.
@@ -311,6 +313,10 @@ model User {
   // usuario sea borrado (compliance PMI: el risk register debe sobrevivir
   // a la rotación de su dueño original).
   risksOwned Risk[] @relation("RiskOwner")
+
+  // Wave R-360 — Acciones correctivas de riesgos asignadas a este usuario.
+  // `SetNull` en RiskAction.ownerId preserva el plan aunque cambie de dueño.
+  riskActionsOwned RiskAction[] @relation("RiskActionOwner")
 
   // Wave P18-A · Quality Inspections + Defect Tracking
   inspectionsAsInspector QualityInspection[] @relation("InspectionInspector")
@@ -2734,6 +2740,26 @@ enum RiskStatus {
   CLOSED
 }
 
+/// Wave R-360 (post-P17) — origen de un Risk para visión 360°:
+///   - MANUAL    : creado por un usuario desde la UI (default).
+///   - HEURISTIC : promovido desde TaskInsight kind=DELAY_RISK.
+///   - BRAIN_AI  : promovido desde Brain Project Manager AI (Wave P14c).
+///   - IMPORTED  : creado vía CSV/Excel (Wave P16-B Migration Assistant).
+enum RiskSource {
+  MANUAL
+  HEURISTIC
+  BRAIN_AI
+  IMPORTED
+}
+
+/// Wave R-360 — estado de una Risk Action correctiva (workflow Kanban).
+enum RiskActionStatus {
+  PENDING
+  IN_PROGRESS
+  DONE
+  CANCELLED
+}
+
 model Risk {
   id          String  @id @default(uuid())
   projectId   String
@@ -2766,8 +2792,19 @@ model Risk {
   taskId String?
   task   Task?   @relation("TaskRisks", fields: [taskId], references: [id], onDelete: SetNull)
 
+  /// Wave R-360 — trazabilidad de origen + dedupe.
+  /// `source` identifica de dónde nació el riesgo (MANUAL/HEURISTIC/
+  /// BRAIN_AI/IMPORTED). `sourceRef` contiene el ID externo (ej.
+  /// `taskInsightId` para HEURISTIC, `brainInsightId` para BRAIN_AI)
+  /// para evitar promover dos veces el mismo insight.
+  source    RiskSource @default(MANUAL)
+  sourceRef String?
+
   detectedAt DateTime  @default(now())
   closedAt   DateTime?
+
+  /// Wave R-360 — acciones correctivas asociadas (one-to-many).
+  actions RiskAction[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -2775,6 +2812,29 @@ model Risk {
   @@index([projectId, status])
   @@index([probability, impact])
   @@index([taskId])
+  @@index([source, sourceRef])
+}
+
+/// Wave R-360 — Acción correctiva de un riesgo. Permite gestionar el plan
+/// de mitigación con responsable, fecha objetivo y workflow de status.
+/// Cada Risk puede tener N RiskActions; visibles desde el panel de gestión
+/// de riesgos del proyecto.
+model RiskAction {
+  id          String           @id @default(uuid())
+  riskId      String
+  risk        Risk             @relation(fields: [riskId], references: [id], onDelete: Cascade)
+  description String
+  ownerId     String?
+  owner       User?            @relation("RiskActionOwner", fields: [ownerId], references: [id], onDelete: SetNull)
+  status      RiskActionStatus @default(PENDING)
+  dueDate     DateTime?
+  doneAt      DateTime?
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  @@index([riskId, status])
+  @@index([ownerId, status])
+  @@index([dueDate])
 }
 
 // ─────────────────────────────────────────────────────────────────

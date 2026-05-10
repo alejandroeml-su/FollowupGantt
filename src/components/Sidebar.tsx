@@ -130,6 +130,8 @@ const menuGroups: RouteGroup[] = [
     routes: [
       { name: 'sidebar.items.pmiCharter', path: '/pmi/charter', icon: FileText },
       { name: 'sidebar.items.pmiStakeholders', path: '/pmi/stakeholders', icon: Users2 },
+      // Wave R-360 — Gestión 360° de riesgos del proyecto activo.
+      { name: 'sidebar.items.pmiRisks', path: '/pmi/risks', icon: ShieldAlertIcon },
       // Wave P18-A — Quality Inspections + Defect tracking.
       { name: 'sidebar.items.pmiQuality', path: '/pmi/quality', icon: CheckSquare },
       { name: 'sidebar.items.pmiChangeRequests', path: '/pmi/change-requests', icon: GitMerge },
