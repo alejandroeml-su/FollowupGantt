@@ -161,6 +161,11 @@ export const KNOWN_AUDIT_ACTIONS = [
   // Permisos
   'permission.granted',
   'permission.revoked',
+  // Wave R-360 — Risk Register & corrective actions.
+  'risk.promoted_from_insight',
+  'risk_action.created',
+  'risk_action.updated',
+  'risk_action.deleted',
 ] as const
 
 export type AuditAction = (typeof KNOWN_AUDIT_ACTIONS)[number]
@@ -277,6 +282,11 @@ export const ACTION_LABELS: Record<AuditAction, string> = {
   'export.downloaded': 'Exportación descargada',
   'permission.granted': 'Permiso otorgado',
   'permission.revoked': 'Permiso revocado',
+  // Wave R-360
+  'risk.promoted_from_insight': 'Riesgo promovido desde insight heurístico',
+  'risk_action.created': 'Acción correctiva creada',
+  'risk_action.updated': 'Acción correctiva actualizada',
+  'risk_action.deleted': 'Acción correctiva eliminada',
 }
 
 // ───────────────────────── Tipos de entidad ─────────────────────────

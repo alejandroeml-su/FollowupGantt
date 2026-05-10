@@ -17,6 +17,7 @@ import type { RiskOverviewItem } from '@/lib/actions/insights'
 import { RiskBadge } from './RiskBadge'
 import { InsightsRunButton } from './InsightsRunButton'
 import { NextActionsList, type NextActionItem } from './NextActionsList'
+import { PromoteRiskButton } from './PromoteRiskButton'
 
 export interface ProjectSummaryEntry {
   id: string
@@ -120,7 +121,7 @@ export function InsightsDashboard({
           <ul className="divide-y divide-gray-200 rounded-lg border border-gray-200 bg-white dark:divide-gray-700 dark:border-gray-700 dark:bg-gray-900">
             {topRisks.map((r) => (
               <li
-                key={r.taskId}
+                key={r.insightId}
                 className="flex items-center justify-between gap-3 p-3 text-sm"
               >
                 <div className="min-w-0 flex-1">
@@ -137,7 +138,13 @@ export function InsightsDashboard({
                     )}
                   </p>
                 </div>
-                <RiskBadge level={r.level} score={r.score} factors={r.factors} />
+                <div className="flex shrink-0 items-center gap-2">
+                  <RiskBadge level={r.level} score={r.score} factors={r.factors} />
+                  <PromoteRiskButton
+                    insightId={r.insightId}
+                    projectId={r.projectId}
+                  />
+                </div>
               </li>
             ))}
           </ul>
