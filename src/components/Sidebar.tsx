@@ -140,6 +140,8 @@ const menuGroups: RouteGroup[] = [
       { name: 'sidebar.items.pmiEvm', path: '/pmi/evm', icon: Activity },
       { name: 'sidebar.items.pmiLessons', path: '/lessons-learned', icon: BookOpen },
       { name: 'sidebar.items.pmiCommunications', path: '/pmi/communications', icon: Megaphone },
+      // Wave P18-D — Performance Reports PMI (Status + Final XLSX).
+      { name: 'sidebar.items.pmiReports', path: '/pmi/reports', icon: FileBarChart },
     ],
   },
   // ── Estrategia (amber) ──────────────────────────────────────────
