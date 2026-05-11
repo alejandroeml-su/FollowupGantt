@@ -207,3 +207,157 @@ describe('uiStore · baselineTrendOpen (HU-3.4)', () => {
     expect(parsed?.state?.baselineTrendOpen).toBe(true)
   })
 })
+
+// ─── R3.0-G · Coverage push: toggles + setters faltantes ─────────────
+
+describe('uiStore · sidebar + mobile', () => {
+  it('toggleSidebarCollapsed() alterna sin arg', () => {
+    useUIStore.setState({ sidebarCollapsed: false })
+    useUIStore.getState().toggleSidebarCollapsed()
+    expect(useUIStore.getState().sidebarCollapsed).toBe(true)
+    useUIStore.getState().toggleSidebarCollapsed()
+    expect(useUIStore.getState().sidebarCollapsed).toBe(false)
+  })
+
+  it('toggleSidebarCollapsed(true) fuerza estado', () => {
+    useUIStore.getState().toggleSidebarCollapsed(true)
+    expect(useUIStore.getState().sidebarCollapsed).toBe(true)
+  })
+
+  it('setMobileSidebarOpen actualiza flag', () => {
+    useUIStore.getState().setMobileSidebarOpen(true)
+    expect(useUIStore.getState().mobileSidebarOpen).toBe(true)
+    useUIStore.getState().setMobileSidebarOpen(false)
+    expect(useUIStore.getState().mobileSidebarOpen).toBe(false)
+  })
+})
+
+describe('uiStore · filters expand/dateRange', () => {
+  it('toggleFiltersExpanded() alterna sin arg', () => {
+    useUIStore.setState({ filtersExpanded: true })
+    useUIStore.getState().toggleFiltersExpanded()
+    expect(useUIStore.getState().filtersExpanded).toBe(false)
+    useUIStore.getState().toggleFiltersExpanded()
+    expect(useUIStore.getState().filtersExpanded).toBe(true)
+  })
+
+  it('toggleFiltersExpanded(false) fuerza estado', () => {
+    useUIStore.getState().toggleFiltersExpanded(false)
+    expect(useUIStore.getState().filtersExpanded).toBe(false)
+  })
+
+  it('toggleFiltersDateRange() alterna sin arg', () => {
+    useUIStore.setState({ filtersDateRangeOpen: false })
+    useUIStore.getState().toggleFiltersDateRange()
+    expect(useUIStore.getState().filtersDateRangeOpen).toBe(true)
+    useUIStore.getState().toggleFiltersDateRange()
+    expect(useUIStore.getState().filtersDateRangeOpen).toBe(false)
+  })
+
+  it('toggleFiltersDateRange(true) fuerza estado', () => {
+    useUIStore.getState().toggleFiltersDateRange(true)
+    expect(useUIStore.getState().filtersDateRangeOpen).toBe(true)
+  })
+})
+
+describe('uiStore · shortcuts overlay + view + active workspace', () => {
+  it('toggleShortcutsOverlay() alterna', () => {
+    useUIStore.setState({ shortcutsOverlayOpen: false })
+    useUIStore.getState().toggleShortcutsOverlay()
+    expect(useUIStore.getState().shortcutsOverlayOpen).toBe(true)
+    useUIStore.getState().toggleShortcutsOverlay(false)
+    expect(useUIStore.getState().shortcutsOverlayOpen).toBe(false)
+  })
+
+  it('setView cambia la vista actual', () => {
+    useUIStore.getState().setView('gantt')
+    expect(useUIStore.getState().currentView).toBe('gantt')
+    useUIStore.getState().setView('list')
+    expect(useUIStore.getState().currentView).toBe('list')
+  })
+
+  it('setActiveWorkspaceId guarda y limpia', () => {
+    useUIStore.getState().setActiveWorkspaceId('ws-42')
+    expect(useUIStore.getState().activeWorkspaceId).toBe('ws-42')
+    useUIStore.getState().setActiveWorkspaceId(null)
+    expect(useUIStore.getState().activeWorkspaceId).toBeNull()
+  })
+})
+
+describe('uiStore · activeView por superficie (Ola P2-1)', () => {
+  it('setActiveView guarda viewId por surface', () => {
+    useUIStore.getState().setActiveView('kanban', 'view-1')
+    expect(useUIStore.getState().activeViewByPath.kanban).toBe('view-1')
+  })
+
+  it('clearActiveView resetea a null SIN tocar otras surfaces', () => {
+    useUIStore.getState().setActiveView('list', 'view-list')
+    useUIStore.getState().setActiveView('gantt', 'view-gantt')
+    useUIStore.getState().clearActiveView('list')
+    const v = useUIStore.getState().activeViewByPath
+    expect(v.list).toBeNull()
+    expect(v.gantt).toBe('view-gantt')
+  })
+})
+
+describe('uiStore · onboarding tour + newTask (Wave P16-C)', () => {
+  it('toggleOnboardingTour() alterna sin arg', () => {
+    useUIStore.setState({ onboardingTourOpen: false })
+    useUIStore.getState().toggleOnboardingTour()
+    expect(useUIStore.getState().onboardingTourOpen).toBe(true)
+    useUIStore.getState().toggleOnboardingTour()
+    expect(useUIStore.getState().onboardingTourOpen).toBe(false)
+  })
+
+  it('toggleOnboardingTour(true) fuerza estado', () => {
+    useUIStore.getState().toggleOnboardingTour(true)
+    expect(useUIStore.getState().onboardingTourOpen).toBe(true)
+  })
+
+  it('requestNewTask actualiza newTaskRequestedAt con timestamp >0', () => {
+    const before = useUIStore.getState().newTaskRequestedAt
+    useUIStore.getState().requestNewTask()
+    const after = useUIStore.getState().newTaskRequestedAt
+    expect(after).not.toBe(before)
+    expect(typeof after).toBe('number')
+    expect(after).toBeGreaterThan(0)
+  })
+})
+
+describe('uiStore · multi-selection helpers', () => {
+  it('toggleManySelection con array vacío es no-op', () => {
+    const before = useUIStore.getState().selectedIds
+    useUIStore.getState().toggleManySelection([])
+    expect(useUIStore.getState().selectedIds).toBe(before)
+  })
+
+  it('toggleManySelection (additive=false) reemplaza selección', () => {
+    useUIStore.getState().toggleSelection('x', true)
+    useUIStore.getState().toggleManySelection(['a', 'b'])
+    const ids = Array.from(useUIStore.getState().selectedIds).sort()
+    expect(ids).toEqual(['a', 'b'])
+  })
+
+  it('toggleManySelection additive: agrega si faltaban', () => {
+    useUIStore.getState().toggleSelection('a', true)
+    useUIStore.getState().toggleManySelection(['b', 'c'], true)
+    const ids = Array.from(useUIStore.getState().selectedIds).sort()
+    expect(ids).toEqual(['a', 'b', 'c'])
+  })
+
+  it('toggleManySelection additive: deselecciona TODOS si ya estaban', () => {
+    useUIStore.getState().toggleSelection('a', true)
+    useUIStore.getState().toggleSelection('b', true)
+    useUIStore.getState().toggleSelection('c', true)
+    useUIStore.getState().toggleManySelection(['a', 'b'], true)
+    const ids = Array.from(useUIStore.getState().selectedIds).sort()
+    expect(ids).toEqual(['c'])
+  })
+
+  it('selectRange reemplaza con set de ids', () => {
+    useUIStore.getState().toggleSelection('x', true)
+    useUIStore.getState().selectRange(['a', 'b', 'c'])
+    const ids = Array.from(useUIStore.getState().selectedIds).sort()
+    expect(ids).toEqual(['a', 'b', 'c'])
+  })
+})

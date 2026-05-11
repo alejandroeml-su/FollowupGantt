@@ -364,6 +364,92 @@ describe('simulateDelay', () => {
     expect(result.affected[0].depth).toBe(0)
     expect(result.affected[0].deltaDays).toBe(7)
   })
+
+  it('cuando TODAS las tasks tienen endDate=null la source tampoco simula', () => {
+    // source con endDate null cae al branch sourceEndMs==null
+    const tasks = [
+      makeScenarioTask({ id: 'A', endDate: null }),
+      makeScenarioTask({ id: 'B', endDate: null }),
+    ]
+    const result = simulateDelay({
+      sourceTaskId: 'A',
+      delayDays: 5,
+      tasks,
+      dependencies: [],
+    })
+    expect(result.originalProjectEndDate).toBeNull()
+    expect(result.newProjectEndDate).toBeNull()
+    expect(result.affected).toEqual([])
+  })
+
+  it('endDate inválido (string no parseable) se trata como null', () => {
+    const tasks = [makeScenarioTask({ id: 'A', endDate: 'not-a-date' })]
+    const result = simulateDelay({
+      sourceTaskId: 'A',
+      delayDays: 5,
+      tasks,
+      dependencies: [],
+    })
+    // endDate inválido = NaN → tratado como null = affected vacío
+    expect(result.affected).toEqual([])
+  })
+
+  it('sucesor con startDate=null es skippeado en propagación', () => {
+    const tasks = [
+      makeScenarioTask({ id: 'A', startDate: isoDay(1), endDate: isoDay(10) }),
+      makeScenarioTask({ id: 'B', startDate: null, endDate: isoDay(20) }),
+    ]
+    const deps: ScenarioDependencyInput[] = [
+      { predecessorId: 'A', successorId: 'B', lagDays: 0 },
+    ]
+    const result = simulateDelay({
+      sourceTaskId: 'A',
+      delayDays: 5,
+      tasks,
+      dependencies: deps,
+    })
+    // B se skip por startDate null → solo A en affected
+    expect(result.affected).toHaveLength(1)
+    expect(result.affected[0].taskId).toBe('A')
+  })
+
+  it('dependencia que apunta a successor inexistente no rompe el algoritmo', () => {
+    const tasks = [
+      makeScenarioTask({ id: 'A', startDate: isoDay(1), endDate: isoDay(10) }),
+    ]
+    const deps: ScenarioDependencyInput[] = [
+      { predecessorId: 'A', successorId: 'ghost', lagDays: 0 },
+    ]
+    const result = simulateDelay({
+      sourceTaskId: 'A',
+      delayDays: 3,
+      tasks,
+      dependencies: deps,
+    })
+    expect(result.affected).toHaveLength(1)
+    expect(result.affected[0].taskId).toBe('A')
+  })
+
+  it('lag negativo permite que el sucesor solape con el predecesor', () => {
+    // A: [1-10], B: [10-15]. lag=-2 permite B comenzar en day 8 (A.end-2).
+    // Si retrasamos A 5 días → A.newEnd=day 15, B.requiredStart=day 13 > day 10 → shift.
+    const tasks = [
+      makeScenarioTask({ id: 'A', startDate: isoDay(1), endDate: isoDay(10) }),
+      makeScenarioTask({ id: 'B', startDate: isoDay(10), endDate: isoDay(15) }),
+    ]
+    const deps: ScenarioDependencyInput[] = [
+      { predecessorId: 'A', successorId: 'B', lagDays: -2 },
+    ]
+    const result = simulateDelay({
+      sourceTaskId: 'A',
+      delayDays: 5,
+      tasks,
+      dependencies: deps,
+    })
+    const b = result.affected.find((a) => a.taskId === 'B')
+    expect(b).toBeDefined()
+    expect(b!.deltaDays).toBeGreaterThan(0)
+  })
 })
 
 // ─────────────────────────────────────────────────────────────────────
@@ -531,5 +617,21 @@ describe('suggestRebalancing', () => {
     expect(out).toHaveLength(3)
     const ids = out.map((s) => s.userId).sort()
     expect(ids).toEqual(['u1', 'u2', 'u3'])
+  })
+
+  it('user overcommitted SIN proyectos retorna averageSpi=null', () => {
+    const users = [
+      makeUser({
+        userId: 'u-empty',
+        userName: 'NoProjects',
+        totalDailyHours: 10,
+        projects: [],
+      }),
+    ]
+    const out = suggestRebalancing(users)
+    expect(out).toHaveLength(1)
+    // Branch sin proyectos → averageSpi null
+    expect(out[0].metrics.averageSpi).toBeNull()
+    expect(out[0].metrics.projectsInvolved).toBe(0)
   })
 })
