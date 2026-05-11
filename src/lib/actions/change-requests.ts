@@ -2,11 +2,16 @@
 
 /**
  * Wave P11-PMI (HU-12.3) — Server actions Change Control Board (CCB).
+ *
+ * Wave P18 hardening — TODAS las queries pasan por
+ * `withRlsContextFromSession()` para activar la RLS restrictiva
+ * `ChangeRequest_member_only` (solo miembros del proyecto pueden
+ * leer/escribir filas).
  */
 
 import { revalidatePath } from 'next/cache'
-import prisma from '@/lib/prisma'
 import { recordAuditEventSafe } from '@/lib/audit/events'
+import { withRlsContextFromSession } from '@/lib/db/with-rls-context'
 
 type ChangeImpactLevel = 'NONE' | 'LOW' | 'MEDIUM' | 'HIGH'
 type ChangeRequestStatus =
@@ -24,14 +29,16 @@ function revalidateCRs(projectId: string) {
 
 export async function listChangeRequests(projectId: string) {
   if (!projectId) throw new Error('[INVALID_INPUT] projectId requerido')
-  return prisma.changeRequest.findMany({
-    where: { projectId },
-    include: {
-      requestedBy: { select: { id: true, name: true } },
-      decidedBy: { select: { id: true, name: true } },
-    },
-    orderBy: [{ createdAt: 'desc' }],
-  })
+  return withRlsContextFromSession((tx) =>
+    tx.changeRequest.findMany({
+      where: { projectId },
+      include: {
+        requestedBy: { select: { id: true, name: true } },
+        decidedBy: { select: { id: true, name: true } },
+      },
+      orderBy: [{ createdAt: 'desc' }],
+    }),
+  )
 }
 
 export interface CreateChangeRequestInput {
@@ -58,25 +65,27 @@ export async function createChangeRequest(input: CreateChangeRequestInput) {
     throw new Error('[INVALID_INPUT] requestedById requerido')
   }
 
-  const created = await prisma.changeRequest.create({
-    data: {
-      projectId: input.projectId,
-      title: input.title.trim(),
-      description: input.description.trim(),
-      rationale: input.rationale?.trim() || null,
-      requestedById: input.requestedById,
-      impactScope: input.impactScope ?? 'NONE',
-      impactSchedule: input.impactSchedule ?? 'NONE',
-      impactCost: input.impactCost ?? 'NONE',
-      impactQuality: input.impactQuality ?? 'NONE',
-      estimatedCostDelta:
-        input.estimatedCostDelta != null
-          ? (input.estimatedCostDelta as unknown as never)
-          : null,
-      estimatedScheduleDeltaDays: input.estimatedScheduleDeltaDays ?? null,
-      status: 'SUBMITTED',
-    },
-  })
+  const created = await withRlsContextFromSession((tx) =>
+    tx.changeRequest.create({
+      data: {
+        projectId: input.projectId,
+        title: input.title.trim(),
+        description: input.description.trim(),
+        rationale: input.rationale?.trim() || null,
+        requestedById: input.requestedById,
+        impactScope: input.impactScope ?? 'NONE',
+        impactSchedule: input.impactSchedule ?? 'NONE',
+        impactCost: input.impactCost ?? 'NONE',
+        impactQuality: input.impactQuality ?? 'NONE',
+        estimatedCostDelta:
+          input.estimatedCostDelta != null
+            ? (input.estimatedCostDelta as unknown as never)
+            : null,
+        estimatedScheduleDeltaDays: input.estimatedScheduleDeltaDays ?? null,
+        status: 'SUBMITTED',
+      },
+    }),
+  )
 
   await recordAuditEventSafe({
     action: 'change_request.submitted',
@@ -97,20 +106,23 @@ export async function decideChangeRequest(input: {
 }) {
   if (!input.id) throw new Error('[INVALID_INPUT] id requerido')
 
-  const before = await prisma.changeRequest.findUnique({
-    where: { id: input.id },
-    select: { id: true, status: true, projectId: true },
-  })
-  if (!before) throw new Error('[NOT_FOUND] change request no existe')
+  const result = await withRlsContextFromSession(async (tx) => {
+    const before = await tx.changeRequest.findUnique({
+      where: { id: input.id },
+      select: { id: true, status: true, projectId: true },
+    })
+    if (!before) throw new Error('[NOT_FOUND] change request no existe')
 
-  const updated = await prisma.changeRequest.update({
-    where: { id: input.id },
-    data: {
-      status: input.status as ChangeRequestStatus,
-      decidedAt: new Date(),
-      decidedById: input.decidedById,
-      decisionNotes: input.decisionNotes?.trim() || null,
-    },
+    const updated = await tx.changeRequest.update({
+      where: { id: input.id },
+      data: {
+        status: input.status as ChangeRequestStatus,
+        decidedAt: new Date(),
+        decidedById: input.decidedById,
+        decisionNotes: input.decisionNotes?.trim() || null,
+      },
+    })
+    return { before, updated }
   })
 
   await recordAuditEventSafe({
@@ -123,10 +135,10 @@ export async function decideChangeRequest(input: {
     entityType: 'change_request',
     entityId: input.id,
     actorId: input.decidedById,
-    before: { status: before.status },
-    after: { status: updated.status },
+    before: { status: result.before.status },
+    after: { status: result.updated.status },
   })
 
-  revalidateCRs(before.projectId)
-  return updated
+  revalidateCRs(result.before.projectId)
+  return result.updated
 }

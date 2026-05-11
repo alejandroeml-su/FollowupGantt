@@ -2,12 +2,17 @@
 
 /**
  * Wave P12 (PMI 100%) — Lessons Learned repository.
+ *
+ * Wave P18 hardening — TODAS las queries pasan por
+ * `withRlsContextFromSession()` para activar la RLS restrictiva
+ * `LessonLearned_member_only` (solo miembros del proyecto pueden
+ * leer/escribir filas).
  */
 
 import { revalidatePath } from 'next/cache'
 import type { LessonCategory, LessonVisibility } from '@prisma/client'
-import prisma from '@/lib/prisma'
 import { recordAuditEventSafe } from '@/lib/audit/events'
+import { withRlsContextFromSession } from '@/lib/db/with-rls-context'
 
 function revalidateScopes(projectId?: string) {
   revalidatePath('/lessons-learned')
@@ -24,39 +29,43 @@ export async function listLessons(input: {
   search?: string
   limit?: number
 }) {
-  return prisma.lessonLearned.findMany({
-    where: {
-      projectId: input.projectId,
-      project: input.workspaceId
-        ? { workspaceId: input.workspaceId }
-        : undefined,
-      category: input.category,
-      OR: input.search
-        ? [
-            { title: { contains: input.search, mode: 'insensitive' } },
-            { recommendation: { contains: input.search, mode: 'insensitive' } },
-            { whatHappened: { contains: input.search, mode: 'insensitive' } },
-            { appliesTo: { contains: input.search, mode: 'insensitive' } },
-          ]
-        : undefined,
-    },
-    include: {
-      project: { select: { id: true, name: true } },
-      capturedBy: { select: { id: true, name: true } },
-    },
-    orderBy: { createdAt: 'desc' },
-    take: input.limit ?? 100,
-  })
+  return withRlsContextFromSession((tx) =>
+    tx.lessonLearned.findMany({
+      where: {
+        projectId: input.projectId,
+        project: input.workspaceId
+          ? { workspaceId: input.workspaceId }
+          : undefined,
+        category: input.category,
+        OR: input.search
+          ? [
+              { title: { contains: input.search, mode: 'insensitive' } },
+              { recommendation: { contains: input.search, mode: 'insensitive' } },
+              { whatHappened: { contains: input.search, mode: 'insensitive' } },
+              { appliesTo: { contains: input.search, mode: 'insensitive' } },
+            ]
+          : undefined,
+      },
+      include: {
+        project: { select: { id: true, name: true } },
+        capturedBy: { select: { id: true, name: true } },
+      },
+      orderBy: { createdAt: 'desc' },
+      take: input.limit ?? 100,
+    }),
+  )
 }
 
 export async function getLesson(input: { id: string }) {
-  return prisma.lessonLearned.findUnique({
-    where: { id: input.id },
-    include: {
-      project: { select: { id: true, name: true } },
-      capturedBy: { select: { id: true, name: true } },
-    },
-  })
+  return withRlsContextFromSession((tx) =>
+    tx.lessonLearned.findUnique({
+      where: { id: input.id },
+      include: {
+        project: { select: { id: true, name: true } },
+        capturedBy: { select: { id: true, name: true } },
+      },
+    }),
+  )
 }
 
 export async function createLesson(input: {
@@ -79,20 +88,22 @@ export async function createLesson(input: {
   if (!input.recommendation?.trim())
     throw new Error('[INVALID_INPUT] recommendation requerido')
 
-  const created = await prisma.lessonLearned.create({
-    data: {
-      projectId: input.projectId,
-      title: input.title.trim(),
-      category: input.category,
-      context: input.context.trim(),
-      whatHappened: input.whatHappened.trim(),
-      rootCause: input.rootCause?.trim() || null,
-      recommendation: input.recommendation.trim(),
-      appliesTo: input.appliesTo?.trim() || null,
-      visibility: input.visibility ?? 'WORKSPACE',
-      capturedById: input.capturedById || null,
-    },
-  })
+  const created = await withRlsContextFromSession((tx) =>
+    tx.lessonLearned.create({
+      data: {
+        projectId: input.projectId,
+        title: input.title.trim(),
+        category: input.category,
+        context: input.context.trim(),
+        whatHappened: input.whatHappened.trim(),
+        rootCause: input.rootCause?.trim() || null,
+        recommendation: input.recommendation.trim(),
+        appliesTo: input.appliesTo?.trim() || null,
+        visibility: input.visibility ?? 'WORKSPACE',
+        capturedById: input.capturedById || null,
+      },
+    }),
+  )
 
   await recordAuditEventSafe({
     action: 'lesson.created',
@@ -118,29 +129,32 @@ export async function updateLesson(input: {
   visibility?: LessonVisibility
   actorId?: string
 }) {
-  const before = await prisma.lessonLearned.findUnique({
-    where: { id: input.id },
-  })
-  if (!before) throw new Error('[NOT_FOUND] lesson no existe')
+  const result = await withRlsContextFromSession(async (tx) => {
+    const before = await tx.lessonLearned.findUnique({
+      where: { id: input.id },
+    })
+    if (!before) throw new Error('[NOT_FOUND] lesson no existe')
 
-  const updated = await prisma.lessonLearned.update({
-    where: { id: input.id },
-    data: {
-      title: input.title?.trim() ?? before.title,
-      category: input.category ?? before.category,
-      context: input.context?.trim() ?? before.context,
-      whatHappened: input.whatHappened?.trim() ?? before.whatHappened,
-      rootCause:
-        input.rootCause === undefined
-          ? before.rootCause
-          : input.rootCause?.trim() || null,
-      recommendation: input.recommendation?.trim() ?? before.recommendation,
-      appliesTo:
-        input.appliesTo === undefined
-          ? before.appliesTo
-          : input.appliesTo?.trim() || null,
-      visibility: input.visibility ?? before.visibility,
-    },
+    const updated = await tx.lessonLearned.update({
+      where: { id: input.id },
+      data: {
+        title: input.title?.trim() ?? before.title,
+        category: input.category ?? before.category,
+        context: input.context?.trim() ?? before.context,
+        whatHappened: input.whatHappened?.trim() ?? before.whatHappened,
+        rootCause:
+          input.rootCause === undefined
+            ? before.rootCause
+            : input.rootCause?.trim() || null,
+        recommendation: input.recommendation?.trim() ?? before.recommendation,
+        appliesTo:
+          input.appliesTo === undefined
+            ? before.appliesTo
+            : input.appliesTo?.trim() || null,
+        visibility: input.visibility ?? before.visibility,
+      },
+    })
+    return { before, updated }
   })
 
   await recordAuditEventSafe({
@@ -150,16 +164,21 @@ export async function updateLesson(input: {
     actorId: input.actorId,
   })
 
-  revalidateScopes(before.projectId)
-  return updated
+  revalidateScopes(result.before.projectId)
+  return result.updated
 }
 
 export async function deleteLesson(input: { id: string; actorId?: string }) {
-  const before = await prisma.lessonLearned.findUnique({
-    where: { id: input.id },
+  const before = await withRlsContextFromSession(async (tx) => {
+    const row = await tx.lessonLearned.findUnique({
+      where: { id: input.id },
+      select: { id: true, projectId: true, title: true },
+    })
+    if (!row) return null
+    await tx.lessonLearned.delete({ where: { id: input.id } })
+    return row
   })
   if (!before) return { ok: true }
-  await prisma.lessonLearned.delete({ where: { id: input.id } })
 
   await recordAuditEventSafe({
     action: 'lesson.deleted',
@@ -181,16 +200,18 @@ export async function getLessonCategoryStats(input: {
   // filas y contarlas en TS. Ahora dejamos a Postgres agregar y solo
   // viajamos los rollups (1 fila por categoría). La query crítica usa
   // los índices @@index([projectId]) y la FK Project.workspaceId.
-  const grouped = await prisma.lessonLearned.groupBy({
-    by: ['category'],
-    where: {
-      projectId: input.projectId,
-      project: input.workspaceId
-        ? { workspaceId: input.workspaceId }
-        : undefined,
-    },
-    _count: { _all: true },
-  })
+  const grouped = await withRlsContextFromSession((tx) =>
+    tx.lessonLearned.groupBy({
+      by: ['category'],
+      where: {
+        projectId: input.projectId,
+        project: input.workspaceId
+          ? { workspaceId: input.workspaceId }
+          : undefined,
+      },
+      _count: { _all: true },
+    }),
+  )
   const stats: Record<string, number> = {}
   let total = 0
   for (const g of grouped) {
