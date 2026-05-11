@@ -18,6 +18,15 @@ export const KNOWN_V2_SCOPES = [
   'write:tasks',
   'read:risks',
   'write:risks',
+  /**
+   * Wave R3.0 Fase 4.2 · BI Export Connector.
+   *
+   * Cubre `/api/v2/exports/**` (CSV) y `/api/v2/odata/**`. Es un scope
+   * "agregado" sobre múltiples recursos (projects/tasks/risks/EVM) — el
+   * caso de uso es justamente exportar el set completo a Tableau/PowerBI
+   * sin requerir múltiples scopes simultáneos.
+   */
+  'read:exports',
   '*',
 ] as const
 
