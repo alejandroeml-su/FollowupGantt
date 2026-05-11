@@ -193,9 +193,9 @@ export const KNOWN_AUDIT_ACTIONS = [
   'auto_pilot.proposal_applied',
   'auto_pilot.proposal_rolled_back',
   // Wave R3.0 Fase 4 · Equipo P21-B — Tableau Web Data Connector.
-  // Emitido por cada GET a `/api/integrations/tableau/<dataset>`. `metadata`
-  // incluye `{ dataset, rowCount, hasNextPage }` para forensic + capacity.
   'tableau.dataset_fetched',
+  // Wave P21-C — Power BI Native Connector (OData v4 dataset fetch).
+  'powerbi.dataset_fetched',
 ] as const
 
 export type AuditAction = (typeof KNOWN_AUDIT_ACTIONS)[number]
@@ -345,6 +345,8 @@ export const ACTION_LABELS: Record<AuditAction, string> = {
   'auto_pilot.proposal_rolled_back': 'Auto-Pilot · propuesta revertida',
   // Wave R3.0 Fase 4 · Equipo P21-B
   'tableau.dataset_fetched': 'Tableau · dataset descargado',
+  // Wave P21-C
+  'powerbi.dataset_fetched': 'Power BI · dataset consultado vía OData',
 }
 
 // ───────────────────────── Tipos de entidad ─────────────────────────

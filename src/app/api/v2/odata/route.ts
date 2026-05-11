@@ -20,15 +20,19 @@ export async function GET(request: NextRequest) {
     value: [
       { name: 'Projects', kind: 'EntitySet', url: 'Projects' },
       { name: 'Tasks', kind: 'EntitySet', url: 'Tasks' },
+      { name: 'Sprints', kind: 'EntitySet', url: 'Sprints' },
       { name: 'Risks', kind: 'EntitySet', url: 'Risks' },
       { name: 'EVMSnapshots', kind: 'EntitySet', url: 'EVMSnapshots' },
+      { name: 'AuditEvents', kind: 'EntitySet', url: 'AuditEvents' },
     ],
   }
   return new Response(JSON.stringify(body), {
     status: 200,
     headers: {
-      'Content-Type': 'application/json; charset=utf-8',
+      // Power BI Desktop espera `odata.metadata=minimal` y charset.
+      'Content-Type': 'application/json; odata.metadata=minimal; charset=utf-8',
       'OData-Version': '4.0',
+      'OData-MaxVersion': '4.0',
       'X-API-Version': 'v2-odata',
       'Cache-Control': 'no-store',
     },

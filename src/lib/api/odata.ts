@@ -1,9 +1,8 @@
 /**
  * Wave R3.0 Fase 4.2 · BI Export Connector — OData v4 minimal helpers.
  *
- * Implementación intencionalmente reducida: solo lo necesario para que
- * Tableau "OData Connector" y PowerBI "Get Data > OData feed" descubran
- * el endpoint y paginen. Incluye:
+ * Implementación originalmente reducida (PR #192) y extendida con
+ * features Power BI-friendly (Wave P21-C):
  *   - Auth dual: header `Authorization: Bearer <ApiKey>` o query
  *     `?$apikey=<plain>` (Tableau no permite headers en algunos planes).
  *   - Parser mínimo de `$filter` ⇒ donde de Prisma. Soporta:
@@ -12,10 +11,20 @@
  *       encadenar 2+ predicados. Sin `or`, sin paréntesis anidados,
  *       sin funciones (`contains`, `startswith`).
  *   - `$top` / `$skip` numéricos.
+ *   - `$select` (Wave P21-C) → proyección server-side de columnas.
+ *   - `$orderby` (Wave P21-C) → orden ASC/DESC por uno o más campos.
+ *   - `$count=true` (Wave P21-C) → incluye `@odata.count` con el total
+ *     antes de top/skip.
+ *   - `$expand` (Wave P21-C) → expansión mínima de 1 nivel sobre
+ *     navegaciones whitelisted (Project→Tasks, Sprint→Project).
  *
- * Limitaciones documentadas (no $expand, no $select, no $orderby, no
- * $count nested, no $search). Si Tableau/PowerBI piden alguna de estas
- * funcionalidades, agregar como follow-up.
+ * Backward-compat: clientes del PR #192 que no envíen las nuevas
+ * options siguen recibiendo el shape original con todos los campos
+ * del entity (no breaking).
+ *
+ * Limitaciones documentadas (no $expand multinivel, no funciones
+ * `contains/startswith/$search`, no `or`/paréntesis en $filter). Si
+ * Power BI requiere alguna de estas, agregar como follow-up.
  *
  * Errores: devolvemos JSON shape `{ "error": { "code", "message" } }`
  * compatible OData v4 §19.2.
@@ -82,23 +91,64 @@ export async function odataAuth(
 // Response helpers
 // ─────────────────────────────────────────────────────────────────
 
+/**
+ * Headers OData v4 estándar. Power BI Desktop espera:
+ *   - `OData-Version: 4.0` (RFC sin esto rechaza el feed).
+ *   - `Content-Type: application/json; odata.metadata=minimal` — el
+ *     `metadata=minimal` es el default del protocolo y reduce ruido
+ *     versus `full`. Power BI Desktop acepta `minimal`, `none` y
+ *     `full`; usamos `minimal` que es lo recomendado.
+ *   - `charset=utf-8` (preserve compat).
+ */
 const ODATA_HEADERS: Record<string, string> = {
-  'Content-Type': 'application/json; charset=utf-8',
+  'Content-Type': 'application/json; odata.metadata=minimal; charset=utf-8',
   'Cache-Control': 'no-store',
   'OData-Version': '4.0',
+  'OData-MaxVersion': '4.0',
   'X-API-Version': 'v2-odata',
+}
+
+/**
+ * Headers para responses XML ($metadata, service document XML variant).
+ * Power BI Desktop tolera ambos JSON y XML; usamos XML para `$metadata`.
+ */
+export const ODATA_XML_HEADERS: Record<string, string> = {
+  'Content-Type': 'application/xml; charset=utf-8',
+  'Cache-Control': 'no-store',
+  'OData-Version': '4.0',
+  'OData-MaxVersion': '4.0',
+  'X-API-Version': 'v2-odata',
+}
+
+/**
+ * Construye el `@odata.context` URL apuntando al `$metadata` correcto.
+ * Cuando se aplica `$select`, OData v4 §10.10 sugiere serializar la
+ * lista de propiedades entre paréntesis en el context.
+ */
+function buildContext(
+  request: NextRequest,
+  entitySet: string,
+  selectFields?: readonly string[] | null,
+): string {
+  const url = new URL(request.url)
+  const base = `${url.origin}/api/v2/odata`
+  const projection =
+    selectFields && selectFields.length > 0 ? `(${selectFields.join(',')})` : ''
+  return `${base}/$metadata#${entitySet}${projection}`
 }
 
 export function odataOk<T>(
   request: NextRequest,
   entitySet: string,
   value: T[],
-  opts?: { count?: number; nextLink?: string },
+  opts?: {
+    count?: number
+    nextLink?: string
+    selectFields?: readonly string[] | null
+  },
 ): Response {
-  const url = new URL(request.url)
-  const base = `${url.origin}/api/v2/odata`
   const body: Record<string, unknown> = {
-    '@odata.context': `${base}/$metadata#${entitySet}`,
+    '@odata.context': buildContext(request, entitySet, opts?.selectFields ?? null),
     value,
   }
   if (typeof opts?.count === 'number') {
@@ -378,9 +428,221 @@ export function odataSerialize<T extends Record<string, unknown>>(row: T): Recor
       out[key] = v.toISOString()
     } else if (typeof v === 'object' && typeof (v as { toString?: () => string }).toString === 'function' && v.constructor?.name === 'Decimal') {
       out[key] = Number((v as { toString: () => string }).toString())
+    } else if (Array.isArray(v)) {
+      // Expansiones (`$expand`) llegan como arrays de subrecords.
+      out[key] = v.map((row) =>
+        row && typeof row === 'object' && !Array.isArray(row)
+          ? odataSerialize(row as Record<string, unknown>)
+          : row,
+      )
+    } else if (typeof v === 'object') {
+      out[key] = odataSerialize(v as Record<string, unknown>)
     } else {
       out[key] = v
     }
   }
   return out
+}
+
+// ─────────────────────────────────────────────────────────────────
+// $select — proyección de columnas server-side (Wave P21-C)
+// ─────────────────────────────────────────────────────────────────
+
+/**
+ * Parsea `$select=col1,col2,col3` y devuelve la lista whitelisted.
+ *
+ * - Si `$select` no viene → null (significa "todas las columnas" — el
+ *   route handler usa el `select` Prisma original).
+ * - Si `$select` viene vacío o solo whitespace → error.
+ * - Campos no en `allowed` → error `[INVALID_INPUT]`.
+ * - Campos duplicados → se dedupean silenciosamente preservando orden.
+ * - Permite `$select=*` como atajo para "todas las columnas" (devuelve null).
+ */
+export function parseSelect(
+  raw: string | null,
+  allowed: readonly string[],
+): { ok: true; fields: string[] | null } | { ok: false; message: string } {
+  if (raw === null) return { ok: true, fields: null }
+  const trimmed = raw.trim()
+  if (trimmed === '' || trimmed === '*') return { ok: true, fields: null }
+  const requested = trimmed.split(',').map((s) => s.trim()).filter(Boolean)
+  if (requested.length === 0) {
+    return { ok: false, message: '$select vacío. Use $select=col1,col2 o omita el parámetro.' }
+  }
+  const allowedSet = new Set(allowed)
+  const seen = new Set<string>()
+  const fields: string[] = []
+  for (const f of requested) {
+    if (!allowedSet.has(f)) {
+      return {
+        ok: false,
+        message: `Campo no seleccionable: ${f}. Disponibles: ${allowed.join(', ')}`,
+      }
+    }
+    if (!seen.has(f)) {
+      seen.add(f)
+      fields.push(f)
+    }
+  }
+  return { ok: true, fields }
+}
+
+/**
+ * Construye el objeto `select` de Prisma desde la lista parseada por
+ * `parseSelect`. Si la lista incluye un campo `key`, lo fuerza para
+ * mantener el contrato OData (cada entity siempre debe tener `id`).
+ */
+export function selectToPrisma(
+  fields: readonly string[] | null,
+  keyField: string = 'id',
+): Record<string, true> | null {
+  if (!fields || fields.length === 0) return null
+  const out: Record<string, true> = {}
+  out[keyField] = true
+  for (const f of fields) out[f] = true
+  return out
+}
+
+// ─────────────────────────────────────────────────────────────────
+// $orderby — orden ASC/DESC server-side (Wave P21-C)
+// ─────────────────────────────────────────────────────────────────
+
+export interface OrderbyClause {
+  field: string
+  dir: 'asc' | 'desc'
+}
+
+/**
+ * Parsea `$orderby=col1 desc,col2,col3 asc`. Default direction = `asc`.
+ *
+ * - Si `$orderby` no viene → null (caller usa default).
+ * - Multi-campo soportado separado por coma.
+ * - Direction `asc` (default) o `desc` (case-insensitive).
+ * - Campos no en `allowed` → error.
+ */
+export function parseOrderby(
+  raw: string | null,
+  allowed: readonly string[],
+): { ok: true; clauses: OrderbyClause[] | null } | { ok: false; message: string } {
+  if (raw === null) return { ok: true, clauses: null }
+  const trimmed = raw.trim()
+  if (trimmed === '') return { ok: true, clauses: null }
+  const parts = trimmed.split(',').map((s) => s.trim()).filter(Boolean)
+  if (parts.length === 0) return { ok: true, clauses: null }
+  const clauses: OrderbyClause[] = []
+  const allowedSet = new Set(allowed)
+  for (const part of parts) {
+    const tokens = part.split(/\s+/).filter(Boolean)
+    if (tokens.length === 0 || tokens.length > 2) {
+      return {
+        ok: false,
+        message: `Cláusula $orderby inválida: "${part}" (esperado <field> [asc|desc])`,
+      }
+    }
+    const field = tokens[0]
+    const dirRaw = (tokens[1] ?? 'asc').toLowerCase()
+    if (dirRaw !== 'asc' && dirRaw !== 'desc') {
+      return {
+        ok: false,
+        message: `Direction inválida en $orderby: ${tokens[1]} (use asc o desc)`,
+      }
+    }
+    if (!allowedSet.has(field)) {
+      return {
+        ok: false,
+        message: `Campo no ordenable: ${field}. Disponibles: ${allowed.join(', ')}`,
+      }
+    }
+    clauses.push({ field, dir: dirRaw })
+  }
+  return { ok: true, clauses }
+}
+
+/** Convierte clauses de $orderby al `orderBy` array de Prisma. */
+export function orderbyToPrisma(
+  clauses: readonly OrderbyClause[] | null,
+  defaultOrder: Record<string, 'asc' | 'desc'> = { id: 'asc' },
+): Array<Record<string, 'asc' | 'desc'>> | Record<string, 'asc' | 'desc'> {
+  if (!clauses || clauses.length === 0) return defaultOrder
+  return clauses.map((c) => ({ [c.field]: c.dir }))
+}
+
+// ─────────────────────────────────────────────────────────────────
+// $count — total inline (Wave P21-C)
+// ─────────────────────────────────────────────────────────────────
+
+/**
+ * Parsea `$count=true` (OData v4 §11.2.5.5). Power BI lo envía cuando
+ * activa "Include count" en el query design.
+ *
+ * Valores permitidos: `true`, `false` (case-insensitive). Cualquier
+ * otro string lanza error explícito en lugar de fallar silenciosamente.
+ */
+export function parseCount(
+  raw: string | null,
+): { ok: true; include: boolean } | { ok: false; message: string } {
+  if (raw === null) return { ok: true, include: false }
+  const v = raw.trim().toLowerCase()
+  if (v === 'true') return { ok: true, include: true }
+  if (v === 'false') return { ok: true, include: false }
+  return { ok: false, message: `$count debe ser true o false (recibido: ${raw})` }
+}
+
+// ─────────────────────────────────────────────────────────────────
+// $expand — navigaciones whitelisted (Wave P21-C)
+// ─────────────────────────────────────────────────────────────────
+
+/**
+ * Whitelist por entity → mapa "navProp OData" → "campo Prisma include".
+ * Mantenemos solo 1 nivel y un set acotado: Power BI tiene mejor
+ * rendimiento con queries separadas que con $expand multinivel.
+ */
+export type ExpandWhitelist = Record<string, { prismaInclude: string }>
+
+/**
+ * Parsea `$expand=Tasks,Project`. Cada navProp se valida contra el
+ * whitelist del entity. Si la lista está vacía → null (no include).
+ */
+export function parseExpand(
+  raw: string | null,
+  whitelist: ExpandWhitelist,
+): { ok: true; navs: string[] | null } | { ok: false; message: string } {
+  if (raw === null) return { ok: true, navs: null }
+  const trimmed = raw.trim()
+  if (trimmed === '') return { ok: true, navs: null }
+  const requested = trimmed.split(',').map((s) => s.trim()).filter(Boolean)
+  if (requested.length === 0) return { ok: true, navs: null }
+  const allowed = Object.keys(whitelist)
+  const navs: string[] = []
+  for (const r of requested) {
+    // Reject sub-options ($expand=Tasks($top=5)) — sin soporte multinivel.
+    if (r.includes('(')) {
+      return {
+        ok: false,
+        message: `$expand con sub-options no soportado: ${r}. Use $expand=NavProp simple.`,
+      }
+    }
+    if (!Object.prototype.hasOwnProperty.call(whitelist, r)) {
+      return {
+        ok: false,
+        message: `Navegación no expandible: ${r}. Disponibles: ${allowed.join(', ') || '(ninguna)'}`,
+      }
+    }
+    navs.push(r)
+  }
+  return { ok: true, navs }
+}
+
+/** Convierte $expand parseado al objeto `include` de Prisma. */
+export function expandToPrismaInclude(
+  navs: readonly string[] | null,
+  whitelist: ExpandWhitelist,
+): Record<string, true> | null {
+  if (!navs || navs.length === 0) return null
+  const include: Record<string, true> = {}
+  for (const nav of navs) {
+    const spec = whitelist[nav]
+    if (spec) include[spec.prismaInclude] = true
+  }
+  return include
 }
