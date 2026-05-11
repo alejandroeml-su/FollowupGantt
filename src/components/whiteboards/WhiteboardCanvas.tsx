@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { CSSProperties, MouseEvent as ReactMouseEvent, WheelEvent as ReactWheelEvent } from 'react'
 import {
   DEFAULT_VIEWPORT,
@@ -14,10 +14,18 @@ import type { CurrentUserIdentity } from '@/lib/realtime-cursors/use-live-cursor
 type Props = {
   elements: WhiteboardElement[]
   selectedId: string | null
+  /** Elemento actualmente en modo edición inline (textarea visible). */
+  editingId?: string | null
   onSelect: (id: string | null) => void
   onMove: (id: string, next: { x: number; y: number }) => void
   /** Click sobre el lienzo vacío en coords mundo. Útil para insertar con tool activo. */
   onCanvasClick?: (worldPoint: { x: number; y: number }) => void
+  /** Doble click sobre un elemento editable (sticky/text/shape). */
+  onStartEdit?: (id: string) => void
+  /** Commit del texto editado tras blur o Esc/Enter. */
+  onCommitEdit?: (id: string, text: string) => void
+  /** Right-click sobre un elemento. screen es relativo al contenedor del canvas. */
+  onContextMenu?: (id: string, screen: { x: number; y: number }) => void
   snapEnabled: boolean
   /** Si está en true, el background usa cursor "grab" para indicar pan con space. */
   panMode?: boolean
@@ -41,9 +49,13 @@ type Props = {
 export function WhiteboardCanvas({
   elements,
   selectedId,
+  editingId,
   onSelect,
   onMove,
   onCanvasClick,
+  onStartEdit,
+  onCommitEdit,
+  onContextMenu,
   snapEnabled,
   panMode = false,
   whiteboardId,
@@ -172,6 +184,41 @@ export function WhiteboardCanvas({
     [eventToWorld, onCanvasClick, onSelect],
   )
 
+  const handleContextMenu = useCallback(
+    (e: ReactMouseEvent<HTMLDivElement>) => {
+      const target = e.target as HTMLElement
+      const elementHandle = target.closest('[data-element-id]') as HTMLElement | null
+      if (!elementHandle || !onContextMenu) return
+      e.preventDefault()
+      const id = elementHandle.dataset.elementId
+      if (!id) return
+      const rect = containerRef.current?.getBoundingClientRect()
+      if (!rect) return
+      onContextMenu(id, {
+        x: e.clientX - rect.left,
+        y: e.clientY - rect.top,
+      })
+    },
+    [onContextMenu],
+  )
+
+  const handleDoubleClick = useCallback(
+    (e: ReactMouseEvent<HTMLDivElement>) => {
+      const target = e.target as HTMLElement
+      const elementHandle = target.closest('[data-element-id]') as HTMLElement | null
+      if (!elementHandle || !onStartEdit) return
+      const id = elementHandle.dataset.elementId
+      if (!id) return
+      const el = elements.find((x) => x.id === id)
+      if (!el) return
+      if (el.type === 'STICKY' || el.type === 'TEXT' || el.type === 'SHAPE') {
+        e.stopPropagation()
+        onStartEdit(id)
+      }
+    },
+    [elements, onStartEdit],
+  )
+
   const transformStyle: CSSProperties = useMemo(
     () => ({
       transform: `translate(${viewport.panX}px, ${viewport.panY}px) scale(${viewport.zoom})`,
@@ -202,6 +249,8 @@ export function WhiteboardCanvas({
       onMouseDown={handleMouseDown}
       onMouseMove={handleMouseMove}
       onMouseUp={handleMouseUp}
+      onContextMenu={handleContextMenu}
+      onDoubleClick={handleDoubleClick}
       onMouseLeave={() => {
         dragRef.current = null
       }}
@@ -217,6 +266,8 @@ export function WhiteboardCanvas({
               key={el.id}
               element={el}
               isSelected={el.id === selectedId}
+              isEditing={el.id === editingId}
+              onCommitEdit={onCommitEdit}
             />
           ))}
       </div>
@@ -263,9 +314,13 @@ function ZoomIndicator({
 function WhiteboardElementView({
   element,
   isSelected,
+  isEditing,
+  onCommitEdit,
 }: {
   element: WhiteboardElement
   isSelected: boolean
+  isEditing?: boolean
+  onCommitEdit?: (id: string, text: string) => void
 }) {
   const baseStyle: CSSProperties = {
     position: 'absolute',
@@ -288,9 +343,21 @@ function WhiteboardElementView({
           data-element-id={element.id}
           data-testid={`sticky-${element.id}`}
           style={{ ...baseStyle, backgroundColor: data.color }}
-          className={`shadow-lg rounded-md p-3 cursor-grab text-slate-900 text-sm overflow-hidden ${ringClass}`}
+          className={`shadow-lg rounded-md p-3 ${isEditing ? 'cursor-text' : 'cursor-grab'} text-slate-900 text-sm overflow-hidden ${ringClass}`}
         >
-          <div className="whitespace-pre-wrap break-words">{data.text || 'Sticky vacío'}</div>
+          {isEditing ? (
+            <InlineEditor
+              initial={data.text}
+              onCommit={(t) => onCommitEdit?.(element.id, t)}
+              multiline
+              className="h-full w-full bg-transparent text-slate-900"
+              placeholder="Escribe aquí…"
+            />
+          ) : (
+            <div className="whitespace-pre-wrap break-words">
+              {data.text || 'Doble click para escribir'}
+            </div>
+          )}
         </div>
       )
     }
@@ -324,7 +391,16 @@ function WhiteboardElementView({
               />
             </svg>
           )}
-          {data.text && <span className="relative">{data.text}</span>}
+          {isEditing ? (
+            <InlineEditor
+              initial={data.text ?? ''}
+              onCommit={(t) => onCommitEdit?.(element.id, t)}
+              className="relative w-full bg-transparent text-center text-foreground"
+              placeholder="Texto…"
+            />
+          ) : (
+            data.text && <span className="relative">{data.text}</span>
+          )}
         </div>
       )
     }
@@ -364,9 +440,20 @@ function WhiteboardElementView({
           data-element-id={element.id}
           data-testid={`text-${element.id}`}
           style={{ ...baseStyle, color: data.color, fontSize: data.fontSize }}
-          className={`cursor-grab leading-tight ${ringClass}`}
+          className={`${isEditing ? 'cursor-text' : 'cursor-grab'} leading-tight ${ringClass}`}
         >
-          {data.text}
+          {isEditing ? (
+            <InlineEditor
+              initial={data.text}
+              onCommit={(t) => onCommitEdit?.(element.id, t)}
+              multiline
+              className="h-full w-full bg-transparent"
+              style={{ color: data.color, fontSize: data.fontSize }}
+              placeholder="Escribe aquí…"
+            />
+          ) : (
+            data.text || 'Doble click para escribir'
+          )}
         </div>
       )
     }
@@ -385,6 +472,88 @@ function WhiteboardElementView({
       )
     }
   }
+}
+
+/**
+ * Editor inline de texto · se monta cuando `isEditing` es true sobre un
+ * elemento (sticky/text/shape). Auto-focus al montar, commit en blur o
+ * Enter (sin Shift), cancela con Esc.
+ */
+function InlineEditor({
+  initial,
+  onCommit,
+  multiline,
+  className,
+  style,
+  placeholder,
+}: {
+  initial: string
+  onCommit: (text: string) => void
+  multiline?: boolean
+  className?: string
+  style?: CSSProperties
+  placeholder?: string
+}) {
+  const ref = useRef<HTMLTextAreaElement | HTMLInputElement | null>(null)
+  const [value, setValue] = useState(initial)
+
+  // Auto-focus + select-all al montar — patrón de Miro/Figma para edición.
+  useEffect(() => {
+    const node = ref.current
+    if (!node) return
+    node.focus()
+    if ('select' in node) node.select()
+  }, [])
+
+  const commit = useCallback(() => {
+    onCommit(value.trim())
+  }, [onCommit, value])
+
+  const onKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement | HTMLInputElement>) => {
+    if (e.key === 'Escape') {
+      e.preventDefault()
+      onCommit(initial)
+    } else if (e.key === 'Enter' && !e.shiftKey && !multiline) {
+      e.preventDefault()
+      commit()
+    } else if (e.key === 'Enter' && !e.shiftKey && multiline && e.metaKey) {
+      e.preventDefault()
+      commit()
+    }
+  }
+
+  // Evita que mousedown sobre el editor propague al canvas (no inicia drag).
+  const stopPropagation = (e: React.MouseEvent) => e.stopPropagation()
+
+  if (multiline) {
+    return (
+      <textarea
+        ref={ref as React.RefObject<HTMLTextAreaElement>}
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+        onBlur={commit}
+        onKeyDown={onKeyDown}
+        onMouseDown={stopPropagation}
+        placeholder={placeholder}
+        style={style}
+        className={`resize-none border-0 outline-none ring-0 ${className ?? ''}`}
+      />
+    )
+  }
+
+  return (
+    <input
+      ref={ref as React.RefObject<HTMLInputElement>}
+      value={value}
+      onChange={(e) => setValue(e.target.value)}
+      onBlur={commit}
+      onKeyDown={onKeyDown}
+      onMouseDown={stopPropagation}
+      placeholder={placeholder}
+      style={style}
+      className={`border-0 outline-none ring-0 ${className ?? ''}`}
+    />
+  )
 }
 
 export { worldToScreen }
