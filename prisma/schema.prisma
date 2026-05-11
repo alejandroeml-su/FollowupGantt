@@ -369,6 +369,11 @@ model User {
   // Wave P17-C — Plantillas globales creadas por este usuario (SUPER_ADMIN).
   createdGlobalTemplates GlobalTemplate[] @relation("GlobalTemplateCreator")
 
+  // Wave P19-D — Strategist insights cross-project que este usuario ha
+  // reconocido (ACKNOWLEDGED). SetNull en `BrainStrategistInsight.ackById`
+  // preserva el insight aunque el actor sea eliminado.
+  strategistInsightsAcked BrainStrategistInsight[] @relation("StrategistInsightAck")
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
@@ -3666,4 +3671,68 @@ model GlobalTemplate {
 
   @@index([kind])
   @@index([workspaceId])
+}
+
+// ─────────────────────────────────────────────────────────────
+// Wave P19-D · Brain Strategist Persistence
+//
+// Persiste los insights cross-project que hoy son ephemeral en
+// `src/lib/brain/strategist/actions.ts`. Cada `StrategistReport`
+// se explota en N rows (uno por insight) para permitir filtrado,
+// historial temporal, ACK/Resolve y comparación mes-a-mes.
+//
+// `workspaceId` NULL = scope global (todos los proyectos visibles
+// al actor); set = scope acotado al workspace. Mantenemos string
+// (no FK) porque el insight nace de un análisis cross-workspace y
+// los detectores ya operan con el workspace-scope efectivo del
+// caller; se valida en server actions, no a nivel BD.
+// ─────────────────────────────────────────────────────────────
+
+enum StrategistInsightKind {
+  RESOURCE_CONTENTION
+  DEPENDENCY_CONFLICT
+  REUSABLE_LESSON
+  PREDICTIVE_SCENARIO
+  BALANCE_SUGGESTION
+}
+
+enum StrategistInsightSeverity {
+  HIGH
+  MEDIUM
+  LOW
+}
+
+model BrainStrategistInsight {
+  id          String                    @id @default(uuid())
+  workspaceId String?
+  kind        StrategistInsightKind
+  severity    StrategistInsightSeverity
+
+  /// Snapshot serializable del insight original (depende de `kind`):
+  ///   resource_contention: { userId, userName, overlapDays, projects[] }
+  ///   dependency_conflict: { predecessor, successor, gapDays }
+  ///   reusable_lesson:     { sourceProject, category, title, applicableProjects[] }
+  ///   predictive_scenario: { sourceTaskId, delayDays, affected[] }
+  ///   balance_suggestion:  { userId, kind, message, metrics }
+  payload Json
+
+  /// Resumen humano (1-2 líneas) usado en el historial/timeline UI.
+  summary String?
+
+  /// Status de seguimiento: NEW | ACKNOWLEDGED | RESOLVED | DISMISSED.
+  /// Se modela como String (no enum) para permitir extender el workflow
+  /// sin migración destructiva — la validación vive en zod (server actions).
+  status String @default("NEW")
+
+  ackById String?
+  ackBy   User?   @relation("StrategistInsightAck", fields: [ackById], references: [id], onDelete: SetNull)
+  ackedAt DateTime?
+
+  resolvedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([workspaceId, kind, status])
+  @@index([severity, createdAt(sort: Desc)])
 }

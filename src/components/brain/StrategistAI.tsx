@@ -27,6 +27,8 @@ import { clsx } from 'clsx'
 import { loadStrategistReport } from '@/lib/brain/strategist/actions'
 import { generateStrategistBrief } from '@/lib/brain/strategist/narration-actions'
 import type { StrategistNarration } from '@/lib/brain/strategist/narration'
+// Wave P19-D · Historial persistente del Strategist (sección inferior).
+import { StrategistHistory } from './StrategistHistory'
 
 type Report = Awaited<ReturnType<typeof loadStrategistReport>>
 
@@ -368,6 +370,9 @@ export function StrategistAI() {
               </Card>
             ))}
           </Section>
+
+          {/* Wave P19-D · Historial persistente */}
+          <StrategistHistory currentReport={report} />
         </div>
       )}
     </div>
