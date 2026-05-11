@@ -2,10 +2,20 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
-import { ArrowLeft, Save, Loader2 } from 'lucide-react'
+import {
+  ArrowLeft,
+  Save,
+  Loader2,
+  Copy,
+  Trash2,
+  Pencil,
+  ArrowUpToLine,
+  ArrowDownToLine,
+} from 'lucide-react'
 import {
   createElement,
   deleteElements,
+  setElementData,
   updateWhiteboardElements,
 } from '@/lib/actions/whiteboards'
 import { toast } from '@/components/interactions/Toaster'
@@ -65,10 +75,16 @@ export function WhiteboardEditor({
       : null,
   )
   const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [editingId, setEditingId] = useState<string | null>(null)
   const [activeTool, setActiveTool] = useState<ToolId | null>(null)
   const [snapEnabled, setSnapEnabled] = useState(true)
   const [panMode, setPanMode] = useState(false)
   const [savingState, setSavingState] = useState<'idle' | 'pending' | 'saving' | 'error'>('idle')
+  const [contextMenu, setContextMenu] = useState<{
+    elementId: string
+    x: number
+    y: number
+  } | null>(null)
 
   // Wave P6 · B3 — Edit lock + conflict detection.
   // `useWhiteboardEditLock` espera EditingUser `{ id, name }`; `currentUser`
@@ -114,9 +130,18 @@ export function WhiteboardEditor({
     [lock],
   )
 
-  const pendingPatches = useRef<Map<string, { x?: number; y?: number; width?: number; height?: number }>>(
-    new Map(),
-  )
+  const pendingPatches = useRef<
+    Map<
+      string,
+      {
+        x?: number
+        y?: number
+        width?: number
+        height?: number
+        zIndex?: number
+      }
+    >
+  >(new Map())
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   // Ref para que el listener global de teclado pueda invocar el handler
   // de borrado actualizado sin necesidad de re-suscribirse a cada cambio
@@ -209,11 +234,103 @@ export function WhiteboardEditor({
     try {
       await deleteElements(whiteboard.id, [selectedId])
     } catch (err) {
-      // Rollback optimista
       setElements(previous)
       toast.error(err instanceof Error ? err.message : 'Error al eliminar')
     }
   }, [elements, selectedId, whiteboard.id])
+
+  // Actualiza el payload `data` JSON del elemento (texto, color, etc.).
+  // Optimista: actualiza UI primero, luego persiste. Si falla, rollback.
+  const handleUpdateData = useCallback(
+    async (id: string, patch: Record<string, unknown>) => {
+      const target = elements.find((el) => el.id === id)
+      if (!target) return
+      const previous = elements
+      const merged = {
+        ...(target.data as Record<string, unknown>),
+        ...patch,
+      }
+      setElements((prev) =>
+        prev.map((el) =>
+          el.id === id
+            ? { ...el, data: merged as WhiteboardElement['data'] }
+            : el,
+        ),
+      )
+      try {
+        await setElementData(id, merged)
+      } catch (err) {
+        setElements(previous)
+        toast.error(err instanceof Error ? err.message : 'Error al guardar')
+      }
+    },
+    [elements],
+  )
+
+  // Duplica el elemento seleccionado con offset diagonal de +20px.
+  const handleDuplicateSelected = useCallback(async () => {
+    if (!selectedId) return
+    const target = elements.find((el) => el.id === selectedId)
+    if (!target) return
+    try {
+      const created = await createElement({
+        whiteboardId: whiteboard.id,
+        type: target.type,
+        x: target.x + 20,
+        y: target.y + 20,
+        width: target.width,
+        height: target.height,
+        rotation: target.rotation,
+        data: target.data,
+      })
+      const newEl: WhiteboardElement = {
+        id: created.id,
+        whiteboardId: created.whiteboardId,
+        type: created.type,
+        x: created.x,
+        y: created.y,
+        width: created.width,
+        height: created.height,
+        rotation: created.rotation,
+        zIndex: created.zIndex,
+        data: created.data as WhiteboardElement['data'],
+      }
+      setElements((prev) => [...prev, newEl])
+      setSelectedId(newEl.id)
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Error al duplicar')
+    }
+  }, [elements, selectedId, whiteboard.id])
+
+  // Cambia el orden Z para llevar al frente o enviar al fondo.
+  const handleChangeZ = useCallback(
+    async (id: string, direction: 'front' | 'back') => {
+      const others = elements.filter((el) => el.id !== id)
+      const target = elements.find((el) => el.id === id)
+      if (!target) return
+      // Si no hay otros elementos, usamos 1/-1 como anclas. Con seed 0 el
+      // reduce devolvía 0 aunque todos los zIndex fueran positivos, lo que
+      // dejaba elementos enviados al fondo "delante" de los demás.
+      const maxZ =
+        others.length > 0
+          ? others.reduce((m, e) => Math.max(m, e.zIndex), -Infinity)
+          : 0
+      const minZ =
+        others.length > 0
+          ? others.reduce((m, e) => Math.min(m, e.zIndex), Infinity)
+          : 0
+      const nextZ = direction === 'front' ? maxZ + 1 : minZ - 1
+      setElements((prev) =>
+        prev.map((el) => (el.id === id ? { ...el, zIndex: nextZ } : el)),
+      )
+      pendingPatches.current.set(id, {
+        ...(pendingPatches.current.get(id) ?? {}),
+        zIndex: nextZ,
+      })
+      scheduleAutosave()
+    },
+    [elements, scheduleAutosave],
+  )
 
   // Mantén la ref apuntando al handler vigente. Esto deja al listener
   // global de teclado independiente del ciclo de render: lo registramos
@@ -290,25 +407,6 @@ export function WhiteboardEditor({
           onForceOverride={lock.forceOverride}
         />
       </div>
-      <div className="flex items-center justify-center gap-4 border-b border-border bg-subtle/30 px-4 py-2">
-        <WhiteboardToolbar
-          activeTool={activeTool}
-          onSelectTool={setActiveTool}
-          snapEnabled={snapEnabled}
-          onToggleSnap={setSnapEnabled}
-          onExportPng={handleExportPng}
-        />
-        {/* Wave P6 · B1 — Presencia en vivo (avatares solapados). */}
-        {presence.users.length > 0 ? (
-          <div
-            className="flex items-center"
-            data-testid="whiteboard-toolbar-presence"
-          >
-            <PresenceAvatars users={presence.users} max={5} />
-          </div>
-        ) : null}
-      </div>
-
       {/* SoftLockProvider en modo `unwrap` — sólo proporciona contexto, no
           envuelve con div para no romper el flexbox del shell. La toolbar y
           el canvas reciben `aria-disabled` directamente cuando está locked. */}
@@ -323,7 +421,7 @@ export function WhiteboardEditor({
           data-locked={lock.isLockedByOther ? 'true' : 'false'}
           aria-disabled={lock.isLockedByOther || undefined}
         >
-          <div className="flex items-center justify-center border-b border-border bg-subtle/30 px-4 py-2">
+          <div className="flex items-center justify-center gap-4 border-b border-border bg-subtle/30 px-4 py-2">
             <WhiteboardToolbar
               activeTool={activeTool}
               onSelectTool={setActiveTool}
@@ -331,18 +429,91 @@ export function WhiteboardEditor({
               onToggleSnap={setSnapEnabled}
               onExportPng={handleExportPng}
             />
+            {presence.users.length > 0 ? (
+              <div
+                className="flex items-center"
+                data-testid="whiteboard-toolbar-presence"
+              >
+                <PresenceAvatars users={presence.users} max={5} />
+              </div>
+            ) : null}
           </div>
 
           <div className="relative flex-1 overflow-hidden">
             <WhiteboardCanvas
               elements={elements}
               selectedId={selectedId}
-              onSelect={setSelectedId}
+              editingId={editingId}
+              onSelect={(id) => {
+                setSelectedId(id)
+                setContextMenu(null)
+                if (id !== editingId) setEditingId(null)
+              }}
               onMove={handleMove}
-              onCanvasClick={handleCanvasClick}
+              onCanvasClick={(world) => {
+                setContextMenu(null)
+                setEditingId(null)
+                void handleCanvasClick(world)
+              }}
+              onStartEdit={(id) => {
+                setSelectedId(id)
+                setEditingId(id)
+                setContextMenu(null)
+              }}
+              onCommitEdit={(id, text) => {
+                void handleUpdateData(id, { text })
+                setEditingId(null)
+              }}
+              onContextMenu={(id, screen) => {
+                setSelectedId(id)
+                setContextMenu({ elementId: id, x: screen.x, y: screen.y })
+              }}
               snapEnabled={snapEnabled}
               panMode={panMode}
             />
+
+            {selectedId && !editingId && !contextMenu && (
+              <SelectedElementToolbar
+                element={elements.find((e) => e.id === selectedId)}
+                onChangeColor={(color) => {
+                  if (!selectedId) return
+                  void handleUpdateData(selectedId, { color, fill: color })
+                }}
+                onDuplicate={() => void handleDuplicateSelected()}
+                onBringToFront={() => void handleChangeZ(selectedId, 'front')}
+                onSendToBack={() => void handleChangeZ(selectedId, 'back')}
+                onEdit={() => setEditingId(selectedId)}
+                onDelete={() => void handleDeleteSelected()}
+              />
+            )}
+
+            {contextMenu && (
+              <ContextMenu
+                x={contextMenu.x}
+                y={contextMenu.y}
+                onClose={() => setContextMenu(null)}
+                onEdit={() => {
+                  setEditingId(contextMenu.elementId)
+                  setContextMenu(null)
+                }}
+                onDuplicate={() => {
+                  void handleDuplicateSelected()
+                  setContextMenu(null)
+                }}
+                onBringToFront={() => {
+                  void handleChangeZ(contextMenu.elementId, 'front')
+                  setContextMenu(null)
+                }}
+                onSendToBack={() => {
+                  void handleChangeZ(contextMenu.elementId, 'back')
+                  setContextMenu(null)
+                }}
+                onDelete={() => {
+                  void handleDeleteSelected()
+                  setContextMenu(null)
+                }}
+              />
+            )}
           </div>
         </div>
       </SoftLockProvider>
@@ -367,6 +538,210 @@ export function WhiteboardEditor({
         onResolve={handleResolveConflict}
       />
     </div>
+  )
+}
+
+const COLOR_PALETTE = [
+  '#fde68a', // amarillo (sticky default)
+  '#fca5a5', // rojo claro
+  '#86efac', // verde claro
+  '#93c5fd', // azul claro
+  '#c4b5fd', // morado claro
+  '#fbcfe8', // rosa claro
+  '#fed7aa', // naranja claro
+  '#e5e7eb', // gris claro
+]
+
+function SelectedElementToolbar({
+  element,
+  onChangeColor,
+  onDuplicate,
+  onBringToFront,
+  onSendToBack,
+  onEdit,
+  onDelete,
+}: {
+  element: WhiteboardElement | undefined
+  onChangeColor: (hex: string) => void
+  onDuplicate: () => void
+  onBringToFront: () => void
+  onSendToBack: () => void
+  onEdit: () => void
+  onDelete: () => void
+}) {
+  if (!element) return null
+  const showColor = element.type === 'STICKY' || element.type === 'SHAPE'
+  const showEdit =
+    element.type === 'STICKY' ||
+    element.type === 'TEXT' ||
+    element.type === 'SHAPE'
+  return (
+    <div
+      role="toolbar"
+      aria-label="Acciones sobre elemento seleccionado"
+      className="absolute left-1/2 top-3 z-30 flex -translate-x-1/2 items-center gap-1 rounded-xl border border-border bg-card/95 px-2 py-1.5 shadow-xl backdrop-blur"
+    >
+      {showColor && (
+        <>
+          <div className="flex items-center gap-1 px-1">
+            {COLOR_PALETTE.map((c) => (
+              <button
+                key={c}
+                type="button"
+                onClick={() => onChangeColor(c)}
+                title={`Color ${c}`}
+                aria-label={`Cambiar color a ${c}`}
+                style={{ backgroundColor: c }}
+                className="h-5 w-5 rounded-full border border-border ring-offset-1 hover:ring-2 hover:ring-primary"
+              />
+            ))}
+          </div>
+          <span className="mx-1 h-5 w-px bg-border" aria-hidden="true" />
+        </>
+      )}
+      {showEdit && (
+        <button
+          type="button"
+          onClick={onEdit}
+          title="Editar texto (doble click también)"
+          className="rounded-md p-1.5 text-muted-foreground hover:bg-secondary hover:text-foreground"
+        >
+          <Pencil className="h-4 w-4" />
+        </button>
+      )}
+      <button
+        type="button"
+        onClick={onDuplicate}
+        title="Duplicar"
+        className="rounded-md p-1.5 text-muted-foreground hover:bg-secondary hover:text-foreground"
+      >
+        <Copy className="h-4 w-4" />
+      </button>
+      <button
+        type="button"
+        onClick={onBringToFront}
+        title="Traer al frente"
+        className="rounded-md p-1.5 text-muted-foreground hover:bg-secondary hover:text-foreground"
+      >
+        <ArrowUpToLine className="h-4 w-4" />
+      </button>
+      <button
+        type="button"
+        onClick={onSendToBack}
+        title="Enviar al fondo"
+        className="rounded-md p-1.5 text-muted-foreground hover:bg-secondary hover:text-foreground"
+      >
+        <ArrowDownToLine className="h-4 w-4" />
+      </button>
+      <span className="mx-1 h-5 w-px bg-border" aria-hidden="true" />
+      <button
+        type="button"
+        onClick={onDelete}
+        title="Eliminar"
+        className="rounded-md p-1.5 text-muted-foreground hover:bg-rose-500/15 hover:text-rose-400"
+      >
+        <Trash2 className="h-4 w-4" />
+      </button>
+    </div>
+  )
+}
+
+function ContextMenu({
+  x,
+  y,
+  onClose,
+  onEdit,
+  onDuplicate,
+  onBringToFront,
+  onSendToBack,
+  onDelete,
+}: {
+  x: number
+  y: number
+  onClose: () => void
+  onEdit: () => void
+  onDuplicate: () => void
+  onBringToFront: () => void
+  onSendToBack: () => void
+  onDelete: () => void
+}) {
+  // Cierra al hacer click fuera o presionar Escape.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose()
+    }
+    const onClick = () => onClose()
+    window.addEventListener('keydown', onKey)
+    window.addEventListener('mousedown', onClick)
+    return () => {
+      window.removeEventListener('keydown', onKey)
+      window.removeEventListener('mousedown', onClick)
+    }
+  }, [onClose])
+
+  return (
+    <div
+      role="menu"
+      aria-label="Menú contextual del elemento"
+      style={{ left: x, top: y }}
+      onMouseDown={(e) => e.stopPropagation()}
+      className="absolute z-40 min-w-[180px] overflow-hidden rounded-lg border border-border bg-card shadow-xl"
+    >
+      <ContextMenuItem icon={<Pencil className="h-4 w-4" />} onClick={onEdit}>
+        Editar texto
+      </ContextMenuItem>
+      <ContextMenuItem icon={<Copy className="h-4 w-4" />} onClick={onDuplicate}>
+        Duplicar
+      </ContextMenuItem>
+      <ContextMenuItem
+        icon={<ArrowUpToLine className="h-4 w-4" />}
+        onClick={onBringToFront}
+      >
+        Traer al frente
+      </ContextMenuItem>
+      <ContextMenuItem
+        icon={<ArrowDownToLine className="h-4 w-4" />}
+        onClick={onSendToBack}
+      >
+        Enviar al fondo
+      </ContextMenuItem>
+      <div className="h-px bg-border" />
+      <ContextMenuItem
+        icon={<Trash2 className="h-4 w-4" />}
+        onClick={onDelete}
+        danger
+      >
+        Eliminar
+      </ContextMenuItem>
+    </div>
+  )
+}
+
+function ContextMenuItem({
+  icon,
+  onClick,
+  children,
+  danger,
+}: {
+  icon: React.ReactNode
+  onClick: () => void
+  children: React.ReactNode
+  danger?: boolean
+}) {
+  return (
+    <button
+      type="button"
+      role="menuitem"
+      onClick={onClick}
+      className={`flex w-full items-center gap-2 px-3 py-2 text-left text-xs ${
+        danger
+          ? 'text-rose-400 hover:bg-rose-500/15'
+          : 'text-foreground hover:bg-secondary'
+      }`}
+    >
+      {icon}
+      {children}
+    </button>
   )
 }
 
