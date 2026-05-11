@@ -206,6 +206,9 @@ export const KNOWN_AUDIT_ACTIONS = [
   'billing.subscription_canceled',
   'billing.invoice_paid',
   'billing.invoice_failed',
+  // Support Chatbot flotante (cualquier rol autenticado · in-memory rate limit).
+  'support.chat_started',
+  'support.chat_message_sent',
 ] as const
 
 export type AuditAction = (typeof KNOWN_AUDIT_ACTIONS)[number]
@@ -367,6 +370,9 @@ export const ACTION_LABELS: Record<AuditAction, string> = {
   'billing.subscription_canceled': 'Billing · suscripción cancelada',
   'billing.invoice_paid': 'Billing · factura pagada',
   'billing.invoice_failed': 'Billing · pago fallido',
+  // Support Chatbot
+  'support.chat_started': 'Soporte · chat iniciado',
+  'support.chat_message_sent': 'Soporte · mensaje enviado',
 }
 
 // ───────────────────────── Tipos de entidad ─────────────────────────

@@ -65,6 +65,7 @@ import { InstallPrompt } from "@/components/pwa/InstallPrompt";
 import { PwaUpdateBanner } from "@/components/pwa/PwaUpdateBanner";
 import UserMenu from "@/components/auth/UserMenu";
 import WorkspaceSwitcherSlot from "@/components/workspace/WorkspaceSwitcherSlot";
+import { SupportChatbot } from "@/components/support/SupportChatbot";
 
 /**
  * Auth (Ola P1): la página `/login` no debe renderizar el Sidebar ni el
@@ -122,6 +123,10 @@ export default async function RootLayout({
               registra el SW canonico `/service-worker.js`. */}
           {!hideChrome && <InstallPrompt />}
           <PwaUpdateBanner />
+          {/* Support Chatbot flotante · oculto a sí mismo en /login,
+              /invite/*, /forgot-password, /reset-password vía
+              usePathname. Disponible para cualquier rol autenticado. */}
+          {!hideChrome && <SupportChatbot />}
         </ThemeProvider>
       </body>
     </html>
