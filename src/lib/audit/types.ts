@@ -173,6 +173,12 @@ export const KNOWN_AUDIT_ACTIONS = [
   'defect.created',
   'defect.updated',
   'defect.deleted',
+  // R3.0 · Fase 2 — SSO/SAML (R3-D)
+  'sso.provider.created',
+  'sso.provider.updated',
+  'sso.provider.deleted',
+  'sso.login.success',
+  'sso.login.failed',
 ] as const
 
 export type AuditAction = (typeof KNOWN_AUDIT_ACTIONS)[number]
@@ -301,6 +307,12 @@ export const ACTION_LABELS: Record<AuditAction, string> = {
   'defect.created': 'Defecto reportado',
   'defect.updated': 'Defecto actualizado',
   'defect.deleted': 'Defecto eliminado',
+  // R3.0 · Fase 2 — SSO/SAML
+  'sso.provider.created': 'Proveedor SSO creado',
+  'sso.provider.updated': 'Proveedor SSO actualizado',
+  'sso.provider.deleted': 'Proveedor SSO eliminado',
+  'sso.login.success': 'Login SSO exitoso',
+  'sso.login.failed': 'Login SSO fallido',
 }
 
 // ───────────────────────── Tipos de entidad ─────────────────────────

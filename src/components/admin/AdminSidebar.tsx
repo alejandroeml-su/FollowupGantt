@@ -8,6 +8,7 @@ import {
   Layers,
   Shield,
   FileStack,
+  KeyRound,
   ArrowLeft,
 } from 'lucide-react'
 
@@ -52,6 +53,12 @@ const items: Array<{
     label: 'Plantillas',
     icon: FileStack,
     description: 'Catálogo global',
+  },
+  {
+    href: '/admin/sso',
+    label: 'SSO / SAML',
+    icon: KeyRound,
+    description: 'Identidad federada por workspace',
   },
 ]
 
