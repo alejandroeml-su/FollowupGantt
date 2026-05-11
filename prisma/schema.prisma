@@ -2182,6 +2182,28 @@ model Workspace {
   /// Wave P20-C — Auto-Pilot history (cross-project optimization runs).
   autoPilotRuns AutoPilotRun[]
 
+  /// Wave R4-E · Monetización SaaS — relación 1-1 con BillingSubscription.
+  /// Cascade: borrar/archivar WS purga la subscripción Stripe asociada
+  /// (la cancelación efectiva en Stripe la hace el webhook + el helper
+  /// `cancelSubscription`, no la BD).
+  billingSubscription BillingSubscription?
+  /// Wave R4-E — histórico de facturas Stripe persistidas por el webhook.
+  billingInvoices     BillingInvoice[]
+
+  /// Wave R4-E — Contador in-DB de Brain AI calls del periodo en curso.
+  /// MVP sin Redis: cada llamada incrementa, el cron mensual resetea.
+  /// Si excede `tier.brainCalls`, `requireCapacity('brainCalls', current)`
+  /// lanza `[CAPACITY_EXCEEDED]`. Default 0.
+  brainCallsThisMonth Int       @default(0)
+  /// Wave R4-E — Timestamp del último reset (cron mensual). Útil para
+  /// debug y para mostrar a usuarios "se reseteará el X de mes".
+  brainCallsResetAt   DateTime?
+
+  /// Wave R4-E · Onboarding flow — flag idempotente. NULL = onboarding
+  /// pendiente; set en `markOnboardingCompleted()` cuando el usuario cierra
+  /// el modal o lo skipea explícitamente.
+  onboardingCompletedAt DateTime?
+
   createdAt  DateTime  @default(now())
   updatedAt  DateTime  @updatedAt
   /// Wave P17-C — Soft delete. Workspaces archivados no aparecen en el
@@ -2189,6 +2211,100 @@ model Workspace {
   archivedAt DateTime?
 
   @@index([ownerId])
+}
+
+// ─────────────────────────────────────────────────────────────
+// Wave R4-E · Monetización SaaS externa (Stripe).
+//
+// Permite spin-off de Sync como producto SaaS comercializable:
+//   - `BillingSubscription` (1-1 con Workspace) refleja el estado Stripe.
+//   - `BillingInvoice` materializa el histórico para UI sin round-trips
+//     a Stripe (que tiene rate limits y latencia).
+//
+// Decisiones documentadas:
+//   D-R4E-1: 1 sub por WS (vs por user). Stripe `quantity` representa
+//            asientos (`seats`); el monto = priceMonthly × seats.
+//   D-R4E-2: `tier` es String (no enum) para tolerar planes promocionales
+//            o experimentales sin migración. La validación canónica vive
+//            en `src/lib/billing/pricing.ts::PRICING_TIERS`.
+//   D-R4E-3: `BillingInvoice.stripeInvoiceId` es @unique → idempotencia
+//            del webhook (replays del mismo invoice.paid no duplican).
+//   D-R4E-4: `BillingSubscription.workspaceId` es @unique (1-1). Si en
+//            el futuro queremos múltiples subs (ej. add-ons), migrar a
+//            `WorkspaceAddon` separado en lugar de relajar este unique.
+//   D-R4E-5: Cascade onDelete: archivar WS purga su BillingSubscription
+//            local. La cancelación efectiva en Stripe la hace el server
+//            action `cancelSubscription` o el webhook customer.deleted.
+// ─────────────────────────────────────────────────────────────
+
+model BillingSubscription {
+  id String @id @default(uuid())
+
+  /// 1-1 con Workspace. Cascade onDelete (D-R4E-5).
+  workspaceId String    @unique
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  /// Stripe customer ID (`cus_xxx`). Null hasta que el WS hace su primer
+  /// checkout (workspaces nuevos arrancan FREE sin tocar Stripe).
+  stripeCustomerId String?
+  /// Stripe subscription ID (`sub_xxx`). Null mientras esté en FREE.
+  stripeSubscriptionId String? @unique
+  /// Stripe price ID (`price_xxx`) del plan suscrito.
+  stripePriceId String?
+
+  /// Plan vigente: FREE / PRO / ENTERPRISE (string libre — ver D-R4E-2).
+  tier String @default("FREE")
+
+  /// Estado Stripe canónico: active / past_due / canceled / trialing /
+  /// incomplete / incomplete_expired / unpaid. Default `active` para FREE.
+  status String @default("active")
+
+  /// Fin del periodo facturado actual. UI muestra "Renueva el X".
+  currentPeriodEnd DateTime?
+  /// Si el WS marcó cancelación, fecha en que efectivamente se baja.
+  /// Mientras `cancelAt > now`, el WS conserva sus features paid.
+  cancelAt DateTime?
+  /// Si el WS está en trial gratuito, fecha de fin. UI muestra banner.
+  trialEndsAt DateTime?
+
+  /// Cantidad de seats incluidos en la sub (Stripe `quantity`). Default 1
+  /// para FREE; el `requireCapacity('users', …)` valida contra
+  /// `PRICING_TIERS[tier].users` (que puede ser distinto de `seats` si el
+  /// tier tiene users máximos por seat, ej. PRO=25 users por 1 seat).
+  seats Int @default(1)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([stripeCustomerId])
+  @@index([status])
+}
+
+model BillingInvoice {
+  id              String @id @default(uuid())
+  workspaceId     String
+  workspace       Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  /// Stripe invoice ID (`in_xxx`). @unique → key de idempotencia.
+  stripeInvoiceId String @unique
+  /// Monto en centavos. Stripe usa enteros para evitar floats.
+  amountCents     Int
+  /// ISO 4217 lowercase (`usd`, `mxn`, etc.). Default usd.
+  currency        String @default("usd")
+  /// Stripe status: paid / open / void / uncollectible / draft.
+  status          String
+
+  /// URL del PDF de Stripe. La UI ofrece descarga directa.
+  invoicePdfUrl   String?
+
+  /// Periodo facturado (Stripe `period_start` / `period_end`).
+  periodStart     DateTime
+  periodEnd       DateTime
+
+  createdAt       DateTime @default(now())
+
+  @@index([workspaceId, createdAt(sort: Desc)])
+  @@index([status])
 }
 
 model WorkspaceMember {

@@ -197,10 +197,15 @@ export const KNOWN_AUDIT_ACTIONS = [
   // Wave P21-C — Power BI Native Connector (OData v4 dataset fetch).
   'powerbi.dataset_fetched',
   // R4-D · DocSpace + Real-time co-edit · sesiones de edición colaborativa.
-  // Emitido al persistir el state Yjs (debounced 2s o cada 10s). Sirve para
-  // detectar quién co-edita qué documento y reconstruir historial de sesiones.
   'doc.realtime_edit_session',
   'whiteboard.realtime_edit_session',
+  // Wave R4-E — Monetización SaaS (Stripe checkout/subscription/invoice).
+  'billing.checkout_started',
+  'billing.subscription_created',
+  'billing.subscription_updated',
+  'billing.subscription_canceled',
+  'billing.invoice_paid',
+  'billing.invoice_failed',
 ] as const
 
 export type AuditAction = (typeof KNOWN_AUDIT_ACTIONS)[number]
@@ -355,6 +360,13 @@ export const ACTION_LABELS: Record<AuditAction, string> = {
   // R4-D · DocSpace + Real-time co-edit
   'doc.realtime_edit_session': 'Documento · sesión de co-edit persistida',
   'whiteboard.realtime_edit_session': 'Pizarra · sesión de co-edit persistida',
+  // Wave R4-E · Monetización SaaS
+  'billing.checkout_started': 'Billing · checkout iniciado',
+  'billing.subscription_created': 'Billing · suscripción creada',
+  'billing.subscription_updated': 'Billing · suscripción actualizada',
+  'billing.subscription_canceled': 'Billing · suscripción cancelada',
+  'billing.invoice_paid': 'Billing · factura pagada',
+  'billing.invoice_failed': 'Billing · pago fallido',
 }
 
 // ───────────────────────── Tipos de entidad ─────────────────────────

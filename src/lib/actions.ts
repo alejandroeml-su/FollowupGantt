@@ -14,6 +14,8 @@ import { countPendingCriteria } from '@/lib/user-story/types'
 import { recordAuditEventSafe } from '@/lib/audit/events'
 import { nextProgressForStatus } from '@/lib/tasks/status-progress'
 import { seedOnboardingKit, shouldSeedKit } from '@/lib/onboarding/seed-kit'
+// Wave R4-E · Plan enforcement (FREE=1 proyecto, PRO=10, ENT=unlimited).
+import { requireProjectCapacity } from '@/lib/billing/enforce'
 // Wave P17-B (API v2 / Webhooks v2) — dispatch fire-and-forget.
 import { dispatchEvent as dispatchV2Event } from '@/lib/webhooks-out/dispatcher'
 // Wave P18-B (Automation rule engine) — trigger rules tras mutaciones.
@@ -149,6 +151,15 @@ export async function createProject(formData: FormData) {
 
   if (!name) throw new Error('El nombre del proyecto es requerido')
 
+  // Wave R4-E · Plan enforcement. Si el form incluye `workspaceId`,
+  // validamos capacidad (FREE=1, PRO=10, ENT=∞). Non-disruptive: si no
+  // viene workspaceId (flujo legacy sin tenant explícito), no aplicamos
+  // enforce — esos proyectos no cuentan contra cuota de un WS concreto.
+  const workspaceIdFromForm = (formData.get('workspaceId') as string | null) ?? null
+  if (workspaceIdFromForm) {
+    await requireProjectCapacity(workspaceIdFromForm)
+  }
+
   const created = await prisma.project.create({
     data: {
       name,
@@ -156,6 +167,7 @@ export async function createProject(formData: FormData) {
       status: status as ProjectStatus,
       areaId: areaId || null,
       methodology,
+      workspaceId: workspaceIdFromForm,
     },
     select: { id: true },
   })
