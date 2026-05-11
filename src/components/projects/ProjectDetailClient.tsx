@@ -25,6 +25,7 @@ import { ImportProjectDialog } from '@/components/backup/ImportProjectDialog';
 import ProjectHeaderPresence from '@/components/projects/ProjectHeaderPresence';
 import { NewSprintButton } from '@/components/sprints/NewSprintButton';
 import type { CurrentUserPresence } from '@/lib/auth/get-current-user-presence';
+import { useTranslation } from '@/lib/i18n/use-translation';
 
 // Datos Mock con jerarquía
 const initialTasks = [
@@ -78,6 +79,7 @@ export default function ProjectDetailClient({
   currentUser,
   sprintReleases = [],
 }: Props) {
+  const { t } = useTranslation();
   const [tasks] = useState(initialTasks);
   const [dependencies] = useState(mockDependencies);
 
@@ -132,9 +134,9 @@ export default function ProjectDetailClient({
             <button
               onClick={() => { setSelectedParentId(task.id); setIsTaskModalOpen(true); }}
               className="text-xs text-indigo-400 hover:text-indigo-300 mr-2"
-              title="Añadir Subtarea"
+              title={t('pages.projectDetail.addSubtaskTitle')}
             >
-              + Subtarea
+              {t('pages.projectDetail.addSubtask')}
             </button>
           </div>
         </div>
@@ -149,19 +151,19 @@ export default function ProjectDetailClient({
       <header className="flex-shrink-0 bg-card border-b border-border px-8 py-5">
         <div className="flex items-center gap-4 text-sm text-muted-foreground mb-2">
           <Link href="/projects" className="hover:text-indigo-400 transition-colors flex items-center gap-1">
-            <ArrowLeft className="h-4 w-4" /> Volver a Proyectos
+            <ArrowLeft className="h-4 w-4" /> {t('pages.projectDetail.backToProjects')}
           </Link>
           <span>/</span>
-          <span>Migración a la Nube (AWS)</span>
+          <span>{t('pages.projectDetail.breadcrumbProject')}</span>
         </div>
 
         <div className="flex justify-between items-end">
           <div>
             <h1 className="text-2xl font-bold text-white flex items-center gap-3">
-              Planificación Detallada (WBS &amp; Dependencias)
+              {t('pages.projectDetail.title')}
             </h1>
             <p className="mt-1 text-muted-foreground text-sm">
-              Mantenimiento de Fases, Tareas, Subtareas y Enlaces Críticos.
+              {t('pages.projectDetail.subtitle')}
             </p>
           </div>
 
@@ -179,12 +181,12 @@ export default function ProjectDetailClient({
                 onClick={() => { setSelectedParentId(null); setIsTaskModalOpen(true); }}
                 className="flex items-center gap-2 rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-500 shadow-lg shadow-indigo-500/20"
               >
-                <Plus className="h-4 w-4" /> Crear Fase / Tarea
+                <Plus className="h-4 w-4" /> {t('pages.projectDetail.createPhaseTask')}
               </button>
               <NewSprintButton
                 projectId={projectId}
                 variant="solid"
-                label="Nuevo Sprint"
+                label={t('pages.projectDetail.newSprint')}
                 releases={sprintReleases}
               />
             </div>
@@ -195,43 +197,43 @@ export default function ProjectDetailClient({
             {/* ═══════ Cluster: Agile (Wave P9) — secondary outline ═══════ */}
             <div className="flex items-center gap-1.5 rounded-lg border border-cyan-500/20 bg-cyan-500/5 px-2 py-1.5">
               <span className="hidden text-[10px] font-bold uppercase tracking-wider text-cyan-300 md:inline-block">
-                Agile
+                {t('pages.projectDetail.groupAgile')}
               </span>
               <Link
                 href={`/projects/${projectId}/epics`}
                 className="flex items-center gap-1.5 rounded-md bg-card px-2.5 py-1.5 text-xs font-medium text-foreground hover:bg-secondary border border-border"
-                title="Epics del proyecto"
+                title={t('pages.projectDetail.epicsTitle')}
               >
-                <Sparkles className="h-3.5 w-3.5 text-amber-400" /> Epics
+                <Sparkles className="h-3.5 w-3.5 text-amber-400" /> {t('pages.projectDetail.epics')}
               </Link>
               <Link
                 href={`/projects/${projectId}/backlog`}
                 className="flex items-center gap-1.5 rounded-md bg-card px-2.5 py-1.5 text-xs font-medium text-foreground hover:bg-secondary border border-border"
-                title="Product Backlog & Sprint Backlogs"
+                title={t('pages.projectDetail.backlogTitle')}
               >
-                <ListTree className="h-3.5 w-3.5 text-indigo-400" /> Backlog
+                <ListTree className="h-3.5 w-3.5 text-indigo-400" /> {t('pages.projectDetail.backlog')}
               </Link>
               <Link
                 href={`/projects/${projectId}/releases`}
                 className="flex items-center gap-1.5 rounded-md bg-card px-2.5 py-1.5 text-xs font-medium text-foreground hover:bg-secondary border border-border"
-                title="Releases / Roadmap"
+                title={t('pages.projectDetail.releasesTitle')}
               >
-                <Rocket className="h-3.5 w-3.5 text-emerald-400" /> Releases
+                <Rocket className="h-3.5 w-3.5 text-emerald-400" /> {t('pages.projectDetail.releases')}
               </Link>
               <Link
                 href={`/projects/${projectId}/definitions`}
                 className="flex items-center gap-1.5 rounded-md bg-card px-2.5 py-1.5 text-xs font-medium text-foreground hover:bg-secondary border border-border"
-                title="Definitions of Ready & Done"
+                title={t('pages.projectDetail.definitionsTitle')}
               >
-                <CheckSquare className="h-3.5 w-3.5 text-rose-400" /> DoR/DoD
+                <CheckSquare className="h-3.5 w-3.5 text-rose-400" /> {t('pages.projectDetail.definitions')}
               </Link>
               {/* Wave P11-Scrum (HU-11.1) — Product Goal link */}
               <Link
                 href={`/projects/${projectId}/product-goal`}
                 className="flex items-center gap-1.5 rounded-md bg-card px-2.5 py-1.5 text-xs font-medium text-foreground hover:bg-secondary border border-border"
-                title="Product Goal · commitment Scrum"
+                title={t('pages.projectDetail.productGoalTitle')}
               >
-                <Target className="h-3.5 w-3.5 text-fuchsia-400" /> Product Goal
+                <Target className="h-3.5 w-3.5 text-fuchsia-400" /> {t('pages.projectDetail.productGoal')}
               </Link>
             </div>
 
@@ -239,16 +241,16 @@ export default function ProjectDetailClient({
             <div className="flex items-center gap-2">
               <button
                 className="flex items-center gap-2 rounded-md bg-secondary px-3 py-1.5 text-xs font-medium text-foreground/90 hover:bg-secondary/80 border border-border"
-                title="Capturar línea base"
+                title={t('pages.projectDetail.baselineTitle')}
               >
-                <Settings className="h-3.5 w-3.5" /> Línea Base
+                <Settings className="h-3.5 w-3.5" /> {t('pages.projectDetail.baseline')}
               </button>
               <Link
                 href={`/projects/${projectId}/calendar`}
                 className="flex items-center gap-2 rounded-md bg-secondary px-3 py-1.5 text-xs font-medium text-foreground/90 hover:bg-secondary/80 border border-border"
-                title="Calendario laboral + agenda equipo"
+                title={t('pages.projectDetail.calendarTitle')}
               >
-                <CalendarIcon className="h-3.5 w-3.5" /> Calendario
+                <CalendarIcon className="h-3.5 w-3.5" /> {t('pages.projectDetail.calendar')}
               </Link>
               {/* P3-3 · Backup/Restore */}
               <ExportProjectButton projectId={projectId} />
@@ -263,13 +265,13 @@ export default function ProjectDetailClient({
             onClick={() => setActiveTab('WBS')}
             className={`pb-3 text-sm font-medium flex items-center gap-2 border-b-2 transition-colors ${activeTab === 'WBS' ? 'border-indigo-500 text-indigo-400' : 'border-transparent text-muted-foreground hover:text-foreground'}`}
           >
-            <ListTree className="h-4 w-4" /> Estructura de Tareas (WBS)
+            <ListTree className="h-4 w-4" /> {t('pages.projectDetail.tabWbs')}
           </button>
           <button
             onClick={() => setActiveTab('DEPENDENCIES')}
             className={`pb-3 text-sm font-medium flex items-center gap-2 border-b-2 transition-colors ${activeTab === 'DEPENDENCIES' ? 'border-indigo-500 text-indigo-400' : 'border-transparent text-muted-foreground hover:text-foreground'}`}
           >
-            <LinkIcon className="h-4 w-4" /> Vincular Dependencias
+            <LinkIcon className="h-4 w-4" /> {t('pages.projectDetail.tabDependencies')}
           </button>
         </div>
       </header>
@@ -279,11 +281,11 @@ export default function ProjectDetailClient({
           <div className="space-y-6">
             <div className="bg-card border border-border rounded-xl overflow-hidden shadow-sm">
               <div className="flex items-center bg-background/95 border-b border-border py-3 px-4 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                <div className="flex-1">Estructura / Nombre</div>
-                <div className="w-32">Fecha Inicio</div>
-                <div className="w-32">Fecha Fin</div>
-                <div className="w-32">Progreso</div>
-                <div className="w-24 text-right">Acciones</div>
+                <div className="flex-1">{t('pages.projectDetail.columnName')}</div>
+                <div className="w-32">{t('pages.projectDetail.columnStart')}</div>
+                <div className="w-32">{t('pages.projectDetail.columnEnd')}</div>
+                <div className="w-32">{t('pages.projectDetail.columnProgress')}</div>
+                <div className="w-24 text-right">{t('pages.projectDetail.columnActions')}</div>
               </div>
               <div className="divide-y divide-border/50">
                 {tasks.map(task => renderTaskRow(task, 0))}
@@ -303,13 +305,13 @@ export default function ProjectDetailClient({
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
             <div className="lg:col-span-1 bg-card border border-border rounded-xl p-6 shadow-sm h-fit">
               <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
-                <LinkIcon className="h-5 w-5 text-indigo-400" /> Crear Vínculo
+                <LinkIcon className="h-5 w-5 text-indigo-400" /> {t('pages.projectDetail.createLink')}
               </h3>
-              <p className="text-sm text-muted-foreground mb-6">Visualmente vincula una tarea predecesora con su sucesora para generar la ruta crítica en el Gantt.</p>
+              <p className="text-sm text-muted-foreground mb-6">{t('pages.projectDetail.createLinkHint')}</p>
 
               <div className="space-y-4">
                 <div>
-                  <label className="block text-xs font-medium text-foreground/90 mb-1 uppercase tracking-wider">Tarea Predecesora (A)</label>
+                  <label className="block text-xs font-medium text-foreground/90 mb-1 uppercase tracking-wider">{t('pages.projectDetail.predecessorLabel')}</label>
                   <select className="w-full bg-background border border-border rounded-lg px-3 py-2.5 text-sm text-white focus:outline-none focus:border-indigo-500">
                     <option>t1-1: Reunión Kickoff</option>
                     <option>t1-2: Toma de requerimientos</option>
@@ -326,7 +328,7 @@ export default function ProjectDetailClient({
                 </div>
 
                 <div>
-                  <label className="block text-xs font-medium text-foreground/90 mb-1 uppercase tracking-wider">Tarea Sucesora (B)</label>
+                  <label className="block text-xs font-medium text-foreground/90 mb-1 uppercase tracking-wider">{t('pages.projectDetail.successorLabel')}</label>
                   <select className="w-full bg-background border border-border rounded-lg px-3 py-2.5 text-sm text-white focus:outline-none focus:border-indigo-500">
                     <option>t1-2: Toma de requerimientos</option>
                     <option>t2-1: Diseño de Base de Datos</option>
@@ -335,24 +337,24 @@ export default function ProjectDetailClient({
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-foreground/90 mb-1 uppercase tracking-wider mt-4">Tipo de Relación</label>
+                  <label className="block text-sm font-medium text-foreground/90 mb-1 uppercase tracking-wider mt-4">{t('pages.projectDetail.relationType')}</label>
                   <div className="grid grid-cols-2 gap-2">
-                    <button className="bg-indigo-500/20 border border-indigo-500/50 text-indigo-300 text-xs py-2 rounded-md font-medium">Fin a Inicio (FS)</button>
-                    <button className="bg-secondary border border-border text-muted-foreground hover:text-foreground/90 text-xs py-2 rounded-md font-medium transition-colors">Inicio a Inicio (SS)</button>
-                    <button className="bg-secondary border border-border text-muted-foreground hover:text-foreground/90 text-xs py-2 rounded-md font-medium transition-colors">Fin a Fin (FF)</button>
-                    <button className="bg-secondary border border-border text-muted-foreground hover:text-foreground/90 text-xs py-2 rounded-md font-medium transition-colors">Inicio a Fin (SF)</button>
+                    <button className="bg-indigo-500/20 border border-indigo-500/50 text-indigo-300 text-xs py-2 rounded-md font-medium">{t('pages.projectDetail.relationFS')}</button>
+                    <button className="bg-secondary border border-border text-muted-foreground hover:text-foreground/90 text-xs py-2 rounded-md font-medium transition-colors">{t('pages.projectDetail.relationSS')}</button>
+                    <button className="bg-secondary border border-border text-muted-foreground hover:text-foreground/90 text-xs py-2 rounded-md font-medium transition-colors">{t('pages.projectDetail.relationFF')}</button>
+                    <button className="bg-secondary border border-border text-muted-foreground hover:text-foreground/90 text-xs py-2 rounded-md font-medium transition-colors">{t('pages.projectDetail.relationSF')}</button>
                   </div>
                 </div>
 
                 <button className="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-medium py-2.5 rounded-lg transition-colors mt-4">
-                  Guardar Dependencia
+                  {t('pages.projectDetail.saveDependency')}
                 </button>
               </div>
             </div>
 
             <div className="lg:col-span-2 bg-card border border-border rounded-xl overflow-hidden shadow-sm">
               <div className="flex items-center bg-background/95 border-b border-border py-4 px-6">
-                <h3 className="font-semibold text-foreground">Enlaces Activos</h3>
+                <h3 className="font-semibold text-foreground">{t('pages.projectDetail.activeLinks')}</h3>
               </div>
               <div className="p-6">
                 <div className="space-y-4">
@@ -391,31 +393,33 @@ export default function ProjectDetailClient({
             <div className="flex justify-between items-center mb-6 border-b border-border pb-4">
               <h3 className="text-xl font-bold text-white flex items-center gap-2">
                 <GitCommit className="h-5 w-5 text-indigo-400" />
-                {selectedParentId ? 'Crear Subtarea' : 'Crear Nueva Fase / Tarea Raíz'}
+                {selectedParentId
+                  ? t('pages.projectDetail.modalNewSubtask')
+                  : t('pages.projectDetail.modalNewRootTask')}
               </h3>
               <button onClick={() => setIsTaskModalOpen(false)} className="text-muted-foreground hover:text-white"><X className="h-5 w-5" /></button>
             </div>
 
             <div className="space-y-5">
               <div>
-                <label className="block text-sm font-medium text-foreground/90 mb-1">Título de la Tarea</label>
-                <input type="text" className="w-full bg-background border border-border rounded-lg px-4 py-2.5 text-white focus:outline-none focus:border-indigo-500" placeholder="Ej. Diseño de Arquitectura" />
+                <label className="block text-sm font-medium text-foreground/90 mb-1">{t('pages.projectDetail.modalTaskTitle')}</label>
+                <input type="text" className="w-full bg-background border border-border rounded-lg px-4 py-2.5 text-white focus:outline-none focus:border-indigo-500" placeholder={t('pages.projectDetail.modalTaskTitlePlaceholder')} />
               </div>
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-foreground/90 mb-1">Tipo de Tarea</label>
+                  <label className="block text-sm font-medium text-foreground/90 mb-1">{t('pages.projectDetail.modalTaskType')}</label>
                   <select className="w-full bg-background border border-border rounded-lg px-4 py-2.5 text-foreground/90 focus:outline-none focus:border-indigo-500">
-                    <option>PHASE (Agrupador PMI)</option>
-                    <option>PMI_TASK (Tarea Clásica)</option>
-                    <option>AGILE_STORY (Historia de Usuario)</option>
-                    <option>ITIL_TICKET (Incidencia/Requerimiento)</option>
+                    <option>{t('pages.projectDetail.modalTaskTypePhase')}</option>
+                    <option>{t('pages.projectDetail.modalTaskTypePmi')}</option>
+                    <option>{t('pages.projectDetail.modalTaskTypeAgile')}</option>
+                    <option>{t('pages.projectDetail.modalTaskTypeItil')}</option>
                   </select>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-foreground/90 mb-1">Responsable</label>
+                  <label className="block text-sm font-medium text-foreground/90 mb-1">{t('pages.projectDetail.modalOwner')}</label>
                   <select className="w-full bg-background border border-border rounded-lg px-4 py-2.5 text-foreground/90 focus:outline-none focus:border-indigo-500">
-                    <option>Sin Asignar</option>
+                    <option>{t('pages.projectDetail.modalOwnerUnassigned')}</option>
                     <option>Edwin Martinez</option>
                     <option>Desarrollador 1</option>
                   </select>
@@ -425,29 +429,29 @@ export default function ProjectDetailClient({
               <div className="grid grid-cols-2 gap-4 bg-background/95 p-4 rounded-lg border border-border">
                 <div>
                   <label className="block text-sm font-medium text-foreground/90 mb-1 flex items-center gap-2">
-                    <CalendarIcon className="h-4 w-4 text-muted-foreground" /> Fecha Inicio
+                    <CalendarIcon className="h-4 w-4 text-muted-foreground" /> {t('pages.projectDetail.modalStartDate')}
                   </label>
                   <input type="date" className="w-full bg-card border border-border rounded-lg px-4 py-2 text-white focus:outline-none focus:border-indigo-500 color-scheme-dark" />
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-foreground/90 mb-1 flex items-center gap-2">
-                    <CalendarIcon className="h-4 w-4 text-muted-foreground" /> Fecha Fin
+                    <CalendarIcon className="h-4 w-4 text-muted-foreground" /> {t('pages.projectDetail.modalEndDate')}
                   </label>
                   <input type="date" className="w-full bg-card border border-border rounded-lg px-4 py-2 text-white focus:outline-none focus:border-indigo-500 color-scheme-dark" />
                 </div>
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-foreground/90 mb-1">Descripción</label>
-                <textarea className="w-full bg-background border border-border rounded-lg px-4 py-2 text-white focus:outline-none focus:border-indigo-500" rows={3} placeholder="Criterios de aceptación o descripción..." />
+                <label className="block text-sm font-medium text-foreground/90 mb-1">{t('pages.projectDetail.modalDescription')}</label>
+                <textarea className="w-full bg-background border border-border rounded-lg px-4 py-2 text-white focus:outline-none focus:border-indigo-500" rows={3} placeholder={t('pages.projectDetail.modalDescriptionPlaceholder')} />
               </div>
 
               <div className="flex justify-end gap-3 pt-4 border-t border-border">
                 <button onClick={() => setIsTaskModalOpen(false)} className="px-5 py-2.5 rounded-lg text-sm font-medium text-foreground/90 hover:bg-secondary transition-colors">
-                  Cancelar
+                  {t('pages.projectDetail.modalCancel')}
                 </button>
                 <button className="bg-indigo-600 hover:bg-indigo-500 text-white font-medium px-6 py-2.5 rounded-lg transition-colors shadow-lg shadow-indigo-500/20">
-                  Guardar Tarea
+                  {t('pages.projectDetail.modalSave')}
                 </button>
               </div>
             </div>
