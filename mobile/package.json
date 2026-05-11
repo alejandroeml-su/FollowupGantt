@@ -1,0 +1,28 @@
+{
+  "name": "sync-mobile",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Capacitor wrapper para la PWA de Sync (FollowupGantt). NO afecta el build del proyecto raíz; mantiene su propio node_modules.",
+  "scripts": {
+    "cap:sync": "cap sync",
+    "cap:add:android": "cap add android",
+    "cap:add:ios": "cap add ios",
+    "cap:open:android": "cap open android",
+    "cap:open:ios": "cap open ios",
+    "build:android": "cap sync android && cap open android",
+    "build:ios": "cap sync ios && cap open ios"
+  },
+  "dependencies": {
+    "@capacitor/android": "^7.0.0",
+    "@capacitor/app": "^7.0.0",
+    "@capacitor/cli": "^7.0.0",
+    "@capacitor/core": "^7.0.0",
+    "@capacitor/ios": "^7.0.0",
+    "@capacitor/network": "^7.0.0",
+    "@capacitor/preferences": "^7.0.0",
+    "@capacitor/push-notifications": "^7.0.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.0.0"
+  }
+}

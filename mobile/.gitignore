@@ -1,0 +1,34 @@
+# Wave P21-A · Capacitor wrapper · NO committear binarios ni proyectos
+# nativos generados por `cap add`. Cada dev los regenera localmente.
+
+node_modules/
+dist/
+out/
+
+# Proyectos nativos generados por Capacitor — se regeneran con
+# `npx cap add android` / `npx cap add ios`.
+android/
+ios/
+
+# Build artefacts Android
+*.apk
+*.aab
+*.keystore
+*.jks
+
+# Build artefacts iOS
+*.ipa
+*.xcuserstate
+*.mobileprovision
+
+# Secrets (keystore passwords, etc.)
+.env
+.env.local
+keystore.properties
+
+# Logs
+*.log
+
+# IDE
+.idea/
+.vscode/

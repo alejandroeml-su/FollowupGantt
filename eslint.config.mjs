@@ -26,6 +26,8 @@ const eslintConfig = defineConfig([
     "JSValidarCodigo.py",
     // k6 corre en su propio runtime (Goja), no en Node:
     "tests/perf/**",
+    // Wave P21-A · wrapper Capacitor con su propio tsconfig y node_modules:
+    "mobile/**",
   ]),
 ]);
 

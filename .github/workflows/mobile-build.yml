@@ -1,0 +1,67 @@
+# Wave P21-A · Validación manual del wrapper Capacitor.
+# NO publica a stores (release requiere keystores Android + cert iOS
+# que viven en GitHub Secrets aún no provisionados). Solo valida que
+# `mobile/` compila: `npm install` + `npx cap sync`.
+name: Mobile · Capacitor Build (manual)
+
+on:
+  workflow_dispatch:
+    inputs:
+      platform:
+        description: 'Plataforma a sincronizar (android | ios | both). iOS solo corre en macOS runner.'
+        required: false
+        default: 'android'
+        type: choice
+        options:
+          - android
+          - ios
+          - both
+
+jobs:
+  cap-sync-android:
+    name: Capacitor · sync Android
+    if: ${{ github.event.inputs.platform == 'android' || github.event.inputs.platform == 'both' || github.event.inputs.platform == '' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: mobile/package.json
+      - name: Install Capacitor deps
+        working-directory: mobile
+        run: npm install --no-audit --no-fund
+      - name: Capacitor add android (idempotent)
+        working-directory: mobile
+        run: npx cap add android || echo "android dir already exists"
+      - name: Capacitor sync android
+        working-directory: mobile
+        run: npx cap sync android
+      - name: Capacitor doctor
+        working-directory: mobile
+        run: npx cap doctor || true
+
+  cap-sync-ios:
+    name: Capacitor · sync iOS
+    if: ${{ github.event.inputs.platform == 'ios' || github.event.inputs.platform == 'both' }}
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: mobile/package.json
+      - name: Install Capacitor deps
+        working-directory: mobile
+        run: npm install --no-audit --no-fund
+      - name: Capacitor add ios (idempotent)
+        working-directory: mobile
+        run: npx cap add ios || echo "ios dir already exists"
+      - name: Capacitor sync ios
+        working-directory: mobile
+        run: npx cap sync ios
+      - name: Capacitor doctor
+        working-directory: mobile
+        run: npx cap doctor || true
