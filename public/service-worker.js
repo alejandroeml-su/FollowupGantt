@@ -39,7 +39,7 @@
 // los Server Action IDs cambiaron y el SW v1 servía bundles obsoletos
 // causando "This page couldn't load" en /brain y otras rutas con
 // llamadas a server actions (incidente reportado por Edwin).
-const VERSION = "v2-r4-2026-05-11";
+const VERSION = "v3-r4-2026-05-11-postmsg";
 const STATIC_CACHE = `sync-static-${VERSION}`;
 const RUNTIME_CACHE = `sync-runtime-${VERSION}`;
 const API_CACHE = `sync-api-${VERSION}`;
@@ -75,6 +75,23 @@ self.addEventListener("activate", (event) => {
         keys.filter((k) => !valid.has(k)).map((k) => caches.delete(k)),
       );
       await self.clients.claim();
+
+      // Tras invalidar caches viejos, fuerza a las páginas abiertas a
+      // hacer hard refresh. Esto evita "This page couldn't load" cuando
+      // los chunks Next.js / Server Action IDs del bundle previo ya no
+      // existen en el deploy nuevo. El cliente recibe el mensaje y
+      // ejecuta `location.reload()` (lo maneja register-sw.ts).
+      const clientsList = await self.clients.matchAll({
+        type: "window",
+        includeUncontrolled: true,
+      });
+      for (const client of clientsList) {
+        try {
+          client.postMessage({ type: "SW_VERSION_UPDATED", version: VERSION });
+        } catch {
+          // Cliente cerrado o sin canal — ignoramos.
+        }
+      }
     })(),
   );
 });
