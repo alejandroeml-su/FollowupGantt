@@ -33,7 +33,13 @@
  * newer deployment").
  */
 
-const VERSION = "v1";
+// Bump VERSION en cada release que cambie bundles Next.js / Server Actions.
+// Los caches `sync-*-${VERSION}` se invalidan automáticamente en `activate`.
+// v2 · 2026-05-11 (R4.0 GA) — tras 44 commits acumulados de R3.0 + R4.0,
+// los Server Action IDs cambiaron y el SW v1 servía bundles obsoletos
+// causando "This page couldn't load" en /brain y otras rutas con
+// llamadas a server actions (incidente reportado por Edwin).
+const VERSION = "v2-r4-2026-05-11";
 const STATIC_CACHE = `sync-static-${VERSION}`;
 const RUNTIME_CACHE = `sync-runtime-${VERSION}`;
 const API_CACHE = `sync-api-${VERSION}`;
