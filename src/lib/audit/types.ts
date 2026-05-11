@@ -196,6 +196,11 @@ export const KNOWN_AUDIT_ACTIONS = [
   'tableau.dataset_fetched',
   // Wave P21-C — Power BI Native Connector (OData v4 dataset fetch).
   'powerbi.dataset_fetched',
+  // R4-D · DocSpace + Real-time co-edit · sesiones de edición colaborativa.
+  // Emitido al persistir el state Yjs (debounced 2s o cada 10s). Sirve para
+  // detectar quién co-edita qué documento y reconstruir historial de sesiones.
+  'doc.realtime_edit_session',
+  'whiteboard.realtime_edit_session',
 ] as const
 
 export type AuditAction = (typeof KNOWN_AUDIT_ACTIONS)[number]
@@ -347,6 +352,9 @@ export const ACTION_LABELS: Record<AuditAction, string> = {
   'tableau.dataset_fetched': 'Tableau · dataset descargado',
   // Wave P21-C
   'powerbi.dataset_fetched': 'Power BI · dataset consultado vía OData',
+  // R4-D · DocSpace + Real-time co-edit
+  'doc.realtime_edit_session': 'Documento · sesión de co-edit persistida',
+  'whiteboard.realtime_edit_session': 'Pizarra · sesión de co-edit persistida',
 }
 
 // ───────────────────────── Tipos de entidad ─────────────────────────
