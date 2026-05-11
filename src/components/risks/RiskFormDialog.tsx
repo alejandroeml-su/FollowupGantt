@@ -48,6 +48,7 @@ import {
   TIER_TEXT_CLASS,
   evaluateRisk,
 } from '@/lib/risks/risk-score'
+import { useTranslation } from '@/lib/i18n/use-translation'
 
 type Props = {
   open: boolean
@@ -129,6 +130,7 @@ function RiskFormBody({
   onClose: () => void
   onSaved?: () => void
 }) {
+  const { t } = useTranslation()
   const [pending, startTransition] = useTransition()
   const [error, setError] = useState<string | null>(null)
 
@@ -156,11 +158,11 @@ function RiskFormBody({
     setError(null)
 
     if (!title.trim()) {
-      setError('El título es obligatorio.')
+      setError(t('pages.riskForm.titleRequired'))
       return
     }
     if (!isEdit && !projectId) {
-      setError('Selecciona un proyecto.')
+      setError(t('pages.riskForm.projectRequired'))
       return
     }
 
@@ -170,7 +172,7 @@ function RiskFormBody({
       delayParsed !== null &&
       (!Number.isInteger(delayParsed) || delayParsed < 0)
     ) {
-      setError('Delay debe ser un entero ≥ 0.')
+      setError(t('pages.riskForm.delayInvalid'))
       return
     }
 
@@ -204,7 +206,9 @@ function RiskFormBody({
         onSaved?.()
         onClose()
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'Error desconocido')
+        setError(
+          err instanceof Error ? err.message : t('pages.riskForm.unknownError'),
+        )
       }
     })
   }
@@ -215,12 +219,14 @@ function RiskFormBody({
     <form onSubmit={handleSubmit} className="w-[min(560px,90vw)] p-4">
       <header className="mb-3 flex items-center justify-between">
         <h2 className="text-base font-semibold">
-          {isEdit ? 'Editar riesgo' : 'Nuevo riesgo'}
+          {isEdit
+            ? t('pages.riskForm.editRisk')
+            : t('pages.riskForm.newRisk')}
         </h2>
         <button
           type="button"
           onClick={onClose}
-          aria-label="Cerrar"
+          aria-label={t('pages.riskForm.close')}
           className="rounded p-1 hover:bg-muted"
         >
           <X className="h-4 w-4" />
@@ -230,7 +236,9 @@ function RiskFormBody({
       <div className="grid grid-cols-2 gap-3">
         {!isEdit && (
           <label className="col-span-2 flex flex-col gap-1 text-xs">
-            <span className="text-muted-foreground">Proyecto *</span>
+            <span className="text-muted-foreground">
+              {t('pages.riskForm.project')} *
+            </span>
             <select
               value={projectId}
               onChange={(e) => setProjectId(e.target.value)}
@@ -246,7 +254,9 @@ function RiskFormBody({
         )}
 
         <label className="col-span-2 flex flex-col gap-1 text-xs">
-          <span className="text-muted-foreground">Título *</span>
+          <span className="text-muted-foreground">
+            {t('pages.riskForm.titleField')} *
+          </span>
           <input
             type="text"
             value={title}
@@ -258,7 +268,9 @@ function RiskFormBody({
         </label>
 
         <label className="col-span-2 flex flex-col gap-1 text-xs">
-          <span className="text-muted-foreground">Descripción</span>
+          <span className="text-muted-foreground">
+            {t('pages.riskForm.descriptionField')}
+          </span>
           <textarea
             value={description}
             onChange={(e) => setDescription(e.target.value)}
@@ -269,7 +281,9 @@ function RiskFormBody({
         </label>
 
         <label className="flex flex-col gap-1 text-xs">
-          <span className="text-muted-foreground">Probabilidad</span>
+          <span className="text-muted-foreground">
+            {t('pages.riskForm.probability')}
+          </span>
           <select
             value={probability}
             onChange={(e) =>
@@ -286,7 +300,9 @@ function RiskFormBody({
         </label>
 
         <label className="flex flex-col gap-1 text-xs">
-          <span className="text-muted-foreground">Impacto</span>
+          <span className="text-muted-foreground">
+            {t('pages.riskForm.impact')}
+          </span>
           <select
             value={impact}
             onChange={(e) => setImpact(Number(e.target.value) as ImpactLevel)}
@@ -301,7 +317,9 @@ function RiskFormBody({
         </label>
 
         <div className="col-span-2 flex items-center gap-2 rounded border border-border bg-muted/30 px-3 py-2 text-xs">
-          <span className="text-muted-foreground">Score:</span>
+          <span className="text-muted-foreground">
+            {t('pages.riskForm.scoreLabel')}
+          </span>
           <span className="font-semibold">{score}</span>
           <span
             className={[
@@ -316,7 +334,9 @@ function RiskFormBody({
         </div>
 
         <label className="flex flex-col gap-1 text-xs">
-          <span className="text-muted-foreground">Estado</span>
+          <span className="text-muted-foreground">
+            {t('pages.riskForm.status')}
+          </span>
           <select
             value={status}
             onChange={(e) => setStatus(e.target.value as RiskStatus)}
@@ -331,13 +351,15 @@ function RiskFormBody({
         </label>
 
         <label className="flex flex-col gap-1 text-xs">
-          <span className="text-muted-foreground">Owner</span>
+          <span className="text-muted-foreground">
+            {t('pages.riskForm.owner')}
+          </span>
           <select
             value={ownerId}
             onChange={(e) => setOwnerId(e.target.value)}
             className="rounded border border-border bg-background px-2 py-1 text-sm"
           >
-            <option value="">— Sin asignar —</option>
+            <option value="">{t('pages.riskForm.ownerUnassigned')}</option>
             {users.map((u) => (
               <option key={u.id} value={u.id}>
                 {u.name}
@@ -347,7 +369,9 @@ function RiskFormBody({
         </label>
 
         <label className="col-span-2 flex flex-col gap-1 text-xs">
-          <span className="text-muted-foreground">Plan de mitigación</span>
+          <span className="text-muted-foreground">
+            {t('pages.riskForm.mitigation')}
+          </span>
           <textarea
             value={mitigation}
             onChange={(e) => setMitigation(e.target.value)}
@@ -359,7 +383,7 @@ function RiskFormBody({
 
         <label className="col-span-2 flex flex-col gap-1 text-xs">
           <span className="text-muted-foreground">
-            Delay si materializa (días)
+            {t('pages.riskForm.delayDaysLabel')}
           </span>
           <input
             type="number"
@@ -371,7 +395,7 @@ function RiskFormBody({
             className="rounded border border-border bg-background px-2 py-1 text-sm"
           />
           <span className="text-[10px] text-muted-foreground">
-            Alimenta la simulación Monte Carlo. Vacío = no impacta cronograma.
+            {t('pages.riskForm.delayDaysHint')}
           </span>
         </label>
       </div>
@@ -388,7 +412,7 @@ function RiskFormBody({
           onClick={onClose}
           className="rounded border border-border bg-background px-3 py-1.5 text-sm hover:bg-muted"
         >
-          Cancelar
+          {t('pages.riskForm.cancel')}
         </button>
         <button
           type="submit"
@@ -396,7 +420,7 @@ function RiskFormBody({
           className="flex items-center gap-1 rounded bg-primary px-3 py-1.5 text-sm text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
         >
           <Save className="h-4 w-4" />
-          {pending ? 'Guardando…' : 'Guardar'}
+          {pending ? t('pages.riskForm.saving') : t('pages.riskForm.save')}
         </button>
       </footer>
     </form>

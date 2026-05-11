@@ -39,6 +39,7 @@ import {
 } from '@/lib/actions/risk-actions'
 import type { SerializedRisk } from '@/lib/risks/types'
 import { toast } from '@/components/interactions/Toaster'
+import { useTranslation } from '@/lib/i18n/use-translation'
 
 type RiskActionStatus = 'PENDING' | 'IN_PROGRESS' | 'DONE' | 'CANCELLED'
 
@@ -85,12 +86,10 @@ const STATUS_BADGE: Record<SerializedRisk['status'], string> = {
   CLOSED: 'bg-emerald-500/15 text-emerald-300',
 }
 
-const ACTION_STATUS_LABEL: Record<RiskActionStatus, string> = {
-  PENDING: 'Pendiente',
-  IN_PROGRESS: 'En curso',
-  DONE: 'Completada',
-  CANCELLED: 'Cancelada',
-}
+// R3.0-A · Hardening · Wave P20 i18n · El label estático se reemplazó por
+// claves `pages.projectRisks.actionStatus*` evaluadas en render para
+// respetar la cookie `x-locale`. Se mantiene `ACTION_STATUS_TONE` porque
+// son clases utilitarias que no dependen del idioma.
 
 const ACTION_STATUS_TONE: Record<RiskActionStatus, string> = {
   PENDING: 'bg-secondary text-muted-foreground',
@@ -106,6 +105,7 @@ export function ProjectRisksClient({
   users,
   pendingInsights: initialInsights,
 }: Props) {
+  const { t } = useTranslation()
   const [risks, setRisks] = useState(initialRisks)
   const [actions, setActions] = useState(initialActions)
   const [insights, setInsights] = useState(initialInsights)
@@ -135,9 +135,9 @@ export function ProjectRisksClient({
       try {
         const r = await promoteHeuristicInsightToRisk({ taskInsightId: insightId })
         if (r.alreadyPromoted) {
-          toast.success('Ya estaba promovido. Refresca para ver el Risk asociado.')
+          toast.success(t('pages.projectRisks.alreadyPromoted'))
         } else {
-          toast.success('Insight promovido al Risk Register')
+          toast.success(t('pages.projectRisks.promotedToRegister'))
           // Optimistic UI: remover el insight de la lista pendiente
           setInsights((prev) => prev.filter((i) => i.id !== insightId))
           // El SSR refrescará la lista de risks — para UX inmediata
@@ -145,7 +145,11 @@ export function ProjectRisksClient({
           window.location.reload()
         }
       } catch (err) {
-        toast.error(err instanceof Error ? err.message : 'Error al promover')
+        toast.error(
+          err instanceof Error
+            ? err.message
+            : t('pages.projectRisks.promoteError'),
+        )
       }
     })
   }
@@ -154,7 +158,10 @@ export function ProjectRisksClient({
     if (insights.length === 0) return
     if (
       !confirm(
-        `Promover ${insights.length} insight${insights.length === 1 ? '' : 's'} al Risk Register?`,
+        t('pages.projectRisks.promoteAllConfirm', {
+          count: insights.length,
+          plural: insights.length === 1 ? '' : 's',
+        }),
       )
     )
       return
@@ -164,29 +171,42 @@ export function ProjectRisksClient({
           projectId: project.id,
         })
         toast.success(
-          `${r.created} riesgo${r.created === 1 ? '' : 's'} creado${r.created === 1 ? '' : 's'} · ${r.skipped} ya existían`,
+          t('pages.projectRisks.bulkPromoteSummary', {
+            created: r.created,
+            createdPlural: r.created === 1 ? '' : 's',
+            createdPlural2: r.created === 1 ? '' : 's',
+            skipped: r.skipped,
+          }),
         )
         window.location.reload()
       } catch (err) {
-        toast.error(err instanceof Error ? err.message : 'Error en promoción bulk')
+        toast.error(
+          err instanceof Error
+            ? err.message
+            : t('pages.projectRisks.bulkPromoteError'),
+        )
       }
     })
   }
 
   const handleDeleteRisk = (id: string, title: string) => {
-    if (!confirm(`Eliminar riesgo "${title}"? También se eliminarán sus acciones correctivas.`))
+    if (!confirm(t('pages.projectRisks.confirmDeleteRisk', { title })))
       return
     startTransition(async () => {
       try {
         await deleteRisk(id)
-        toast.success('Riesgo eliminado')
+        toast.success(t('pages.projectRisks.riskDeleted'))
         setRisks((prev) => prev.filter((r) => r.id !== id))
         setActions((prev) => prev.filter((a) => a.riskId !== id))
         if (selectedRiskId === id) {
           setSelectedRiskId(risks.find((r) => r.id !== id)?.id ?? null)
         }
       } catch (err) {
-        toast.error(err instanceof Error ? err.message : 'Error al eliminar')
+        toast.error(
+          err instanceof Error
+            ? err.message
+            : t('pages.projectRisks.riskDeleteError'),
+        )
       }
     })
   }
@@ -200,7 +220,9 @@ export function ProjectRisksClient({
             <div className="flex items-center gap-2">
               <Sparkles className="h-4 w-4 text-amber-400" />
               <h2 className="text-sm font-semibold text-foreground">
-                Insights heurísticos sin promover · {insights.length}
+                {t('pages.projectRisks.insightsBanner', {
+                  count: insights.length,
+                })}
               </h2>
             </div>
             <button
@@ -209,7 +231,7 @@ export function ProjectRisksClient({
               disabled={isPending}
               className="rounded-md bg-amber-500/20 px-3 py-1 text-xs font-semibold text-amber-200 hover:bg-amber-500/30 disabled:opacity-50"
             >
-              Promover todos
+              {t('pages.projectRisks.promoteAll')}
             </button>
           </header>
           <ul className="space-y-1.5">
@@ -251,7 +273,7 @@ export function ProjectRisksClient({
                   disabled={isPending}
                   className="shrink-0 rounded-md bg-primary/20 px-2.5 py-1 text-[11px] font-semibold text-primary hover:bg-primary/30 disabled:opacity-50"
                 >
-                  Promover
+                  {t('pages.projectRisks.promote')}
                 </button>
               </li>
             ))}
@@ -265,7 +287,7 @@ export function ProjectRisksClient({
           <div className="flex items-center gap-2">
             <ShieldAlert className="h-4 w-4 text-rose-400" />
             <h2 className="text-sm font-semibold text-foreground">
-              Risk Register · {risks.length}
+              {t('pages.projectRisks.registerTitle', { count: risks.length })}
             </h2>
             <select
               value={filterStatus}
@@ -274,11 +296,19 @@ export function ProjectRisksClient({
               }
               className="ml-3 rounded-md border border-border bg-input px-2 py-0.5 text-xs text-input-foreground"
             >
-              <option value="ALL">Todos los estados</option>
-              <option value="OPEN">Abiertos</option>
-              <option value="MITIGATING">Mitigando</option>
-              <option value="ACCEPTED">Aceptados</option>
-              <option value="CLOSED">Cerrados</option>
+              <option value="ALL">
+                {t('pages.projectRisks.filterAllStatuses')}
+              </option>
+              <option value="OPEN">{t('pages.projectRisks.statusOpen')}</option>
+              <option value="MITIGATING">
+                {t('pages.projectRisks.statusMitigating')}
+              </option>
+              <option value="ACCEPTED">
+                {t('pages.projectRisks.statusAccepted')}
+              </option>
+              <option value="CLOSED">
+                {t('pages.projectRisks.statusClosed')}
+              </option>
             </select>
           </div>
           <button
@@ -287,7 +317,7 @@ export function ProjectRisksClient({
             className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground hover:bg-primary/90"
           >
             <Plus className="h-3.5 w-3.5" />
-            Nuevo riesgo manual
+            {t('pages.projectRisks.newManualRisk')}
           </button>
         </header>
 
@@ -296,7 +326,7 @@ export function ProjectRisksClient({
           <div className="max-h-[60vh] overflow-y-auto border-b lg:border-b-0 lg:border-r border-border">
             {filteredRisks.length === 0 ? (
               <div className="p-8 text-center text-xs text-muted-foreground">
-                No hay riesgos que coincidan con el filtro.
+                {t('pages.projectRisks.noRisksFilter')}
               </div>
             ) : (
               <ul className="divide-y divide-border">
@@ -341,7 +371,10 @@ export function ProjectRisksClient({
                           <span>·</span>
                           <span className="inline-flex items-center gap-1">
                             <ListChecks className="h-3 w-3" />
-                            {actionCount} acción{actionCount === 1 ? '' : 'es'}
+                            {t('pages.projectRisks.actionsCount', {
+                              count: actionCount,
+                              plural: actionCount === 1 ? '' : 'es',
+                            })}
                           </span>
                         </div>
                       </button>
@@ -356,7 +389,7 @@ export function ProjectRisksClient({
           <div className="max-h-[60vh] overflow-y-auto p-4">
             {!selectedRisk ? (
               <p className="text-xs text-muted-foreground">
-                Selecciona un riesgo para ver y gestionar su plan de acciones correctivas.
+                {t('pages.projectRisks.selectRiskHint')}
               </p>
             ) : (
               <RiskDetail
@@ -427,15 +460,23 @@ function RiskDetail({
   onDeleteRisk: () => void
   onActionsChange: (actions: ProjectRisksClientAction[]) => void
 }) {
+  const { t } = useTranslation()
   const [adding, setAdding] = useState(false)
   const [newDescription, setNewDescription] = useState('')
   const [newOwnerId, setNewOwnerId] = useState('')
   const [newDueDate, setNewDueDate] = useState('')
   const [isPending, startTransition] = useTransition()
 
+  const localizedStatusLabel: Record<RiskActionStatus, string> = {
+    PENDING: t('pages.projectRisks.actionStatusPending'),
+    IN_PROGRESS: t('pages.projectRisks.actionStatusInProgress'),
+    DONE: t('pages.projectRisks.actionStatusDone'),
+    CANCELLED: t('pages.projectRisks.actionStatusCancelled'),
+  }
+
   const handleAddAction = () => {
     if (newDescription.trim().length < 3) {
-      toast.error('Descripción requerida (≥ 3 caracteres)')
+      toast.error(t('pages.projectRisks.actionDescriptionRequired'))
       return
     }
     startTransition(async () => {
@@ -446,7 +487,7 @@ function RiskDetail({
           ownerId: newOwnerId || null,
           dueDate: newDueDate || null,
         })
-        toast.success('Acción correctiva creada')
+        toast.success(t('pages.projectRisks.actionCreated'))
         const newAction: ProjectRisksClientAction = {
           id: created.id,
           riskId: risk.id,
@@ -464,7 +505,11 @@ function RiskDetail({
         setNewDueDate('')
         setAdding(false)
       } catch (err) {
-        toast.error(err instanceof Error ? err.message : 'Error al crear')
+        toast.error(
+          err instanceof Error
+            ? err.message
+            : t('pages.projectRisks.actionCreateError'),
+        )
       }
     })
   }
@@ -476,7 +521,7 @@ function RiskDetail({
     startTransition(async () => {
       try {
         await updateRiskAction({ id: actionId, status: nextStatus })
-        toast.success('Acción actualizada')
+        toast.success(t('pages.projectRisks.actionUpdated'))
         onActionsChange(
           actions.map((a) =>
             a.id === actionId
@@ -490,20 +535,28 @@ function RiskDetail({
           ),
         )
       } catch (err) {
-        toast.error(err instanceof Error ? err.message : 'Error al actualizar')
+        toast.error(
+          err instanceof Error
+            ? err.message
+            : t('pages.projectRisks.actionUpdateError'),
+        )
       }
     })
   }
 
   const handleDeleteAction = (actionId: string) => {
-    if (!confirm('¿Eliminar acción correctiva?')) return
+    if (!confirm(t('pages.projectRisks.confirmDeleteAction'))) return
     startTransition(async () => {
       try {
         await deleteRiskAction({ id: actionId })
-        toast.success('Acción eliminada')
+        toast.success(t('pages.projectRisks.actionDeleted'))
         onActionsChange(actions.filter((a) => a.id !== actionId))
       } catch (err) {
-        toast.error(err instanceof Error ? err.message : 'Error al eliminar')
+        toast.error(
+          err instanceof Error
+            ? err.message
+            : t('pages.projectRisks.actionDeleteError'),
+        )
       }
     })
   }
@@ -516,7 +569,10 @@ function RiskDetail({
             {risk.title}
           </h3>
           <p className="mt-0.5 text-[11px] text-muted-foreground">
-            {risk.ownerName ? `Owner: ${risk.ownerName} · ` : ''}P{risk.probability} × I{risk.impact} = score {risk.score}
+            {risk.ownerName
+              ? `${t('pages.projectRisks.ownerLine', { name: risk.ownerName })} · `
+              : ''}
+            P{risk.probability} × I{risk.impact} = score {risk.score}
           </p>
         </div>
         <div className="flex shrink-0 items-center gap-1">
@@ -525,13 +581,13 @@ function RiskDetail({
             onClick={onEditRisk}
             className="rounded-md border border-border bg-secondary px-2 py-1 text-xs hover:bg-secondary/80"
           >
-            Editar
+            {t('pages.projectRisks.edit')}
           </button>
           <button
             type="button"
             onClick={onDeleteRisk}
             className="rounded-md border border-destructive/40 bg-destructive/10 p-1 text-destructive hover:bg-destructive/20"
-            title="Eliminar"
+            title={t('pages.projectRisks.delete')}
           >
             <Trash2 className="h-3.5 w-3.5" />
           </button>
@@ -546,7 +602,7 @@ function RiskDetail({
       {risk.mitigation && (
         <div className="rounded-md border border-border/50 bg-secondary/30 p-3 text-xs text-foreground">
           <p className="font-semibold text-muted-foreground uppercase tracking-wider text-[10px] mb-1">
-            Mitigación
+            {t('pages.projectRisks.mitigationHeader')}
           </p>
           {risk.mitigation}
         </div>
@@ -557,14 +613,15 @@ function RiskDetail({
         <header className="mb-2 flex items-center justify-between">
           <h4 className="inline-flex items-center gap-1.5 text-sm font-semibold text-foreground">
             <ListChecks className="h-4 w-4" />
-            Acciones correctivas · {actions.length}
+            {t('pages.projectRisks.actionsTitle', { count: actions.length })}
           </h4>
           <button
             type="button"
             onClick={() => setAdding((v) => !v)}
             className="rounded-md bg-primary/15 px-2 py-1 text-[11px] font-semibold text-primary hover:bg-primary/25"
           >
-            <Plus className="inline h-3 w-3" /> Nueva acción
+            <Plus className="inline h-3 w-3" />{' '}
+            {t('pages.projectRisks.newAction')}
           </button>
         </header>
 
@@ -574,7 +631,9 @@ function RiskDetail({
               value={newDescription}
               onChange={(e) => setNewDescription(e.target.value)}
               rows={2}
-              placeholder="Descripción de la acción correctiva (ej. Reasignar tarea a recurso senior)"
+              placeholder={t(
+                'pages.projectRisks.actionDescriptionPlaceholder',
+              )}
               className="w-full rounded-md border border-border bg-input px-2 py-1.5 text-xs"
               autoFocus
             />
@@ -584,7 +643,9 @@ function RiskDetail({
                 onChange={(e) => setNewOwnerId(e.target.value)}
                 className="rounded-md border border-border bg-input px-2 py-1 text-xs"
               >
-                <option value="">Sin owner</option>
+                <option value="">
+                  {t('pages.projectRisks.actionWithoutOwner')}
+                </option>
                 {users.map((u) => (
                   <option key={u.id} value={u.id}>
                     {u.name}
@@ -610,7 +671,7 @@ function RiskDetail({
                 disabled={isPending}
                 className="rounded-md border border-border bg-secondary px-3 py-1 text-xs hover:bg-secondary/80 disabled:opacity-50"
               >
-                Cancelar
+                {t('pages.projectRisks.cancel')}
               </button>
               <button
                 type="button"
@@ -618,7 +679,9 @@ function RiskDetail({
                 disabled={isPending}
                 className="rounded-md bg-primary px-3 py-1 text-xs font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
               >
-                {isPending ? 'Guardando…' : 'Crear'}
+                {isPending
+                  ? t('pages.projectRisks.saving')
+                  : t('pages.projectRisks.create')}
               </button>
             </div>
           </div>
@@ -626,8 +689,7 @@ function RiskDetail({
 
         {actions.length === 0 ? (
           <p className="rounded-md border border-dashed border-border p-4 text-center text-[11px] text-muted-foreground">
-            Sin acciones correctivas registradas. Define al menos una para
-            cerrar el riesgo.
+            {t('pages.projectRisks.noActions')}
           </p>
         ) : (
           <ul className="space-y-1.5">
@@ -658,16 +720,29 @@ function RiskDetail({
                         ACTION_STATUS_TONE[a.status],
                       )}
                     >
-                      {ACTION_STATUS_LABEL[a.status]}
+                      {localizedStatusLabel[a.status]}
                     </span>
-                    {a.ownerName && <>Owner: {a.ownerName} · </>}
+                    {a.ownerName && (
+                      <>
+                        {t('pages.projectRisks.ownerLine', {
+                          name: a.ownerName,
+                        })}
+                        {' · '}
+                      </>
+                    )}
                     {a.dueDate && (
-                      <>Vence: {new Date(a.dueDate).toLocaleDateString()} · </>
+                      <>
+                        {t('pages.projectRisks.dueLine', {
+                          date: new Date(a.dueDate).toLocaleDateString(),
+                        })}
+                        {' · '}
+                      </>
                     )}
                     {a.doneAt && (
                       <>
-                        Cerrada:{' '}
-                        {new Date(a.doneAt).toLocaleDateString()}
+                        {t('pages.projectRisks.closedLine', {
+                          date: new Date(a.doneAt).toLocaleDateString(),
+                        })}
                       </>
                     )}
                   </p>
@@ -676,7 +751,7 @@ function RiskDetail({
                   type="button"
                   onClick={() => handleDeleteAction(a.id)}
                   className="shrink-0 rounded p-1 text-muted-foreground hover:bg-destructive/20 hover:text-destructive"
-                  title="Eliminar"
+                  title={t('pages.projectRisks.delete')}
                 >
                   <Trash2 className="h-3 w-3" />
                 </button>
@@ -698,6 +773,7 @@ function ActionStatusToggle({
   onChange: (next: RiskActionStatus) => void
   disabled: boolean
 }) {
+  const { t } = useTranslation()
   // Toggle simple en orden cíclico: PENDING → IN_PROGRESS → DONE → CANCELLED → PENDING
   const next: Record<RiskActionStatus, RiskActionStatus> = {
     PENDING: 'IN_PROGRESS',
@@ -721,12 +797,22 @@ function ActionStatusToggle({
         : status === 'CANCELLED'
           ? 'text-muted-foreground'
           : 'text-muted-foreground'
+  const localizedStatus =
+    status === 'DONE'
+      ? t('pages.projectRisks.actionStatusDone')
+      : status === 'IN_PROGRESS'
+        ? t('pages.projectRisks.actionStatusInProgress')
+        : status === 'CANCELLED'
+          ? t('pages.projectRisks.actionStatusCancelled')
+          : t('pages.projectRisks.actionStatusPending')
   return (
     <button
       type="button"
       onClick={() => onChange(next[status])}
       disabled={disabled}
-      title={`Estado: ${ACTION_STATUS_LABEL[status]} · click para avanzar`}
+      title={t('pages.projectRisks.actionStatusToggleTitle', {
+        status: localizedStatus,
+      })}
       className="shrink-0 rounded-full p-0.5 transition-transform hover:scale-110 disabled:opacity-50"
     >
       <Icon className={clsx('h-4 w-4', tone)} />
@@ -751,6 +837,7 @@ function RiskModal({
   onClose: () => void
   onSaved: (risk: SerializedRisk) => void
 }) {
+  const { t } = useTranslation()
   const titleId = useId()
   const [title, setTitle] = useState(risk?.title ?? '')
   const [description, setDescription] = useState(risk?.description ?? '')
@@ -768,7 +855,7 @@ function RiskModal({
 
   const handleSubmit = () => {
     if (!title.trim()) {
-      toast.error('Título requerido')
+      toast.error(t('pages.projectRisks.fieldTitleRequired'))
       return
     }
     startTransition(async () => {
@@ -809,7 +896,7 @@ function RiskModal({
             tier,
             updatedAt: new Date().toISOString(),
           })
-          toast.success('Riesgo actualizado')
+          toast.success(t('pages.projectRisks.riskUpdated'))
         } else {
           const r = await createRisk({
             projectId,
@@ -854,10 +941,14 @@ function RiskModal({
             createdAt: new Date().toISOString(),
             updatedAt: new Date().toISOString(),
           })
-          toast.success('Riesgo creado')
+          toast.success(t('pages.projectRisks.riskCreated'))
         }
       } catch (err) {
-        toast.error(err instanceof Error ? err.message : 'Error al guardar')
+        toast.error(
+          err instanceof Error
+            ? err.message
+            : t('pages.projectRisks.saveError'),
+        )
       }
     })
   }
@@ -875,12 +966,14 @@ function RiskModal({
       <div className="w-full max-w-[520px] rounded-xl border border-border bg-card shadow-2xl">
         <header className="flex items-center justify-between border-b border-border px-5 py-3">
           <h2 id={titleId} className="text-base font-semibold text-foreground">
-            {mode === 'create' ? 'Nuevo riesgo' : 'Editar riesgo'}
+            {mode === 'create'
+              ? t('pages.projectRisks.modalTitleNew')
+              : t('pages.projectRisks.modalTitleEdit')}
           </h2>
           <button
             type="button"
             onClick={onClose}
-            aria-label="Cerrar"
+            aria-label={t('pages.projectRisks.close')}
             className="rounded p-1 text-muted-foreground hover:bg-secondary hover:text-foreground"
           >
             <CloseIcon className="h-4 w-4" />
@@ -890,13 +983,14 @@ function RiskModal({
         <div className="space-y-3 p-5">
           <div className="space-y-1">
             <label className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-              Título <span className="text-destructive">*</span>
+              {t('pages.projectRisks.fieldTitle')}{' '}
+              <span className="text-destructive">*</span>
             </label>
             <input
               type="text"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              placeholder="Ej. Bloqueo por dependencia externa SAP"
+              placeholder={t('pages.projectRisks.titlePlaceholder')}
               autoFocus
               className="w-full rounded-md border border-border bg-input px-3 py-2 text-sm"
             />
@@ -904,13 +998,13 @@ function RiskModal({
 
           <div className="space-y-1">
             <label className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-              Descripción
+              {t('pages.projectRisks.fieldDescription')}
             </label>
             <textarea
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               rows={3}
-              placeholder="Contexto, factores conocidos, supuestos…"
+              placeholder={t('pages.projectRisks.descriptionPlaceholder')}
               className="w-full resize-none rounded-md border border-border bg-input px-3 py-2 text-sm"
             />
           </div>
@@ -918,7 +1012,7 @@ function RiskModal({
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1">
               <label className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                Probabilidad (1-5)
+                {t('pages.projectRisks.fieldProbability')}
               </label>
               <select
                 value={probability}
@@ -934,7 +1028,7 @@ function RiskModal({
             </div>
             <div className="space-y-1">
               <label className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                Impacto (1-5)
+                {t('pages.projectRisks.fieldImpact')}
               </label>
               <select
                 value={impact}
@@ -953,7 +1047,7 @@ function RiskModal({
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1">
               <label className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                Estado
+                {t('pages.projectRisks.fieldStatus')}
               </label>
               <select
                 value={status}
@@ -962,22 +1056,32 @@ function RiskModal({
                 }
                 className="w-full rounded-md border border-border bg-input px-2 py-1.5 text-sm"
               >
-                <option value="OPEN">Abierto</option>
-                <option value="MITIGATING">Mitigando</option>
-                <option value="ACCEPTED">Aceptado</option>
-                <option value="CLOSED">Cerrado</option>
+                <option value="OPEN">
+                  {t('pages.portfolioRisks.statusOpen')}
+                </option>
+                <option value="MITIGATING">
+                  {t('pages.portfolioRisks.statusMitigating')}
+                </option>
+                <option value="ACCEPTED">
+                  {t('pages.portfolioRisks.statusAccepted')}
+                </option>
+                <option value="CLOSED">
+                  {t('pages.portfolioRisks.statusClosed')}
+                </option>
               </select>
             </div>
             <div className="space-y-1">
               <label className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                Owner
+                {t('pages.projectRisks.fieldOwner')}
               </label>
               <select
                 value={ownerId}
                 onChange={(e) => setOwnerId(e.target.value)}
                 className="w-full rounded-md border border-border bg-input px-2 py-1.5 text-sm"
               >
-                <option value="">Sin owner</option>
+                <option value="">
+                  {t('pages.projectRisks.actionWithoutOwner')}
+                </option>
                 {users.map((u) => (
                   <option key={u.id} value={u.id}>
                     {u.name}
@@ -989,20 +1093,20 @@ function RiskModal({
 
           <div className="space-y-1">
             <label className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-              Plan de mitigación (estrategia)
+              {t('pages.projectRisks.fieldMitigation')}
             </label>
             <textarea
               value={mitigation}
               onChange={(e) => setMitigation(e.target.value)}
               rows={2}
-              placeholder="Estrategia general (las acciones específicas se registran abajo tras crear)"
+              placeholder={t('pages.projectRisks.mitigationPlaceholder')}
               className="w-full resize-none rounded-md border border-border bg-input px-3 py-2 text-sm"
             />
           </div>
 
           <div className="space-y-1">
             <label className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-              Delay si se materializa (días)
+              {t('pages.projectRisks.fieldDelayDays')}
             </label>
             <input
               type="number"
@@ -1012,7 +1116,7 @@ function RiskModal({
               onChange={(e) =>
                 setTriggerDelayDays(e.target.value === '' ? '' : Number(e.target.value))
               }
-              placeholder="Ej. 7 (alimenta Monte Carlo)"
+              placeholder={t('pages.projectRisks.delayPlaceholder')}
               className="w-full rounded-md border border-border bg-input px-3 py-1.5 text-sm"
             />
           </div>
@@ -1025,7 +1129,7 @@ function RiskModal({
             disabled={isPending}
             className="rounded-md border border-border bg-secondary px-3 py-1.5 text-sm hover:bg-secondary/80 disabled:opacity-60"
           >
-            Cancelar
+            {t('pages.projectRisks.cancel')}
           </button>
           <button
             type="button"
@@ -1034,10 +1138,10 @@ function RiskModal({
             className="rounded-md bg-primary px-3 py-1.5 text-sm font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-60"
           >
             {isPending
-              ? 'Guardando…'
+              ? t('pages.projectRisks.saving')
               : mode === 'create'
-                ? 'Crear riesgo'
-                : 'Guardar cambios'}
+                ? t('pages.projectRisks.saveRisk')
+                : t('pages.projectRisks.saveRiskEdit')}
           </button>
         </footer>
       </div>
