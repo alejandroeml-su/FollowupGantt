@@ -2031,6 +2031,13 @@ model Whiteboard {
 
   isArchived Boolean @default(false)
 
+  // R4-D · Whiteboards co-edit · Snapshot Yjs del conjunto de elementos
+  // como `Y.Map<elementId, Y.Map<field, value>>`. Coexistente con la tabla
+  // `WhiteboardElement` (legacy): el editor reconcilia el state Yjs con la
+  // BD relacional al `saveWhiteboardYjsState` (server action).
+  // Nullable; lazy-init desde la lista de elementos al primer co-edit.
+  stateYjs Bytes?
+
   elements WhiteboardElement[]
 
   createdAt DateTime @default(now())
@@ -2446,6 +2453,14 @@ model Doc {
   title   String
   // Markdown crudo. Validado en server action: ≤ 200 KB.
   content String @db.Text
+
+  // R4-D · DocSpace co-edit · Snapshot binario del documento Yjs (CRDT).
+  // Persiste el state vector + document encoded vía `Y.encodeStateAsUpdate`.
+  // Nullable: docs legacy o creados sin co-edit funcionan con sólo `content`.
+  // El editor colaborativo hace lazy-init de Yjs desde `content` (markdown)
+  // si `contentYjs` es null. Tamaño esperado < 2 MB; serializado bytea en
+  // PostgreSQL. Ver `docs/features/realtime-coedit.md`.
+  contentYjs Bytes?
 
   // Tree jerárquico — null ⇒ doc raíz.
   parentId String?
