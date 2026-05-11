@@ -35,3 +35,22 @@ export const WriterImprovedDescriptionSchema = z.object({
 export type WriterImprovedDescription = z.infer<
   typeof WriterImprovedDescriptionSchema
 >
+
+export type WriterFilterOptions = {
+  projects: Array<{ id: string; name: string }>
+  epics: Array<{ id: string; name: string; projectId: string }>
+  sprints: Array<{
+    id: string
+    name: string
+    projectId: string
+    status: string
+  }>
+  userStories: Array<{
+    id: string
+    mnemonic: string | null
+    title: string
+    projectId: string
+    epicId: string | null
+    sprintId: string | null
+  }>
+}

@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useTransition } from 'react'
+import { useEffect, useMemo, useState, useTransition } from 'react'
 import {
   PenTool,
   Sparkles,
@@ -13,16 +13,27 @@ import {
 import {
   improveTaskDescription,
   applyImprovedDescription,
-  listTasksForWriter,
+  listWriterFilterOptions,
 } from '@/lib/brain/writer-actions'
-import type { WriterImprovedDescription } from '@/lib/brain/writer-types'
+import type {
+  WriterImprovedDescription,
+  WriterFilterOptions,
+} from '@/lib/brain/writer-types'
 
-type TaskOption = { id: string; mnemonic: string | null; title: string; project: string | null }
+const EMPTY_OPTIONS: WriterFilterOptions = {
+  projects: [],
+  epics: [],
+  sprints: [],
+  userStories: [],
+}
 
 const SAMPLE = 'Hacer la integración con supabase para que se guarden las tareas y se vean en la lista'
 
 export function WriterAI() {
-  const [tasks, setTasks] = useState<TaskOption[]>([])
+  const [options, setOptions] = useState<WriterFilterOptions>(EMPTY_OPTIONS)
+  const [projectId, setProjectId] = useState('')
+  const [epicId, setEpicId] = useState('')
+  const [sprintId, setSprintId] = useState('')
   const [taskId, setTaskId] = useState('')
   const [rawText, setRawText] = useState('')
   const [suggestion, setSuggestion] = useState<WriterImprovedDescription | null>(null)
@@ -32,10 +43,44 @@ export function WriterAI() {
   const [isApplying, startApplying] = useTransition()
 
   useEffect(() => {
-    listTasksForWriter()
-      .then(setTasks)
-      .catch(() => setTasks([]))
+    listWriterFilterOptions()
+      .then(setOptions)
+      .catch(() => setOptions(EMPTY_OPTIONS))
   }, [])
+
+  // Cascade: épicas, sprints e historias filtran por proyecto.
+  const filteredEpics = useMemo(
+    () => (projectId ? options.epics.filter((e) => e.projectId === projectId) : []),
+    [options.epics, projectId],
+  )
+  const filteredSprints = useMemo(
+    () => (projectId ? options.sprints.filter((s) => s.projectId === projectId) : []),
+    [options.sprints, projectId],
+  )
+  const filteredStories = useMemo(() => {
+    if (!projectId) return []
+    return options.userStories.filter((t) => {
+      if (t.projectId !== projectId) return false
+      if (epicId && t.epicId !== epicId) return false
+      if (sprintId && t.sprintId !== sprintId) return false
+      return true
+    })
+  }, [options.userStories, projectId, epicId, sprintId])
+
+  const onProjectChange = (id: string) => {
+    setProjectId(id)
+    setEpicId('')
+    setSprintId('')
+    setTaskId('')
+  }
+  const onEpicChange = (id: string) => {
+    setEpicId(id)
+    setTaskId('')
+  }
+  const onSprintChange = (id: string) => {
+    setSprintId(id)
+    setTaskId('')
+  }
 
   const generate = () => {
     setError(null)
@@ -97,25 +142,48 @@ export function WriterAI() {
       <div className="flex-1 bg-card border border-border rounded-xl flex flex-col overflow-hidden shadow-lg">
         {/* Inputs */}
         <div className="p-4 border-b border-border bg-background/95 space-y-3">
-          <div className="flex items-center gap-3">
-            <label htmlFor="writer-task" className="text-xs text-muted-foreground font-medium shrink-0">
-              Tarea destino:
-            </label>
-            <select
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <FilterSelect
+              id="writer-project"
+              label="Proyecto"
+              value={projectId}
+              onChange={onProjectChange}
+              placeholder="Todos los proyectos"
+              options={options.projects.map((p) => ({ value: p.id, label: p.name }))}
+            />
+            <FilterSelect
+              id="writer-epic"
+              label="Épica"
+              value={epicId}
+              onChange={onEpicChange}
+              placeholder={projectId ? 'Todas las épicas' : 'Selecciona proyecto'}
+              disabled={!projectId}
+              options={filteredEpics.map((e) => ({ value: e.id, label: e.name }))}
+            />
+            <FilterSelect
+              id="writer-sprint"
+              label="Sprint"
+              value={sprintId}
+              onChange={onSprintChange}
+              placeholder={projectId ? 'Todos los sprints' : 'Selecciona proyecto'}
+              disabled={!projectId}
+              options={filteredSprints.map((s) => ({
+                value: s.id,
+                label: `${s.name} · ${s.status}`,
+              }))}
+            />
+            <FilterSelect
               id="writer-task"
+              label="Historia de usuario"
               value={taskId}
-              onChange={(e) => setTaskId(e.target.value)}
-              className="flex-1 rounded-lg border border-border bg-secondary/40 px-3 py-1.5 text-xs text-foreground focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-ring"
-            >
-              <option value="">Sin tarea — solo generar sugerencia</option>
-              {tasks.map((t) => (
-                <option key={t.id} value={t.id}>
-                  {t.mnemonic ? `[${t.mnemonic}] ` : ''}
-                  {t.title}
-                  {t.project ? ` · ${t.project}` : ''}
-                </option>
-              ))}
-            </select>
+              onChange={setTaskId}
+              placeholder={projectId ? 'Solo generar sugerencia' : 'Selecciona proyecto'}
+              disabled={!projectId}
+              options={filteredStories.map((t) => ({
+                value: t.id,
+                label: `${t.mnemonic ? `[${t.mnemonic}] ` : ''}${t.title}`,
+              }))}
+            />
           </div>
 
           <textarea
@@ -250,6 +318,46 @@ function EmptyState() {
       <p className="text-xs mt-2 opacity-70">
         Selecciona una tarea destino si quieres aplicar el resultado directamente.
       </p>
+    </div>
+  )
+}
+
+function FilterSelect({
+  id,
+  label,
+  value,
+  onChange,
+  placeholder,
+  options,
+  disabled,
+}: {
+  id: string
+  label: string
+  value: string
+  onChange: (value: string) => void
+  placeholder: string
+  options: Array<{ value: string; label: string }>
+  disabled?: boolean
+}) {
+  return (
+    <div className="flex flex-col gap-1">
+      <label htmlFor={id} className="text-[10px] uppercase tracking-wider text-muted-foreground font-bold">
+        {label}
+      </label>
+      <select
+        id={id}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        disabled={disabled}
+        className="rounded-lg border border-border bg-secondary/40 px-3 py-1.5 text-xs text-foreground focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-ring disabled:opacity-50 disabled:cursor-not-allowed"
+      >
+        <option value="">{placeholder}</option>
+        {options.map((opt) => (
+          <option key={opt.value} value={opt.value}>
+            {opt.label}
+          </option>
+        ))}
+      </select>
     </div>
   )
 }

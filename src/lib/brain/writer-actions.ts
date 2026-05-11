@@ -7,6 +7,7 @@ import prisma from '@/lib/prisma'
 import {
   WriterImprovedDescriptionSchema,
   type WriterImprovedDescription,
+  type WriterFilterOptions,
 } from './writer-types'
 
 // NOTA: Schema y type viven en writer-types.ts. NO re-exportar desde aquí —
@@ -34,6 +35,43 @@ export async function listTasksForWriter(): Promise<
     title: t.title,
     project: t.project?.name ?? null,
   }))
+}
+
+export async function listWriterFilterOptions(): Promise<WriterFilterOptions> {
+  const [projects, epics, sprints, userStories] = await Promise.all([
+    prisma.project.findMany({
+      orderBy: { name: 'asc' },
+      select: { id: true, name: true },
+    }),
+    prisma.epic.findMany({
+      where: { archivedAt: null },
+      orderBy: { name: 'asc' },
+      select: { id: true, name: true, projectId: true },
+    }),
+    prisma.sprint.findMany({
+      orderBy: [{ status: 'asc' }, { startDate: 'desc' }],
+      select: { id: true, name: true, projectId: true, status: true },
+    }),
+    prisma.task.findMany({
+      where: { archivedAt: null, type: 'AGILE_STORY' },
+      take: 500,
+      orderBy: { updatedAt: 'desc' },
+      select: {
+        id: true,
+        mnemonic: true,
+        title: true,
+        projectId: true,
+        epicId: true,
+        sprintId: true,
+      },
+    }),
+  ])
+  return {
+    projects,
+    epics,
+    sprints: sprints.map((s) => ({ ...s, status: String(s.status) })),
+    userStories,
+  }
 }
 
 export async function improveTaskDescription(input: {
