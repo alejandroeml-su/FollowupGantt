@@ -17,6 +17,7 @@ import {
   type ProjectDefinitionCatalogs,
   type ProjectDefinitionState,
 } from './ProjectDefinitionDialog'
+import { useTranslation } from '@/lib/i18n/use-translation'
 
 interface Props {
   projectId: string
@@ -34,6 +35,7 @@ export function ProjectDefinitionLazyTrigger({
   variant = 'icon',
   className,
 }: Props): React.JSX.Element {
+  const { t } = useTranslation()
   const [open, setOpen] = useState(false)
   const [initial, setInitial] = useState<ProjectDefinitionState | null>(null)
   const [pending, startTransition] = useTransition()
@@ -45,7 +47,7 @@ export function ProjectDefinitionLazyTrigger({
       try {
         const def = await getProjectDefinition(projectId)
         if (!def) {
-          setError('Proyecto no encontrado')
+          setError(t('pages.projects.projectNotFound'))
           return
         }
         setInitial({
@@ -67,7 +69,7 @@ export function ProjectDefinitionLazyTrigger({
         })
         setOpen(true)
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'Error')
+        setError(err instanceof Error ? err.message : t('pages.projects.genericError'))
       }
     })
   }
@@ -79,8 +81,8 @@ export function ProjectDefinitionLazyTrigger({
           type="button"
           onClick={handleClick}
           disabled={pending}
-          aria-label={`Editar definición de ${projectName}`}
-          title="Definición & Miembros"
+          aria-label={t('pages.projects.editDefinitionOf', { name: projectName })}
+          title={t('pages.projects.definitionAndMembers')}
           className={
             className ??
             'p-1 rounded text-muted-foreground hover:bg-indigo-500/20 hover:text-indigo-400 transition-colors disabled:opacity-50'
@@ -99,7 +101,7 @@ export function ProjectDefinitionLazyTrigger({
           }
         >
           <Settings className="h-3.5 w-3.5" />
-          {pending ? 'Cargando…' : 'Definición & Miembros'}
+          {pending ? t('pages.projects.loadingDots') : t('pages.projects.definitionAndMembers')}
         </button>
       )}
       {error && (

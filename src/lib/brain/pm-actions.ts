@@ -3,6 +3,7 @@
 import { generateObject } from 'ai'
 import { anthropic } from '@ai-sdk/anthropic'
 import prisma from '@/lib/prisma'
+import { getServerLocale } from '@/lib/i18n/server'
 import {
   StandupReportSchema,
   RiskReportSchema,
@@ -12,6 +13,126 @@ import {
   type RegisterRiskResult,
   type BrainProjectOption,
 } from './pm-types'
+
+/**
+ * Wave P20 (i18n) — System prompt para Standup en es/en. Conserva
+ * mismas reglas, traduce el wording que aparece en el output.
+ */
+function buildStandupSystemPrompt(locale: 'es' | 'en'): string {
+  if (locale === 'en') {
+    return `You are Avante Brain, the AI Project Manager assistant for FollowupGantt.
+
+You produce executive stand-ups in English from the system's real activity over the last 24h.
+
+Rules:
+- Be concise. \`summary\` must not exceed 2 sentences.
+- Only include users with real activity (do not invent names).
+- "Completed today" = TaskHistory entries where field='status' and newValue='DONE'.
+- "In progress" = tasks with status=IN_PROGRESS assigned to the user.
+- If there is no activity, be honest: "No changes were recorded in the last 24h."
+- Identify real blockers: IN_PROGRESS tasks with no progress (progress=0) or overdue high-priority tasks.
+- Do not invent projects or data.`
+  }
+  return `Eres Avante Brain, asistente del Project Manager AI de FollowupGantt.
+
+Generas stand-ups ejecutivos en español a partir de la actividad real de las últimas 24h del sistema.
+
+Reglas:
+- Sé conciso. El \`summary\` no debe pasar de 2 frases.
+- Sólo incluye usuarios con actividad real (no inventes nombres).
+- "Completado hoy" = entradas de TaskHistory donde field='status' y newValue='DONE'.
+- "En progreso" = tareas con status=IN_PROGRESS asignadas al usuario.
+- Si no hay actividad, sé honesto: "No hubo cambios registrados en las últimas 24h."
+- Identifica blockers reales: tareas IN_PROGRESS sin progreso (progress=0) o atrasadas con prioridad alta.
+- No inventes proyectos ni datos.`
+}
+
+/**
+ * Wave P20 (i18n) — System prompt para Risk Analysis en es/en.
+ */
+function buildRiskSystemPrompt(
+  locale: 'es' | 'en',
+  ctx: { project: { name: string; methodology: string } },
+): string {
+  if (locale === 'en') {
+    return `You are Avante Brain, a PMI/Agile/ITIL project management specialist for FollowupGantt.
+
+You analyze the **${ctx.project.name}** project (methodology ${ctx.project.methodology}) and return
+actionable alerts in English, calibrated to the PMBOK 5×5 matrix.
+
+Rules:
+- Return at most 5 alerts, ranked by severity (HIGH > MEDIUM > LOW).
+- Each alert must include \`rationale\` with concrete data (days late, % progress, numeric SPI).
+- Each alert MUST include \`probability\` (1-5), \`impact\` (1-5) and \`triggerDelayDays\` (extra
+  schedule days if the risk materializes, 0 if there is no time impact).
+- 5×5 matrix calibration:
+  · prob 1-2 = unlikely; 3 = possible; 4-5 = nearly certain
+  · impact 1-2 = nuisance; 3 = affects release; 4 = affects milestone; 5 = catastrophic
+- \`severity\` derives from the product P×I:
+  · HIGH if P×I >= 12 · MEDIUM if 6-11 · LOW if <= 5
+- \`overallStatus\`:
+  · HEALTHY = no critical delays and SPI/CPI >= 0.95
+  · AT_RISK = 1-3 non-critical delays or SPI 0.85-0.94
+  · CRITICAL = delays on CRITICAL tasks or SPI < 0.85
+- Alert \`type\`:
+  · OVERDUE: task passed endDate and is not DONE
+  · CRITICAL_TASK: task with priority=CRITICAL at risk
+  · EVM_DEVIATION: SPI or CPI below 0.9
+  · DEPENDENCY_VIOLATION: predecessor not finished blocking successor
+  · STALE: IN_PROGRESS task with no progress (progress=0)
+- \`taskMnemonic\` MUST be the exact mnemonic of the most-related task (e.g. "p9-3"),
+  or empty/omitted if the alert is project-wide (e.g. EVM_DEVIATION).
+- \`suggestedAction\` must be a concrete actionable mitigation that goes directly to the
+  \`Risk.mitigation\` field of the Risk Register: "Reassign to X", "Escalate to sponsor",
+  "Trim scope", not generic.
+
+DEDUPE REQUIRED: the \`existingRisks\` context field contains risks ALREADY REGISTERED
+in this project's Risk Register. Do NOT suggest alerts that conceptually duplicate
+an already-registered risk (compare title + taskMnemonic). If every relevant problem
+is already registered, return a single LOW informational alert.
+
+- If everything is healthy and there is nothing NEW to suggest, return a single
+  informational alert of severity=LOW saying so explicitly.`
+  }
+  return `Eres Avante Brain, especialista en gestión de proyectos PMI/Agile/ITIL de FollowupGantt.
+
+Analizas datos del proyecto **${ctx.project.name}** (metodología ${ctx.project.methodology}) y devuelves
+alertas accionables en español, calibradas a la matriz PMBOK 5×5.
+
+Reglas:
+- Devuelve **máximo 5 alertas**, priorizadas por severidad (HIGH > MEDIUM > LOW).
+- Cada alerta debe tener \`rationale\` con datos concretos (días atrasados, % avance, SPI numérico).
+- Cada alerta DEBE incluir \`probability\` (1-5), \`impact\` (1-5) y \`triggerDelayDays\` (días extra
+  al cronograma si el riesgo se materializa, 0 si no aplica delay temporal).
+- Calibración matriz 5×5:
+  · prob 1-2 = improbable; 3 = posible; 4-5 = casi seguro
+  · impact 1-2 = molestia; 3 = afecta release; 4 = afecta milestone; 5 = catastrófico
+- \`severity\` se deriva del producto P×I:
+  · HIGH si P×I >= 12 · MEDIUM si 6-11 · LOW si <= 5
+- \`overallStatus\`:
+  · HEALTHY = sin atrasos críticos y SPI/CPI >= 0.95
+  · AT_RISK = 1-3 atrasos no-críticos o SPI 0.85-0.94
+  · CRITICAL = atrasos en tareas CRITICAL o SPI < 0.85
+- \`type\` de alerta:
+  · OVERDUE: tarea pasó endDate y no está DONE
+  · CRITICAL_TASK: tarea con priority=CRITICAL en riesgo
+  · EVM_DEVIATION: SPI o CPI por debajo de 0.9
+  · DEPENDENCY_VIOLATION: predecesora no terminada que bloquea sucesora
+  · STALE: tarea IN_PROGRESS sin avance (progress=0)
+- \`taskMnemonic\` DEBE ser el mnemonic exacto de la tarea más relacionada (ej. "p9-3"),
+  o vacío/omitirlo si la alerta es global del proyecto (ej. EVM_DEVIATION).
+- \`suggestedAction\` debe ser una mitigación concreta y accionable que vaya directo al
+  campo \`Risk.mitigation\` del Risk Register: "Reasignar a X", "Escalar a sponsor",
+  "Acortar alcance", no genérica.
+
+DEDUPE OBLIGATORIO: el campo \`existingRisks\` del contexto contiene los riesgos
+YA REGISTRADOS en el Risk Register de este proyecto. NO sugieras alertas que dupliquen
+en concepto un riesgo ya registrado (compara title + taskMnemonic). Si todos los
+problemas relevantes ya están registrados, devuelve un solo alert LOW informativo.
+
+- Si todo está saludable y no hay riesgos NUEVOS para sugerir, devuelve un único alert
+  informativo de severity=LOW indicándolo expresamente.`
+}
 
 // NOTA: NO re-exportamos types/schemas desde aquí. En archivos `'use server'`
 // Turbopack rompe `export const` y `export type {}` con ReferenceError en
@@ -164,22 +285,17 @@ export async function generateStandupReport(input?: { projectId?: string }): Pro
     throw new Error('ANTHROPIC_API_KEY no está configurada en el servidor.')
   }
   const ctx = await gatherStandupContext(input?.projectId)
+  // Wave P20 — Locale-aware prompts (es/en).
+  const locale = await getServerLocale()
+  const promptLine =
+    locale === 'en'
+      ? `Current date: ${today()}\n\nLast 24h activity:`
+      : `Fecha actual: ${today()}\n\nActividad de las últimas 24h:`
   const { object } = await generateObject({
     model: anthropic('claude-sonnet-4-6'),
     schema: StandupReportSchema,
-    system: `Eres Avante Brain, asistente del Project Manager AI de FollowupGantt.
-
-Generas stand-ups ejecutivos en español a partir de la actividad real de las últimas 24h del sistema.
-
-Reglas:
-- Sé conciso. El \`summary\` no debe pasar de 2 frases.
-- Sólo incluye usuarios con actividad real (no inventes nombres).
-- "Completado hoy" = entradas de TaskHistory donde field='status' y newValue='DONE'.
-- "En progreso" = tareas con status=IN_PROGRESS asignadas al usuario.
-- Si no hay actividad, sé honesto: "No hubo cambios registrados en las últimas 24h."
-- Identifica blockers reales: tareas IN_PROGRESS sin progreso (progress=0) o atrasadas con prioridad alta.
-- No inventes proyectos ni datos.`,
-    prompt: `Fecha actual: ${today()}\n\nActividad de las últimas 24h:\n${JSON.stringify(ctx, null, 2)}`,
+    system: buildStandupSystemPrompt(locale),
+    prompt: `${promptLine}\n${JSON.stringify(ctx, null, 2)}`,
   })
   return object
 }
@@ -209,48 +325,17 @@ export async function generateRiskAnalysis(input: { projectId: string }): Promis
 
   let object: RiskReport
   try {
+    // Wave P20 — Locale-aware prompts (es/en).
+    const locale = await getServerLocale()
+    const promptLine =
+      locale === 'en'
+        ? `Project data to analyze:`
+        : `Datos del proyecto a analizar:`
     const result = await generateObject({
       model: anthropic('claude-sonnet-4-6'),
       schema: RiskReportSchema,
-      system: `Eres Avante Brain, especialista en gestión de proyectos PMI/Agile/ITIL de FollowupGantt.
-
-Analizas datos del proyecto **${ctx.project.name}** (metodología ${ctx.project.methodology}) y devuelves
-alertas accionables en español, calibradas a la matriz PMBOK 5×5.
-
-Reglas:
-- Devuelve **máximo 5 alertas**, priorizadas por severidad (HIGH > MEDIUM > LOW).
-- Cada alerta debe tener \`rationale\` con datos concretos (días atrasados, % avance, SPI numérico).
-- Cada alerta DEBE incluir \`probability\` (1-5), \`impact\` (1-5) y \`triggerDelayDays\` (días extra
-  al cronograma si el riesgo se materializa, 0 si no aplica delay temporal).
-- Calibración matriz 5×5:
-  · prob 1-2 = improbable; 3 = posible; 4-5 = casi seguro
-  · impact 1-2 = molestia; 3 = afecta release; 4 = afecta milestone; 5 = catastrófico
-- \`severity\` se deriva del producto P×I:
-  · HIGH si P×I >= 12 · MEDIUM si 6-11 · LOW si <= 5
-- \`overallStatus\`:
-  · HEALTHY = sin atrasos críticos y SPI/CPI >= 0.95
-  · AT_RISK = 1-3 atrasos no-críticos o SPI 0.85-0.94
-  · CRITICAL = atrasos en tareas CRITICAL o SPI < 0.85
-- \`type\` de alerta:
-  · OVERDUE: tarea pasó endDate y no está DONE
-  · CRITICAL_TASK: tarea con priority=CRITICAL en riesgo
-  · EVM_DEVIATION: SPI o CPI por debajo de 0.9
-  · DEPENDENCY_VIOLATION: predecesora no terminada que bloquea sucesora
-  · STALE: tarea IN_PROGRESS sin avance (progress=0)
-- \`taskMnemonic\` DEBE ser el mnemonic exacto de la tarea más relacionada (ej. "p9-3"),
-  o vacío/omitirlo si la alerta es global del proyecto (ej. EVM_DEVIATION).
-- \`suggestedAction\` debe ser una mitigación concreta y accionable que vaya directo al
-  campo \`Risk.mitigation\` del Risk Register: "Reasignar a X", "Escalar a sponsor",
-  "Acortar alcance", no genérica.
-
-🚫 **DEDUPE OBLIGATORIO**: el campo \`existingRisks\` del contexto contiene los riesgos
-YA REGISTRADOS en el Risk Register de este proyecto. **NO sugieras alertas que dupliquen
-en concepto** un riesgo ya registrado (compara title + taskMnemonic). Si todos los
-problemas relevantes ya están registrados, devuelve un solo alert LOW informativo.
-
-- Si todo está saludable y no hay riesgos NUEVOS para sugerir, devuelve un único alert
-  informativo de severity=LOW indicándolo expresamente.`,
-      prompt: `Datos del proyecto a analizar:\n${JSON.stringify(ctx, null, 2)}`,
+      system: buildRiskSystemPrompt(locale, { project: ctx.project }),
+      prompt: `${promptLine}\n${JSON.stringify(ctx, null, 2)}`,
     })
     object = result.object
   } catch (err) {

@@ -44,7 +44,18 @@
     "noResults": "Sin resultados",
     "empty": "Vacío",
     "expand": "Expandir",
-    "collapse": "Colapsar"
+    "collapse": "Colapsar",
+    "loadingDots": "Cargando…",
+    "savingDots": "Guardando…",
+    "owner": "Owner",
+    "noOwner": "Sin owner",
+    "date": "Fecha",
+    "ip": "IP",
+    "action": "Acción",
+    "entity": "Entidad",
+    "actor": "Actor",
+    "system": "(sistema)",
+    "ipUnknown": "IP desconocida"
   },
   "buttons": {
     "save": "Guardar",
@@ -70,7 +81,11 @@
     "unpublish": "Despublicar",
     "open": "Abrir",
     "selectAll": "Seleccionar todo",
-    "deselectAll": "Deseleccionar todo"
+    "deselectAll": "Deseleccionar todo",
+    "loadMore": "Cargar más",
+    "loading": "Cargando…",
+    "purging": "Purgando…",
+    "saving": "Guardando…"
   },
   "sidebar": {
     "title": "Orquestación Híbrida",
@@ -147,7 +162,6 @@
       "pmiEvm": "EVM · Curva-S",
       "pmiLessons": "Lessons Learned",
       "pmiCommunications": "Plan de comunicaciones",
-      "pmiReports": "Performance Reports",
       "scrumDaily": "Daily Scrum",
       "scrumImpediments": "Impediments",
       "scrumImprovements": "Improvement Items"
@@ -214,7 +228,16 @@
     "showingCritical": "Mostrando ruta crítica",
     "criticalOnlyAriaPressed": "Mostrando solo la ruta crítica. Pulsa para mostrar todas las tareas.",
     "criticalOnlyAriaUnpressed": "Mostrar solo las tareas en la ruta crítica.",
-    "clearWithCount": "Limpiar ({count})"
+    "clearWithCount": "Limpiar ({count})",
+    "activeCountSingular": "{count} activo",
+    "activeCountPlural": "{count} activos",
+    "epic": "Epic",
+    "noEpic": "Sin Epic",
+    "filterByEpic": "Filtrar por Epic",
+    "dateRange": "Rango de fechas",
+    "dateRangeActive": "activo",
+    "to": "hasta",
+    "activeChipsLabel": "Activos:"
   },
   "pages": {
     "dashboard": {
@@ -246,7 +269,92 @@
     },
     "audit": {
       "title": "Bitácora de auditoría",
-      "subtitle": "Registro de eventos del sistema"
+      "subtitle": "Registro de eventos del sistema",
+      "headerTitle": "Auditoría",
+      "headerSubtitle": "{count} eventos · retention 90 días",
+      "emptyTitle": "Sin eventos para los filtros actuales",
+      "emptySearching": "Buscando eventos…",
+      "emptyHint": "Los eventos críticos del sistema aparecerán aquí en cuanto ocurran.",
+      "colDate": "Fecha",
+      "colActor": "Actor",
+      "colAction": "Acción",
+      "colEntity": "Entidad",
+      "colIp": "IP",
+      "detailBefore": "Antes",
+      "detailAfter": "Después",
+      "detailMetadata": "Metadata",
+      "detailEmpty": "(vacío)",
+      "detailUserAgent": "User-Agent",
+      "purgeTitle": "Confirmar purga de eventos antiguos",
+      "purgeBody": "Se eliminarán {count} eventos con fecha anterior a {date}. Esta operación es irreversible.",
+      "purgeConfirm": "Confirmar purga",
+      "errorQuery": "Error al consultar eventos",
+      "errorLoadMore": "Error al cargar más eventos",
+      "errorPurgeEstimate": "Error al estimar purge",
+      "errorPurgeExecute": "Error al ejecutar purge",
+      "purgeDone": "Purga completada: {count} eventos eliminados"
+    },
+    "profile": {
+      "title": "Mi perfil",
+      "subtitle": "Gestiona tus preferencias personales y los canales por los que recibes notificaciones.",
+      "identity": "Identidad",
+      "tourTitle": "Tour de bienvenida",
+      "tourBody": "¿Quieres volver a ver el recorrido guiado de Sync? Reinicia el tour en cualquier momento.",
+      "futureTitle": "Próximamente"
+    },
+    "sessions": {
+      "title": "Sesiones activas",
+      "subtitle": "Dispositivos donde tu cuenta está iniciada actualmente.",
+      "revokeOthers": "Cerrar otras sesiones",
+      "emptyState": "No tienes sesiones activas.",
+      "currentBadge": "Esta sesión",
+      "lastSeen": "Última actividad: {date}",
+      "started": "Iniciada: {date}",
+      "revoke": "Revocar"
+    },
+    "apiKeys": {
+      "title": "API Keys v2",
+      "subtitle": "Credenciales workspace-scoped para integrar Sync con sistemas corporativos. Soportan scopes granulares y rate limiting.",
+      "openapiLink": "OpenAPI v2"
+    },
+    "portfolioRisks": {
+      "filteringByCell": "Filtrando por celda",
+      "ofRisks": "{shown} de {total} riesgos",
+      "clearFilter": "Limpiar filtro",
+      "probLabels": {
+        "1": "Muy baja",
+        "2": "Baja",
+        "3": "Media",
+        "4": "Alta",
+        "5": "Muy alta"
+      },
+      "impactLabels": {
+        "1": "Insignif.",
+        "2": "Menor",
+        "3": "Moderado",
+        "4": "Mayor",
+        "5": "Severo"
+      },
+      "detail": "Detalle",
+      "print": "Imprimir / PDF",
+      "emptyPortfolio": "Sin riesgos abiertos en el portafolio.",
+      "detectedOn": "Detectado {date}",
+      "ownerLabel": "Owner: {name}",
+      "mitigationLabel": "Mitigación: {value}",
+      "severityHigh": "Alto",
+      "severityMedium": "Medio",
+      "severityLow": "Bajo",
+      "statusOpen": "Abierto",
+      "statusMitigating": "Mitigando",
+      "statusAccepted": "Aceptado",
+      "statusClosed": "Cerrado"
+    },
+    "projects": {
+      "definitionAndMembers": "Definición & Miembros",
+      "editDefinitionOf": "Editar definición de {name}",
+      "projectNotFound": "Proyecto no encontrado",
+      "genericError": "Error",
+      "loadingDots": "Cargando…"
     }
   },
   "toast": {
