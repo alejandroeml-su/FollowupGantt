@@ -26,6 +26,7 @@ import {
   type RecordAuditEventInput,
 } from './types'
 import { withMetrics } from '@/lib/observability/metrics'
+import { enqueueEvent } from './streaming/engine'
 
 // ───────────────────────── Errores tipados ─────────────────────────
 
@@ -129,6 +130,34 @@ export async function recordAuditEvent(
       },
       select: { id: true, createdAt: true },
     })
+
+    // R3-E · Audit Streaming side-channel. NUNCA bloquea ni lanza —
+    // si la cola está llena, drop con warning (ver engine.ts). El
+    // `workspaceId` se infiere de `metadata.workspaceId` cuando el caller
+    // lo provee; eventos sin workspace se descartan del streaming pero
+    // siguen persistidos en BD.
+    try {
+      const workspaceId = extractWorkspaceId(safeMetadata, safeBefore, safeAfter)
+      enqueueEvent(workspaceId, {
+        id: created.id,
+        action: data.action,
+        entityType: data.entityType,
+        entityId: data.entityId ?? null,
+        actorId: data.actorId ?? null,
+        workspaceId,
+        before: safeBefore ?? null,
+        after: safeAfter ?? null,
+        metadata: safeMetadata ?? null,
+        ipAddress: data.ipAddress ?? null,
+        userAgent: data.userAgent ?? null,
+        createdAt: created.createdAt.toISOString(),
+      })
+    } catch (streamErr) {
+      // Defensivo: ningún error de streaming debe romper el path crítico
+      // de audit. Sólo logueamos.
+      console.warn('[Audit] enqueueEvent failed', streamErr)
+    }
+
     return {
       id: created.id,
       createdAt: created.createdAt.toISOString(),
@@ -139,6 +168,27 @@ export async function recordAuditEvent(
     const detail = err instanceof Error ? err.message : String(err)
     auditError('PERSIST_FAILED', detail)
   }
+}
+
+/**
+ * Extrae `workspaceId` de un evento de audit. Mira en orden:
+ *   1. `metadata.workspaceId`
+ *   2. `after.workspaceId`
+ *   3. `before.workspaceId`
+ * Devuelve `null` si no encuentra string válido — el engine de streaming
+ * descarta eventos sin workspace.
+ */
+function extractWorkspaceId(
+  metadata: Record<string, unknown> | null | undefined,
+  before: Record<string, unknown> | null | undefined,
+  after: Record<string, unknown> | null | undefined,
+): string | null {
+  for (const src of [metadata, after, before]) {
+    if (!src) continue
+    const v = (src as Record<string, unknown>).workspaceId
+    if (typeof v === 'string' && v.length > 0) return v
+  }
+  return null
 }
 
 /**

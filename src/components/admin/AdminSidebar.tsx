@@ -11,6 +11,7 @@ import {
   KeyRound,
   ShieldAlert,
   ArrowLeft,
+  Radio,
 } from 'lucide-react'
 
 /**
@@ -66,6 +67,12 @@ const items: Array<{
     label: 'Retention',
     icon: ShieldAlert,
     description: 'Políticas de purge',
+  },
+  {
+    href: '/admin/audit-streaming',
+    label: 'Audit Streaming',
+    icon: Radio,
+    description: 'Reenvío de eventos a SIEM',
   },
 ]
 
