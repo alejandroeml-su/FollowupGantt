@@ -9,6 +9,7 @@ import {
   Shield,
   FileStack,
   KeyRound,
+  ShieldAlert,
   ArrowLeft,
 } from 'lucide-react'
 
@@ -59,6 +60,12 @@ const items: Array<{
     label: 'SSO / SAML',
     icon: KeyRound,
     description: 'Identidad federada por workspace',
+  },
+  {
+    href: '/admin/retention',
+    label: 'Retention',
+    icon: ShieldAlert,
+    description: 'Políticas de purge',
   },
 ]
 

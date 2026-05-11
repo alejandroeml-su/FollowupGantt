@@ -52,6 +52,7 @@ import {
   requireWorkspaceAccess,
   requireWorkspaceManager,
 } from '@/lib/auth/check-workspace-access'
+import { ensureDefaultPolicies } from '@/lib/retention/defaults'
 
 // ───────────────────────── Errores tipados ─────────────────────────
 
@@ -180,6 +181,11 @@ export async function createWorkspace(input: {
         },
       },
       select: { id: true, slug: true },
+    })
+    // R3.0-F · Siembra las 4 retention policies default. Idempotente, no
+    // rompe el flujo si falla (defensivo — el cron las re-aplicará).
+    await ensureDefaultPolicies(ws.id).catch((err) => {
+      console.error('[Retention] ensureDefaultPolicies failed', err)
     })
     revalidatePath('/settings/workspace')
     return ws
