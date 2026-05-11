@@ -8,7 +8,7 @@
  * lessons). Sin persistencia · regenerable con botón "Refrescar".
  */
 
-import { useEffect, useState, useTransition } from 'react'
+import { useCallback, useEffect, useState, useTransition } from 'react'
 import {
   Brain,
   RefreshCw,
@@ -50,7 +50,7 @@ export function StrategistAI() {
   const [briefOpen, setBriefOpen] = useState(true)
   const [copied, setCopied] = useState(false)
 
-  const refresh = () => {
+  const refresh = useCallback(() => {
     setError(null)
     startTransition(async () => {
       try {
@@ -60,7 +60,7 @@ export function StrategistAI() {
         setError(e instanceof Error ? e.message : 'Error al cargar')
       }
     })
-  }
+  }, [])
 
   const generateBrief = () => {
     setNarrationError(null)
@@ -98,9 +98,11 @@ export function StrategistAI() {
   }
 
   useEffect(() => {
-    refresh()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+    const id = setTimeout(() => {
+      void refresh()
+    }, 0)
+    return () => clearTimeout(id)
+  }, [refresh])
 
   return (
     <div className="flex-1 animate-in fade-in slide-in-from-bottom-4 duration-500">

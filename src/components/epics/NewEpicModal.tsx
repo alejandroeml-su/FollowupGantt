@@ -342,7 +342,7 @@ export function NewEpicModal({
               <p className="text-[10px] text-muted-foreground">
                 ✨ Regla ágil: cada Epic pertenece a un Release según su
                 importancia. Cambiar este valor mueve la Epic al Release
-                seleccionado (o la desasocia si eliges "Sin Release").
+                seleccionado (o la desasocia si eliges &ldquo;Sin Release&rdquo;).
               </p>
             </div>
           )}
