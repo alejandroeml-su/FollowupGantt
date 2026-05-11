@@ -48,7 +48,7 @@
 | `src/lib/mobile/capacitor-bridge.ts` | `isCapacitor()`, `getPlatform()` defensivos (no importan `@capacitor/*`). |
 | `src/lib/mobile/push-bridge.ts` | `registerCapacitorPush()` con import dinámico tolerante. |
 | `src/lib/mobile/index.ts` | Barrel para tree-shaking. |
-| `.github/workflows/mobile-build.yml` | Workflow `workflow_dispatch` para validar `cap sync`. |
+| `.github/workflows/mobile-build.yml` | **Pendiente** · workflow `workflow_dispatch` para validar `cap sync` (ver §9). El bot de este PR no tiene `workflow` scope; lo agrega un mantenedor con permisos. |
 
 ## 3. Pasos de release (alto nivel)
 
@@ -140,6 +140,60 @@ npx cap doctor                # opcional, valida versiones SDK
 - `public/manifest.webmanifest` y `public/service-worker.js` **NO se modifican**.
 - `src/components/pwa/InstallPrompt.tsx` **NO se modifica**. Dentro de Capacitor el evento `beforeinstallprompt` nunca dispara → el banner queda oculto sin lógica adicional.
 - Imports `from '@/lib/mobile'` son safe en código que también corre en web: las funciones son no-ops cuando `window.Capacitor` no existe.
+
+## 9. Workflow GitHub Actions (pendiente · `workflow` scope)
+
+El bot que abrió este PR no tiene `workflow` scope, así que `.github/workflows/mobile-build.yml` no se pudo incluir en el push. Un mantenedor con permisos puede crearlo con este contenido:
+
+```yaml
+name: Mobile · Capacitor Build (manual)
+on:
+  workflow_dispatch:
+    inputs:
+      platform:
+        description: 'android | ios | both'
+        required: false
+        default: 'android'
+        type: choice
+        options: [android, ios, both]
+jobs:
+  cap-sync-android:
+    if: ${{ github.event.inputs.platform == 'android' || github.event.inputs.platform == 'both' || github.event.inputs.platform == '' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: mobile/package.json
+      - working-directory: mobile
+        run: npm install --no-audit --no-fund
+      - working-directory: mobile
+        run: npx cap add android || echo "already exists"
+      - working-directory: mobile
+        run: npx cap sync android
+      - working-directory: mobile
+        run: npx cap doctor || true
+  cap-sync-ios:
+    if: ${{ github.event.inputs.platform == 'ios' || github.event.inputs.platform == 'both' }}
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: mobile/package.json
+      - working-directory: mobile
+        run: npm install --no-audit --no-fund
+      - working-directory: mobile
+        run: npx cap add ios || echo "already exists"
+      - working-directory: mobile
+        run: npx cap sync ios
+```
+
+Solo valida `cap sync`. NO publica a stores (release requiere keystores en GitHub Secrets · ver §3).
 
 ---
 
