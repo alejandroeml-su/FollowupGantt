@@ -268,6 +268,7 @@ export async function dispatchEvent(
   }
   const deps: RunAutomationsDeps = {
     loadActiveRules: async () => {
+      if (!prisma.automationRule) return []
       const rules = await prisma.automationRule.findMany({
         where: { isActive: true },
       })
@@ -286,6 +287,7 @@ export async function dispatchEvent(
     },
     adapter,
     recordExecution: async (ruleId, triggeredBy, status, result) => {
+      if (!prisma.automationExecution) return
       await prisma.automationExecution.create({
         data: {
           ruleId,
