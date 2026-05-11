@@ -15,3 +15,29 @@ export async function getAllUsersWithRoles() {
     orderBy: { name: 'asc' }
   })
 }
+
+/**
+ * Lista de gerencias con su gerente actual (si existe). El UI usa esto
+ * para:
+ *  - Poblar el dropdown "Gerencia" del form de usuario.
+ *  - Mostrar en cada gerencia el gerente actual + status (DISPONIBLE / OCUPADO)
+ *    y bloquear el submit si la gerencia ya tiene gerente.
+ */
+export async function getGerenciasWithCurrentManager() {
+  const gerencias = await prisma.gerencia.findMany({
+    orderBy: { name: 'asc' },
+    select: {
+      id: true,
+      name: true,
+      gerentes: {
+        select: { id: true, name: true, email: true },
+      },
+    },
+  })
+  return gerencias.map((g) => ({
+    id: g.id,
+    name: g.name,
+    currentManager: g.gerentes[0] ?? null,
+    isAvailable: g.gerentes.length === 0,
+  }))
+}

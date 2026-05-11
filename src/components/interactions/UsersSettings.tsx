@@ -1,7 +1,17 @@
 'use client'
 
-import React, { useTransition, useState } from 'react'
-import { Plus, User, Trash2, Shield, UserPlus, Mail, Fingerprint } from 'lucide-react'
+import React, { useMemo, useState, useTransition } from 'react'
+import {
+  Plus,
+  User,
+  Trash2,
+  Shield,
+  UserPlus,
+  Mail,
+  Fingerprint,
+  AlertTriangle,
+  Building2,
+} from 'lucide-react'
 import { createUser, deleteUser } from '@/lib/actions'
 import { toast } from '@/components/interactions/Toaster'
 
@@ -17,25 +27,81 @@ type Role = {
   name: string
 }
 
+type GerenciaOption = {
+  id: string
+  name: string
+  currentManager: { id: string; name: string; email: string } | null
+  isAvailable: boolean
+}
+
 type Props = {
   initialUsers: UserData[]
   roles: Role[]
+  gerencias: GerenciaOption[]
 }
 
-export default function UsersSettings({ initialUsers, roles }: Props) {
+export default function UsersSettings({
+  initialUsers,
+  roles,
+  gerencias,
+}: Props) {
   const [isPending, startTransition] = useTransition()
   const [showAdd, setShowAdd] = useState(false)
+  const [selectedRoleIds, setSelectedRoleIds] = useState<Set<string>>(new Set())
+  const [selectedGerenciaId, setSelectedGerenciaId] = useState<string>('')
+
+  const gerenteAreaRoleId = useMemo(
+    () => roles.find((r) => r.name === 'GERENTE_AREA')?.id ?? null,
+    [roles],
+  )
+  const isGerenteAreaSelected = !!(
+    gerenteAreaRoleId && selectedRoleIds.has(gerenteAreaRoleId)
+  )
+
+  const selectedGerencia = gerencias.find((g) => g.id === selectedGerenciaId)
+  const gerenciaBlocked =
+    isGerenteAreaSelected && !!selectedGerencia && !selectedGerencia.isAvailable
+
+  const resetForm = () => {
+    setShowAdd(false)
+    setSelectedRoleIds(new Set())
+    setSelectedGerenciaId('')
+  }
+
+  const toggleRole = (roleId: string) => {
+    setSelectedRoleIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(roleId)) next.delete(roleId)
+      else next.add(roleId)
+      return next
+    })
+  }
 
   const handleAdd = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
+
+    // Pre-check cliente: bloquea submit antes de hacer el round-trip.
+    if (isGerenteAreaSelected && !selectedGerenciaId) {
+      toast.error('Selecciona una gerencia para el Gerente de Área.')
+      return
+    }
+    if (gerenciaBlocked) {
+      toast.error('Esa gerencia ya tiene un Gerente activo. Revoca su rol primero.')
+      return
+    }
+
     const formData = new FormData(e.currentTarget)
+    if (selectedGerenciaId) {
+      formData.set('gerenciaId', selectedGerenciaId)
+    }
     startTransition(async () => {
       try {
         await createUser(formData)
         toast.success('Usuario creado correctamente')
-        setShowAdd(false)
+        resetForm()
       } catch (err) {
-        toast.error('Error al crear usuario')
+        const msg = err instanceof Error ? err.message : 'Error al crear usuario'
+        toast.error(msg)
       }
     })
   }
@@ -76,15 +142,70 @@ export default function UsersSettings({ initialUsers, roles }: Props) {
           <div className="space-y-1.5">
             <label className="text-xs font-bold text-muted-foreground uppercase">Asignar Roles</label>
             <div className="flex flex-wrap gap-2">
-              {roles.map(role => (
-                <label key={role.id} className="flex items-center gap-2 bg-muted px-3 py-1.5 rounded-lg border border-border hover:border-primary/40 cursor-pointer transition-colors">
-                  <input type="checkbox" name="roleIds" value={role.id} className="accent-primary" />
+              {roles.map((role) => (
+                <label
+                  key={role.id}
+                  className="flex items-center gap-2 bg-muted px-3 py-1.5 rounded-lg border border-border hover:border-primary/40 cursor-pointer transition-colors"
+                >
+                  <input
+                    type="checkbox"
+                    name="roleIds"
+                    value={role.id}
+                    checked={selectedRoleIds.has(role.id)}
+                    onChange={() => toggleRole(role.id)}
+                    className="accent-primary"
+                  />
                   <span className="text-xs font-medium text-foreground">{role.name}</span>
                 </label>
               ))}
             </div>
           </div>
-          <button disabled={isPending} className="w-full py-2 bg-primary text-primary-foreground font-bold rounded-lg hover:opacity-90 disabled:opacity-50 transition-all">
+
+          {isGerenteAreaSelected && (
+            <div className="space-y-1.5 animate-in fade-in slide-in-from-top-2">
+              <label className="text-xs font-bold text-muted-foreground uppercase flex items-center gap-1">
+                <Building2 className="h-3 w-3" />
+                Gerencia a cargo
+                <span className="text-red-400">*</span>
+              </label>
+              <select
+                value={selectedGerenciaId}
+                onChange={(e) => setSelectedGerenciaId(e.target.value)}
+                required
+                className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-primary outline-none"
+              >
+                <option value="">Selecciona la gerencia que va a dirigir…</option>
+                {gerencias.map((g) => (
+                  <option key={g.id} value={g.id} disabled={!g.isAvailable}>
+                    {g.name}
+                    {g.isAvailable
+                      ? ' · disponible'
+                      : ` · ocupada por ${g.currentManager?.name ?? 'gerente actual'}`}
+                  </option>
+                ))}
+              </select>
+              <p className="text-[11px] text-muted-foreground italic">
+                Regla de negocio: solo puede existir <strong>un Gerente de Área activo</strong>{' '}
+                por Gerencia. Las gerencias ocupadas aparecen deshabilitadas; revoca al gerente actual
+                antes de asignar uno nuevo.
+              </p>
+              {gerenciaBlocked && (
+                <div className="flex items-start gap-2 text-[12px] text-red-400 bg-red-500/10 border border-red-500/20 rounded-md px-2 py-1.5">
+                  <AlertTriangle className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+                  <span>
+                    {selectedGerencia?.name} ya tiene un Gerente activo (
+                    <strong>{selectedGerencia?.currentManager?.name}</strong>). Elige otra gerencia
+                    o revoca primero el rol del gerente actual.
+                  </span>
+                </div>
+              )}
+            </div>
+          )}
+
+          <button
+            disabled={isPending || gerenciaBlocked}
+            className="w-full py-2 bg-primary text-primary-foreground font-bold rounded-lg hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+          >
             {isPending ? 'Guardando...' : 'Guardar Usuario'}
           </button>
         </form>

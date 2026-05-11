@@ -757,17 +757,53 @@ export async function createUser(formData: FormData) {
   const name = formData.get('name') as string
   const email = formData.get('email') as string
   const roleIds = formData.getAll('roleIds') as string[]
+  const gerenciaIdRaw = formData.get('gerenciaId')
+  const gerenciaId = typeof gerenciaIdRaw === 'string' && gerenciaIdRaw.trim()
+    ? gerenciaIdRaw.trim()
+    : null
 
   if (!name || !email) throw new Error('Nombre y email son requeridos')
+
+  // Wave P13 + UI fix · regla de negocio: SOLO UN GERENTE_AREA activo
+  // por Gerencia. El check vive en server action (no en BD) porque la
+  // relación role↔user es M2M con catálogo de roles externo; un partial
+  // unique index sobre `User.gerenciaId` rompería para roles distintos
+  // a GERENTE_AREA que también quieran asociarse a gerencia.
+  const assignedRoles = await prisma.role.findMany({
+    where: { id: { in: roleIds } },
+    select: { name: true },
+  })
+  const isGerenteArea = assignedRoles.some((r) => r.name === 'GERENTE_AREA')
+
+  if (isGerenteArea) {
+    if (!gerenciaId) {
+      throw new Error('[GERENCIA_REQUIRED] Selecciona una gerencia para el Gerente de Área.')
+    }
+    const existing = await prisma.user.findFirst({
+      where: {
+        gerenciaId,
+        roles: { some: { role: { name: 'GERENTE_AREA' } } },
+      },
+      select: { id: true, name: true, email: true },
+    })
+    if (existing) {
+      throw new Error(
+        `[GERENCIA_ALREADY_HAS_MANAGER] La gerencia ya tiene un Gerente activo (${existing.name} · ${existing.email}). Revoca su rol primero antes de asignar otro.`,
+      )
+    }
+  }
 
   await prisma.user.create({
     data: {
       name,
       email,
+      // `gerenciaId` se persiste si el rol es GERENTE_AREA o si llegó
+      // del form para otros roles (visibilidad heredada futura).
+      gerenciaId: gerenciaId,
       roles: {
-        create: roleIds.map(roleId => ({ roleId }))
-      }
-    }
+        create: roleIds.map((roleId) => ({ roleId })),
+      },
+    },
   })
   await invalidateCatalog(TAG_CATALOG_USERS)
   revalidatePath('/workload')
