@@ -121,6 +121,8 @@ export async function subscribeUserToPush(
       : null;
 
   const persisted = await subscribeToPush({
+    // Wave R4-B · marcamos explícito el transporte para el dispatcher dual.
+    kind: "WEB_PUSH",
     endpoint: json.endpoint,
     keys: { p256dh: json.keys.p256dh, auth: json.keys.auth },
     userAgent: ua,

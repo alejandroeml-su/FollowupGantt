@@ -15,14 +15,17 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 vi.mock('server-only', () => ({}))
 
 const createNotification = vi.fn()
-const sendPushToUser = vi.fn()
+// Wave R4-B · el helper ahora usa el dispatcher dual en lugar de
+// `sendPushToUser` directo. El test mockea el dispatcher con la misma
+// shape DispatchPushResult { total, WEB_PUSH, APNS, FCM }.
+const dispatchPush = vi.fn()
 
 vi.mock('@/lib/actions/notifications', () => ({
   createNotification,
 }))
 
-vi.mock('@/lib/web-push/server', () => ({
-  sendPushToUser,
+vi.mock('@/lib/notifications/push-dispatcher', () => ({
+  dispatchPush,
 }))
 
 beforeEach(() => {
@@ -71,7 +74,12 @@ describe('dispatchNotificationWithPush', () => {
         link: '/list?taskId=t99',
       }),
     )
-    sendPushToUser.mockResolvedValue({ sent: 1, failed: 0, removed: [] })
+    dispatchPush.mockResolvedValue({
+      WEB_PUSH: { sent: 1, failed: 0, skipped: 0, removed: 0 },
+      APNS: { sent: 0, failed: 0, skipped: 0, removed: 0 },
+      FCM: { sent: 0, failed: 0, skipped: 0, removed: 0 },
+      total: { sent: 1, failed: 0, skipped: 0, removed: 0 },
+    })
 
     const { dispatchNotificationWithPush } = await import(
       '@/lib/notifications/dispatch-with-push'
@@ -89,8 +97,8 @@ describe('dispatchNotificationWithPush', () => {
     expect(out.push).toEqual({ sent: 1, failed: 0, removed: [] })
 
     expect(createNotification).toHaveBeenCalledOnce()
-    expect(sendPushToUser).toHaveBeenCalledOnce()
-    const [userId, payload] = sendPushToUser.mock.calls[0]
+    expect(dispatchPush).toHaveBeenCalledOnce()
+    const [userId, payload] = dispatchPush.mock.calls[0]
     expect(userId).toBe('u1')
     expect(payload).toMatchObject({
       title: 'Nueva tarea: Migrar PG',
@@ -114,13 +122,13 @@ describe('dispatchNotificationWithPush', () => {
 
     expect(out.notification.id).toBe('n2')
     expect(out.push).toBeNull()
-    expect(sendPushToUser).not.toHaveBeenCalled()
+    expect(dispatchPush).not.toHaveBeenCalled()
   })
 
   it('NO propaga errores del push — devuelve push: null y persiste la Notification', async () => {
     const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
     createNotification.mockResolvedValue(notifFixture({ id: 'n3' }))
-    sendPushToUser.mockRejectedValue(new Error('[NO_VAPID] keys ausentes'))
+    dispatchPush.mockRejectedValue(new Error('[NO_VAPID] keys ausentes'))
 
     const { dispatchNotificationWithPush } = await import(
       '@/lib/notifications/dispatch-with-push'
@@ -153,7 +161,7 @@ describe('dispatchNotificationWithPush', () => {
       }),
     ).rejects.toThrow(/INVALID_INPUT/)
 
-    expect(sendPushToUser).not.toHaveBeenCalled()
+    expect(dispatchPush).not.toHaveBeenCalled()
   })
 
   it('respeta pushOverrides para acortar body y cambiar URL', async () => {
@@ -166,7 +174,12 @@ describe('dispatchNotificationWithPush', () => {
         link: '/list?taskId=tabc#comment-xyz',
       }),
     )
-    sendPushToUser.mockResolvedValue({ sent: 0, failed: 0, skipped: 'no-subscriptions', removed: [] })
+    dispatchPush.mockResolvedValue({
+      WEB_PUSH: { sent: 0, failed: 0, skipped: 0, removed: 0 },
+      APNS: { sent: 0, failed: 0, skipped: 0, removed: 0 },
+      FCM: { sent: 0, failed: 0, skipped: 0, removed: 0 },
+      total: { sent: 0, failed: 0, skipped: 0, removed: 0 },
+    })
 
     const { dispatchNotificationWithPush } = await import(
       '@/lib/notifications/dispatch-with-push'
@@ -188,8 +201,8 @@ describe('dispatchNotificationWithPush', () => {
       },
     )
 
-    expect(sendPushToUser).toHaveBeenCalledOnce()
-    const [, payload] = sendPushToUser.mock.calls[0]
+    expect(dispatchPush).toHaveBeenCalledOnce()
+    const [, payload] = dispatchPush.mock.calls[0]
     expect(payload.title).toBe(
       'Comentario muy largo en una tarea con título extenso',
     )
@@ -208,7 +221,7 @@ describe('dispatchNotificationWithPush', () => {
     ).rejects.toThrow(/INVALID_INPUT/)
 
     expect(createNotification).not.toHaveBeenCalled()
-    expect(sendPushToUser).not.toHaveBeenCalled()
+    expect(dispatchPush).not.toHaveBeenCalled()
   })
 
   it('cuando link es null, el payload del push tampoco lleva url', async () => {
@@ -222,7 +235,12 @@ describe('dispatchNotificationWithPush', () => {
         body: null,
       }),
     )
-    sendPushToUser.mockResolvedValue({ sent: 1, failed: 0, removed: [] })
+    dispatchPush.mockResolvedValue({
+      WEB_PUSH: { sent: 1, failed: 0, skipped: 0, removed: 0 },
+      APNS: { sent: 0, failed: 0, skipped: 0, removed: 0 },
+      FCM: { sent: 0, failed: 0, skipped: 0, removed: 0 },
+      total: { sent: 1, failed: 0, skipped: 0, removed: 0 },
+    })
 
     const { dispatchNotificationWithPush } = await import(
       '@/lib/notifications/dispatch-with-push'
@@ -234,8 +252,8 @@ describe('dispatchNotificationWithPush', () => {
       title: 'Línea base capturada',
     })
 
-    expect(sendPushToUser).toHaveBeenCalledOnce()
-    const [, payload] = sendPushToUser.mock.calls[0]
+    expect(dispatchPush).toHaveBeenCalledOnce()
+    const [, payload] = dispatchPush.mock.calls[0]
     expect(payload.title).toBe('Línea base capturada')
     expect(payload.url).toBeUndefined()
     expect(payload.body).toBeUndefined()
