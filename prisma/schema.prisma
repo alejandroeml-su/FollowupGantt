@@ -1632,26 +1632,42 @@ model NotificationPreference {
 }
 
 // ─────────────────────────────────────────────────────────────
-// Módulo Web Push (Wave P6 · Equipo A4)
+// Módulo Web Push (Wave P6 · Equipo A4 · extendido Wave R4-B)
 //
-// Persistencia de suscripciones del navegador (PushManager.subscribe).
-// Cada `endpoint` es único por device-browser; el campo `keys` almacena
-// `{ p256dh, auth }` necesarios para `webpush.sendNotification`.
+// Persistencia de suscripciones del navegador (PushManager.subscribe) y
+// de dispositivos nativos Capacitor (APNs/FCM). Cada `endpoint` es único:
+//   - WEB_PUSH → URL del push service (FCM/Mozilla/Apple) + `keys`
+//     `{ p256dh, auth }` para cifrado E2E (RFC 8291).
+//   - APNS     → device token APNs (Apple Push Notification service).
+//     `keys` NULL — el cifrado lo gestiona TLS contra Apple.
+//   - FCM      → registration token Firebase Cloud Messaging. `keys` NULL.
 // `userAgent` es informativo (UI de "dispositivos activos") y `lastUsedAt`
 // se actualiza al enviar push correctamente para limpieza de inactivas.
 // FK a User con CASCADE: al borrar usuario se eliminan suscripciones.
 // ─────────────────────────────────────────────────────────────
+
+/// Wave R4-B · Tipo de transporte de la suscripción push.
+enum PushSubscriptionKind {
+  WEB_PUSH // browser estándar (VAPID + p256dh+auth)
+  APNS     // iOS Capacitor (device token APNs)
+  FCM      // Android Capacitor (registration token FCM)
+}
+
 model PushSubscription {
-  id         String    @id @default(uuid())
+  id         String               @id @default(uuid())
   userId     String
-  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  endpoint   String    @unique
-  keys       Json // { p256dh, auth }
+  user       User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  endpoint   String               @unique
+  /// Para WEB_PUSH: { p256dh, auth }. Para APNS/FCM: NULL.
+  keys       Json?
+  /// Wave R4-B · transporte del device. Default WEB_PUSH (backfill rows P6).
+  kind       PushSubscriptionKind @default(WEB_PUSH)
   userAgent  String?
-  createdAt  DateTime  @default(now())
+  createdAt  DateTime             @default(now())
   lastUsedAt DateTime?
 
   @@index([userId])
+  @@index([kind])
 }
 
 // ─────────────────────────────────────────────────────────────

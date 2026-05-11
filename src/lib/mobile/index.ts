@@ -1,4 +1,4 @@
-// Wave P21-A · Barrel mobile helpers. Tree-shakeable: el web puede
+// Wave P21-A + R4-B · Barrel mobile helpers. Tree-shakeable: el web puede
 // importar `isCapacitor` sin arrastrar el push-bridge.
 export {
   isCapacitor,
@@ -7,7 +7,8 @@ export {
   type MobilePlatform,
 } from './capacitor-bridge'
 export {
-  registerCapacitorPush,
-  ensureMobilePushIfAvailable,
-  type CapacitorPushRegistration,
+  registerMobilePush,
+  isCapacitorAvailable,
+  detectMobileKind,
+  type PushBridgeRegisterResult,
 } from './push-bridge'

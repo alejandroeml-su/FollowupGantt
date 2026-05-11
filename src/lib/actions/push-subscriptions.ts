@@ -15,7 +15,7 @@
 
 import { z } from 'zod'
 import prisma from '@/lib/prisma'
-import { Prisma } from '@prisma/client'
+import { Prisma, PushSubscriptionKind } from '@prisma/client'
 
 export type PushSubscriptionErrorCode = 'INVALID_INPUT' | 'UNAUTHORIZED'
 
@@ -25,22 +25,66 @@ function actionError(code: PushSubscriptionErrorCode, detail: string): never {
 
 // ───────────────────────── Schemas ─────────────────────────
 
-const subscriptionSchema = z.object({
-  endpoint: z.string().url(),
-  keys: z.object({
-    p256dh: z.string().min(1),
-    auth: z.string().min(1),
-  }),
-  /** UA opcional (informativo para UI de "dispositivos activos"). */
-  userAgent: z.string().max(500).nullish(),
-  /** Cuando hay sesión real, este campo se ignora; mientras no, lo usamos. */
-  userId: z.string().min(1).nullish(),
-})
+/**
+ * Wave R4-B · Schema dual web + native.
+ *
+ * Reglas de validación:
+ *   - `kind = 'WEB_PUSH'` (default) → `endpoint` debe ser URL, `keys`
+ *     obligatorias `{ p256dh, auth }`.
+ *   - `kind = 'APNS' | 'FCM'` → `endpoint` es device token (no URL).
+ *     `keys` se ignora (rows nativos las almacenan como NULL).
+ */
+const subscriptionSchema = z
+  .object({
+    kind: z.enum(['WEB_PUSH', 'APNS', 'FCM']).default('WEB_PUSH'),
+    endpoint: z.string().min(1).max(4096),
+    keys: z
+      .object({
+        p256dh: z.string().min(1),
+        auth: z.string().min(1),
+      })
+      .nullish(),
+    /** UA opcional (informativo para UI de "dispositivos activos"). */
+    userAgent: z.string().max(500).nullish(),
+    /** Cuando hay sesión real, este campo se ignora; mientras no, lo usamos. */
+    userId: z.string().min(1).nullish(),
+  })
+  .superRefine((val, ctx) => {
+    if (val.kind === 'WEB_PUSH') {
+      // Web Push: endpoint debe ser URL parseable.
+      try {
+        new URL(val.endpoint)
+      } catch {
+        ctx.addIssue({
+          code: 'custom',
+          message: 'WEB_PUSH endpoint debe ser una URL válida',
+          path: ['endpoint'],
+        })
+      }
+      if (!val.keys) {
+        ctx.addIssue({
+          code: 'custom',
+          message: 'WEB_PUSH requiere keys { p256dh, auth }',
+          path: ['keys'],
+        })
+      }
+    } else {
+      // APNS/FCM: el endpoint es un device token alfanumérico, NO URL.
+      if (val.endpoint.startsWith('http://') || val.endpoint.startsWith('https://')) {
+        ctx.addIssue({
+          code: 'custom',
+          message: `${val.kind} endpoint debe ser device token, no URL`,
+          path: ['endpoint'],
+        })
+      }
+    }
+  })
 
 export type SubscribeToPushInput = z.input<typeof subscriptionSchema>
 
 const unsubscribeSchema = z.object({
-  endpoint: z.string().url(),
+  // Aceptamos URLs (WEB_PUSH) y device tokens (APNS/FCM).
+  endpoint: z.string().min(1).max(4096),
   userId: z.string().min(1).nullish(),
 })
 
@@ -73,6 +117,7 @@ export type SerializedPushSubscription = {
   id: string
   userId: string
   endpoint: string
+  kind: PushSubscriptionKind
   userAgent: string | null
   createdAt: string
   lastUsedAt: string | null
@@ -96,17 +141,25 @@ export async function subscribeToPush(
   const data = parsed.data
   const userId = await resolveUserId(data.userId)
 
+  // APNS/FCM no usan p256dh/auth — guardamos null en `keys`.
+  const keysJson =
+    data.kind === 'WEB_PUSH'
+      ? (data.keys as unknown as Prisma.InputJsonValue)
+      : Prisma.JsonNull
+
   const row = await prisma.pushSubscription.upsert({
     where: { endpoint: data.endpoint },
     create: {
       userId,
       endpoint: data.endpoint,
-      keys: data.keys as unknown as Prisma.InputJsonValue,
+      kind: data.kind,
+      keys: keysJson,
       userAgent: data.userAgent ?? null,
     },
     update: {
       userId,
-      keys: data.keys as unknown as Prisma.InputJsonValue,
+      kind: data.kind,
+      keys: keysJson,
       userAgent: data.userAgent ?? null,
       lastUsedAt: new Date(),
     },
@@ -114,6 +167,7 @@ export async function subscribeToPush(
       id: true,
       userId: true,
       endpoint: true,
+      kind: true,
       userAgent: true,
       createdAt: true,
       lastUsedAt: true,
@@ -124,6 +178,7 @@ export async function subscribeToPush(
     id: row.id,
     userId: row.userId,
     endpoint: row.endpoint,
+    kind: row.kind,
     userAgent: row.userAgent,
     createdAt: row.createdAt.toISOString(),
     lastUsedAt: row.lastUsedAt ? row.lastUsedAt.toISOString() : null,
@@ -168,6 +223,7 @@ export async function listPushSubscriptions(
       id: true,
       userId: true,
       endpoint: true,
+      kind: true,
       userAgent: true,
       createdAt: true,
       lastUsedAt: true,
@@ -177,6 +233,7 @@ export async function listPushSubscriptions(
     id: r.id,
     userId: r.userId,
     endpoint: r.endpoint,
+    kind: r.kind,
     userAgent: r.userAgent,
     createdAt: r.createdAt.toISOString(),
     lastUsedAt: r.lastUsedAt ? r.lastUsedAt.toISOString() : null,

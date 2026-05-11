@@ -31,11 +31,29 @@ import {
   type CreateNotificationInput,
   type SerializedNotification,
 } from '@/lib/actions/notifications'
+// Wave R4-B · refactor: usa dispatcher dual (web + native) en lugar del
+// helper P6 `sendPushToUser`. Backward-compat: el `DispatchPushResult` se
+// mapea a un `SendPushResult`-like para no romper consumers del retorno.
 import {
-  sendPushToUser,
-  type SendPushResult,
-  type WebPushPayload,
-} from '@/lib/web-push/server'
+  dispatchPush,
+  type DispatchPushResult,
+} from '@/lib/notifications/push-dispatcher'
+import type { PushPayload as WebPushPayload } from '@/lib/notifications/push-senders'
+
+export type SendPushResult = {
+  sent: number
+  failed: number
+  removed: string[]
+  skipped?: 'no-vapid' | 'no-subscriptions'
+}
+
+function toLegacyResult(r: DispatchPushResult): SendPushResult {
+  return {
+    sent: r.total.sent,
+    failed: r.total.failed,
+    removed: [], // el dispatcher elimina internamente; ya no expone endpoints
+  }
+}
 
 export type DispatchNotificationErrorCode = 'INVALID_INPUT'
 
@@ -116,14 +134,14 @@ export async function dispatchNotificationWithPush(
   }
 
   try {
-    const result = await sendPushToUser(notification.userId, payload)
-    return { notification, push: result }
+    const result = await dispatchPush(notification.userId, payload)
+    return { notification, push: toLegacyResult(result) }
   } catch (err) {
     // Best-effort: la Notification ya quedó persistida. Loggeamos para
     // que el operador detecte VAPID mal configurado / endpoints caídos
     // de forma agregada en logs, sin romper el flujo de negocio.
     console.error(
-      '[dispatch-with-push] sendPushToUser falló — Notification persistida ok',
+      '[dispatch-with-push] dispatchPush falló — Notification persistida ok',
       err,
     )
     return { notification, push: null }
