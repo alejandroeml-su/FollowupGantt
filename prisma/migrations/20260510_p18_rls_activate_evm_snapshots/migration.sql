@@ -1,0 +1,48 @@
+-- Wave P18 hardening — Activación incremental RLS restrictivas (EVMSnapshot).
+--
+-- Aplica la política `EVMSnapshot_member_only` y DESACTIVA la
+-- open-policy heredada. Tabla con projectId directo.
+--
+-- Pre-requisito: las server actions de evm-snapshots.ts deben pasar por
+-- `withRlsContextFromSession()` para que `current_setting('app.user_id')`
+-- esté seteado durante la transacción. Sin eso las queries devolverían
+-- 0 filas (fail-safe).
+--
+-- Guard: aborta si app.is_project_member no existe (Wave P14d).
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_proc p
+    JOIN pg_namespace n ON n.oid = p.pronamespace
+    WHERE n.nspname = 'app' AND p.proname = 'is_project_member'
+  ) THEN
+    RAISE EXCEPTION
+      'Helper app.is_project_member no existe. Aplicar primero migración 20260509_p14d_rls_is_project_member.';
+  END IF;
+END$$;
+
+-- ── EVMSnapshot ──
+-- Nota: el nombre real del modelo Prisma es `EVMSnapshot` (sin @@map),
+-- por lo que Postgres ve la tabla como "EVMSnapshot". Limpiamos también
+-- variantes pasadas ("EvmSnapshot") por si alguna migración previa
+-- forward-looking creó una policy con typo.
+DROP POLICY IF EXISTS "EVMSnapshot_all" ON "EVMSnapshot";
+DROP POLICY IF EXISTS "EVMSnapshot_member_only" ON "EVMSnapshot";
+CREATE POLICY "EVMSnapshot_member_only" ON "EVMSnapshot"
+  FOR ALL
+  USING (
+    app.is_project_member(
+      current_setting('app.user_id', true),
+      "projectId"
+    )
+  )
+  WITH CHECK (
+    app.is_project_member(
+      current_setting('app.user_id', true),
+      "projectId"
+    )
+  );
+
+COMMENT ON POLICY "EVMSnapshot_member_only" ON "EVMSnapshot" IS
+  'Wave P18 hardening · activado 2026-05-10 · solo miembros del proyecto vía app.is_project_member(). Requiere withRlsContextFromSession en las server actions.';
