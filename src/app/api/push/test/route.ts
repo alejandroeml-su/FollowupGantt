@@ -12,7 +12,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-import { sendPushToUser } from '@/lib/web-push/server'
+import { dispatchPush } from '@/lib/notifications/push-dispatcher'
 import prisma from '@/lib/prisma'
 
 export const dynamic = 'force-dynamic'
@@ -50,7 +50,7 @@ export async function GET(req: NextRequest) {
   const url = searchParams.get('url') ?? '/notifications'
 
   try {
-    const result = await sendPushToUser(userId, { title, body, url })
+    const result = await dispatchPush(userId, { title, body, url })
     return NextResponse.json({ ok: true, userId, result })
   } catch (err) {
     return NextResponse.json(

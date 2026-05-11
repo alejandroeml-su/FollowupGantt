@@ -24,7 +24,8 @@ import { z } from 'zod'
 import { revalidatePath, revalidateTag, unstable_cache } from 'next/cache'
 import { Prisma, type NotificationType } from '@prisma/client'
 import prisma from '@/lib/prisma'
-import { sendPushToUser, type WebPushPayload } from '@/lib/web-push/server'
+import { dispatchPush } from '@/lib/notifications/push-dispatcher'
+import type { PushPayload as WebPushPayload } from '@/lib/notifications/push-senders'
 
 // ───────────────────────── Errores tipados ─────────────────────────
 
@@ -198,11 +199,14 @@ async function maybeSendPush(notification: {
   }
 
   try {
-    await sendPushToUser(notification.userId, payload)
+    // Wave R4-B · Dispatcher dual: routea por `kind` (WEB_PUSH/APNS/FCM).
+    // Para suscripciones P6 (todas WEB_PUSH por DEFAULT) el comportamiento
+    // es idéntico al `sendPushToUser` original.
+    await dispatchPush(notification.userId, payload)
   } catch (err) {
     // Best-effort: NO propagamos. La Notification ya quedó persistida.
     console.error(
-      '[notifications] sendPushToUser falló — Notification ya persistida',
+      '[notifications] dispatchPush falló — Notification ya persistida',
       err,
     )
   }
