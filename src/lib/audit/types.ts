@@ -189,6 +189,9 @@ export const KNOWN_AUDIT_ACTIONS = [
   'audit_stream.target_deleted',
   'audit_stream.target_tested',
   'audit_stream.delivery_retried',
+  // Wave P20-C — Brain Auto-Pilot (apply + rollback de proposals)
+  'auto_pilot.proposal_applied',
+  'auto_pilot.proposal_rolled_back',
 ] as const
 
 export type AuditAction = (typeof KNOWN_AUDIT_ACTIONS)[number]
@@ -333,6 +336,9 @@ export const ACTION_LABELS: Record<AuditAction, string> = {
   'audit_stream.target_deleted': 'Audit streaming · destino eliminado',
   'audit_stream.target_tested': 'Audit streaming · prueba ejecutada',
   'audit_stream.delivery_retried': 'Audit streaming · delivery reintentado',
+  // Wave P20-C
+  'auto_pilot.proposal_applied': 'Auto-Pilot · propuesta aplicada',
+  'auto_pilot.proposal_rolled_back': 'Auto-Pilot · propuesta revertida',
 }
 
 // ───────────────────────── Tipos de entidad ─────────────────────────

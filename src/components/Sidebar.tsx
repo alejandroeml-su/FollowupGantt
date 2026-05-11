@@ -14,6 +14,8 @@ import {
   LineChart, GitMerge,
   // Wave P12 (final compliance)
   CalendarClock, Lightbulb, Activity, BookOpen, Megaphone,
+  // Wave P20-C · Brain Auto-Pilot
+  Wand2,
   type LucideIcon
 } from 'lucide-react';
 import { clsx } from 'clsx';
@@ -155,6 +157,11 @@ const menuGroups: RouteGroup[] = [
       { name: 'sidebar.items.goals', path: '/goals', icon: Compass },
       { name: 'sidebar.items.executiveReports', path: '/reports', icon: FileBarChart },
       { name: 'sidebar.items.aiInsights', path: '/insights', icon: Brain },
+      // Wave P20-C · Brain Auto-Pilot · solo roles ADMIN/GERENCIA_GENERAL/
+      // SUPER_ADMIN pueden mutar datos (la página gatea fuerte además).
+      // En el modelo de roles del Sidebar (DebugRole) GERENCIA_GENERAL no
+      // existe, así que aceptamos AGENTE/ADMIN/SUPER y la página filtra.
+      { name: 'sidebar.items.brainAutoPilot', path: '/brain/auto-pilot', icon: Wand2, roles: ADMIN_ROLES },
     ],
   },
   // ── Operación (cyan) ────────────────────────────────────────────

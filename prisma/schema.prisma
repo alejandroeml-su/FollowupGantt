@@ -379,6 +379,11 @@ model User {
   /// Cascade al borrar usuario para no dejar vínculos huérfanos.
   ssoLinks SsoUserLink[]
 
+  /// Wave P20-C · Brain Auto-Pilot — runs aplicadas por este usuario.
+  /// SetNull en `AutoPilotRun.appliedById` preserva el run aunque el
+  /// actor sea eliminado (mismo criterio que `BrainStrategistInsight.ackBy`).
+  autoPilotRunsApplied AutoPilotRun[] @relation("AutoPilotRunAppliedBy")
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
@@ -2167,6 +2172,9 @@ model Workspace {
   /// reactivar el WS via `ensureDefaultPolicies`).
   retentionPolicies RetentionPolicy[]
 
+  /// Wave P20-C — Auto-Pilot history (cross-project optimization runs).
+  autoPilotRuns AutoPilotRun[]
+
   createdAt  DateTime  @default(now())
   updatedAt  DateTime  @updatedAt
   /// Wave P17-C — Soft delete. Workspaces archivados no aparecen en el
@@ -3925,4 +3933,41 @@ model RetentionPurgeRun {
   errorMessage String?
 
   @@index([policyId, startedAt(sort: Desc)])
+}
+
+// ─────────────────────────────────────────────────────────────
+// Wave P20-C · Brain Auto-Pilot
+//
+// Persiste cada apply de un AutoPilotProposal junto con su snapshot
+// completo y las ops inversas necesarias para revertirlo. El snapshot
+// permite trazar el "qué se aplicó" sin depender de los detectores
+// (heuristícas evolucionarán); las ops inversas son la única fuente
+// de verdad para el rollback.
+//
+// Workspace cascade: archivar el workspace borra su historial de
+// runs — no hay riesgo regulatorio porque la información viva en
+// AuditEvent también (`auto_pilot.proposal_applied`).
+// ─────────────────────────────────────────────────────────────
+
+model AutoPilotRun {
+  id          String    @id @default(uuid())
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  kind    String
+  summary String
+
+  /// Snapshot completo del `AutoPilotProposal` aplicado (incluye
+  /// `applyOps`, `preview` y `rationale`).
+  proposalSnapshot Json
+
+  appliedById String?
+  appliedBy   User?   @relation("AutoPilotRunAppliedBy", fields: [appliedById], references: [id], onDelete: SetNull)
+  appliedAt   DateTime @default(now())
+
+  rolledBackAt DateTime?
+  /// Lista de `AutoPilotOp` inversas (mismo shape JSON-serializable).
+  rollbackOps  Json?
+
+  @@index([workspaceId, appliedAt(sort: Desc)])
 }
