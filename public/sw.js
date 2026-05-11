@@ -22,7 +22,8 @@
 // v4 · 2026-05-11 (R4.0 GA) — sincronizado con bump del SW canónico
 // `/service-worker.js` (v2-r4-2026-05-11). Mismo motivo: invalidar
 // bundles Next.js + Server Action IDs del deploy previo.
-const VERSION = 'v4'
+// v5 · 2026-05-11 · sincronizado con SW canónico v4-no-html-cache.
+const VERSION = 'v5'
 const STATIC_CACHE = `fg-static-${VERSION}`
 const RUNTIME_CACHE = `fg-runtime-${VERSION}`
 const API_CACHE = `fg-api-${VERSION}`
@@ -152,9 +153,11 @@ self.addEventListener('fetch', (event) => {
     return
   }
 
+  // Navegación HTML: SIEMPRE red, NUNCA cache. Ver comentario equivalente
+  // en service-worker.js (fix React error #482 2026-05-11).
   if (request.mode === 'navigate') {
     event.respondWith(
-      networkFirst(request, RUNTIME_CACHE).catch(
+      fetch(request).catch(
         () =>
           new Response(
             '<!doctype html><meta charset="utf-8"><title>Sin conexión</title><body style="font-family:system-ui;padding:2rem"><h1>Sin conexión</h1><p>No hay red disponible. Vuelve a intentar cuando se restablezca.</p></body>',

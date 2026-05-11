@@ -39,7 +39,10 @@
 // los Server Action IDs cambiaron y el SW v1 servía bundles obsoletos
 // causando "This page couldn't load" en /brain y otras rutas con
 // llamadas a server actions (incidente reportado por Edwin).
-const VERSION = "v3-r4-2026-05-11-postmsg";
+// v4 · 2026-05-11 · fix navegación HTML siempre a red (causa real del
+// React error #482: cache HTML stale → bundle JS viejo → Server Action
+// IDs faltantes → use(rejected promise) → "This page couldn't load").
+const VERSION = "v4-r4-2026-05-11-no-html-cache";
 const STATIC_CACHE = `sync-static-${VERSION}`;
 const RUNTIME_CACHE = `sync-runtime-${VERSION}`;
 const API_CACHE = `sync-api-${VERSION}`;
@@ -231,12 +234,16 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
+  // NAVEGACIÓN HTML: SIEMPRE red, NUNCA cache. El cache HTML stale sirve
+  // bundles JS viejos cuyos Server Action IDs ya no existen en el deploy
+  // nuevo → React lanza error #482 (use(rejected promise) en Object.iC).
+  // Mejor mostrar página offline real que servir HTML obsoleto.
   if (request.mode === "navigate") {
     event.respondWith(
-      networkFirstWithTimeout(request, RUNTIME_CACHE, API_TIMEOUT_MS).catch(
+      fetch(request).catch(
         () =>
           new Response(
-            '<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Sync · Sin conexion</title><style>body{font-family:system-ui;background:#0f0f17;color:#e2e8f0;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;margin:0;padding:2rem;text-align:center}h1{color:#4f46e5}button{background:#4f46e5;color:#fff;border:none;padding:.6rem 1.2rem;border-radius:.5rem;cursor:pointer;font-size:1rem;margin-top:1rem}</style></head><body><h1>Sync · Sin conexion</h1><p>No hay red disponible. Tus datos se sincronizaran cuando vuelvas a estar en linea.</p><button onclick="location.reload()">Reintentar</button></body></html>',
+            '<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Sync · Sin conexion</title><style>body{font-family:system-ui;background:#0f0f17;color:#e2e8f0;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;margin:0;padding:2rem;text-align:center}h1{color:#4f46e5}button{background:#4f46e5;color:#fff;border:none;padding:.6rem 1.2rem;border-radius:.5rem;cursor:pointer;font-size:1rem;margin-top:1rem}</style></head><body><h1>Sync · Sin conexion</h1><p>No hay red disponible. Vuelve a intentar cuando se restablezca.</p><button onclick="location.reload()">Reintentar</button></body></html>',
             {
               status: 503,
               headers: { "Content-Type": "text/html; charset=utf-8" },
