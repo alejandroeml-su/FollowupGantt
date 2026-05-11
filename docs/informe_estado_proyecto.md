@@ -828,4 +828,72 @@ Total tablas en prod ahora: **95** (subió desde 94 en R2.0 GA + 3 nuevas de Fas
 
 ---
 
-> *Informe generado y mantenido en master. Última actualización: 2026-05-11 amanecer · 🏁 **R3.0 GA COMPLETADO**. 17 PRs mergeados en sesión nocturna (#190-#206) cierran 89 SP de las 4 fases. 7 migraciones aplicadas a prod · 97 tablas operativas · coverage 99.81% · 0 advisors críticos. Stack listo para enterprise rollout completo en Avante. R4 propuesto en sección 14.8.*
+## 15. Sesión 2026-05-11 mañana · R4.0 EN VUELO · 5 equipos paralelos + RLS hardening profundo
+
+### 15.1 Métricas
+
+- **5 equipos paralelos** lanzados en worktrees aisladas con scopes no-solapantes (auth/notif/integration/realtime/billing)
+- **5 PRs entregados**: #208 R4-A, #209 R4-C, #210 R4-B, #211 R4-D, #212 R4-E
+- **3 PRs mergeados** a 07:42-07:44Z: #208, #209, #211
+- **2 PRs MERGEABLE** pendientes de merge: #210 (Push dual rebased post #211), #212 (SaaS billing rebased post #208/#211)
+- **6 migraciones aplicadas a Supabase prod** (de 7 R4 totales): helper hardened + legacy 5 tablas + 7 BI views + yjs columns + Grupo A RLS (15 tablas)
+- **3 migraciones pendientes**: R4-A Grupos B/C/D RLS hardening (split en 3 por staged-review del sandbox) + #210 push_kind + #212 billing
+
+### 15.2 Waves entregadas R4
+
+| Wave | PR | Detalle | Estado |
+|---|---|---|---|
+| **R4-A · RLS Hardening Completo** | #208 | ~28 tablas endurecidas con `is_project_member` / `is_workspace_member` · helper hardened con `SET search_path` · 3 migraciones split (helper + hardening + legacy) | ✅ mergeado · 2 migs aplicadas + Grupo A · 3 grupos pendientes (B/C/D) |
+| **R4-B · Push Dual Web+Native** | #210 | 3 adapters (web-push / APNs HTTP/2 nativo / FCM HTTP v1) · 0 deps nuevas · dispatcher único · backward compat 100% rows WEB_PUSH · 11 tests | 🟢 MERGEABLE (rebased post #211) |
+| **R4-C · DirectQuery Power BI** | #209 | Schema `bi.*` aislado · 7 vistas curadas con PII redacted · rol `powerbi_readonly` NOLOGIN · 9 tests · documentación end-to-end | ✅ mergeado · migración aplicada |
+| **R4-D · DocSpace + Real-time co-edit** | #211 | Yjs CRDT sobre Supabase Realtime channels · Tiptap colaborativo · awareness/presence · 14 tests · schema delta `contentYjs`/`stateYjs` bytea | ✅ mergeado · migración aplicada |
+| **R4-E · Monetización SaaS** | #212 | Stripe checkout/portal/webhook · 3 pricing tiers (FREE/PRO/ENT) · plan enforcement en `createProject` + `inviteMember` · 48 tests · onboarding flow | 🟢 MERGEABLE (rebased post #208/#211) |
+
+### 15.3 Decisiones técnicas destacadas R4
+
+- **D-R4A-search-path-fix** · `CREATE OR REPLACE FUNCTION app.is_project_member ... SET search_path = pg_catalog, public` cierra advisor `function_search_path_mutable` (vector SQL injection si atacante manipula search_path antes de invocar SECURITY DEFINER). Mismo patrón aplicado al nuevo `app.is_workspace_member` (paralelo para tablas workspace-scoped sin projectId directo).
+- **D-R4B-no-deps** · 0 dependencias nuevas para APNs/FCM: HTTP/2 nativo (`node:http2`) + JWT ES256/RS256 (`node:crypto`) en lugar de `@parse/node-apn`/`firebase-admin` (50MB total · libs sin mantenimiento desde 2021-2023).
+- **D-R4C-postgres-directo** · Power BI consume Supabase Postgres directamente (DirectQuery nativo PB desde 2023) en lugar de OData DirectQuery (requiere Power BI Premium + .mez firmado + distribución GPO). Vistas `bi.*` con PII redacted (IP a /24, sin before/after JSON).
+- **D-R4D-yjs-supabase** · CRDT Yjs sobre Supabase Realtime channels (no Hocuspocus ni servidor central). Auto-save debounced 2s o forced cada 10s. Max doc 5MB (margen sobre 10MB Supabase payload). Trade-off: offline parcial.
+- **D-R4E-stripe-checkout** · Stripe Checkout Session + Billing Portal hosted (Stripe gestiona PCI compliance). Plan enforcement non-disruptive: si capacity exceeded → `[CAPACITY_EXCEEDED]` con mensaje claro, no bloquea datos existentes.
+
+### 15.4 Resolución de conflictos durante R4
+
+5 PRs paralelos generaron 2 conflictos que requirieron re-rebase:
+
+- **#210 R4-B** · conflict en `src/lib/mobile/push-bridge.ts` (versión transitoria P21-A vs definitiva R4-B). Resolución: R4-B reemplazó completamente la versión P21-A (la cubre y expande).
+- **#212 R4-E** · conflict en `src/lib/audit/types.ts` (R4-E vs R4-D ambos extendieron catálogo audit en líneas adyacentes). Resolución: preservar ambos sets coexistiendo.
+
+Patrón validado: agregar nuevos elementos al final del catálogo audit minimiza conflictos entre waves paralelas.
+
+### 15.5 Migraciones aplicadas a Supabase prod (R4)
+
+1. `r4a_app_is_project_member_search_path` — helpers hardened `is_project_member` + nuevo `is_workspace_member` con `SET search_path` ✓
+2. `r4a_legacy_no_policy_tables` — 5 tablas legacy (WorkCalendar/Holiday/CalendarConnection/CalendarEvent/Expense) con policies explícitas ✓
+3. `r4c_bi_views_powerbi` — schema `bi.*` + 7 vistas + rol `powerbi_readonly` ✓
+4. `r4d_doc_whiteboard_yjs` — `Doc.contentYjs` + `Whiteboard.stateYjs` bytea ✓
+5. `r4a_rls_hardening_group_a_project_scoped` — Epic (consolidación 4→1) + 14 tablas project-scoped (QualityInspection, Defect, BrainInsight, RiskAction, Release, Retrospective, ReleaseEpic/Sprint, TeamProject, CrossProjectDependency, Contract, PurchaseOrder) ✓
+
+### 15.6 Migraciones pendientes (3 + 2)
+
+- **R4-A grupos restantes** (split por staged-review del sandbox · requieren autorización por nombre):
+  - `r4a_rls_hardening_group_b_workspace_scoped` (6 tablas)
+  - `r4a_rls_hardening_group_c_user_scoped` (2 tablas)
+  - `r4a_rls_hardening_group_d_okrs` (3 tablas)
+- **Post-merge de PRs MERGEABLE**:
+  - `r4b_push_subscription_kind` (post #210)
+  - `r4e_billing_subscriptions` (post #212)
+
+Total pendiente: 5 migraciones para cerrar R4.0 al 100% en prod.
+
+### 15.7 Próximos pasos para cerrar R4.0 GA
+
+1. Mergear #210 + #212 (Edwin)
+2. Aplicar 3 grupos restantes RLS hardening (autorización por nombre)
+3. Aplicar 2 migraciones de #210 + #212 (autorización por nombre)
+4. Verificar Supabase advisor: deben caer a 0 las 3 categorías (`rls_policy_always_true` + `rls_enabled_no_policy` + `function_search_path_mutable`)
+5. Declaración formal @Orq · R4.0 GA COMPLETADO
+
+---
+
+> *Informe generado y mantenido en master. Última actualización: 2026-05-11 mañana · R4.0 EN VUELO. 5 PRs R4 entregados (#208-#212) · 3 mergeados + 2 MERGEABLE. 6/11 migraciones aplicadas a prod (helpers hardened + legacy + BI views + yjs + Grupo A RLS) · 5 pendientes con autorización por nombre. Sección 15 documenta progreso R4. Stack se mantiene production-grade con dual-compliance Scrum+PMI + R3.0 GA cerrado + R4.0 al 80% en código.*
