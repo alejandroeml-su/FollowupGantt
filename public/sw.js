@@ -19,7 +19,10 @@
 // forzando a clientes existentes a descartar bundles viejos. Esto desbloquea
 // el bug `Failed to find Server Action ... older or newer deployment` que
 // se producía cuando el SW servía chunks Next.js de un deploy previo.
-const VERSION = 'v3'
+// v4 · 2026-05-11 (R4.0 GA) — sincronizado con bump del SW canónico
+// `/service-worker.js` (v2-r4-2026-05-11). Mismo motivo: invalidar
+// bundles Next.js + Server Action IDs del deploy previo.
+const VERSION = 'v4'
 const STATIC_CACHE = `fg-static-${VERSION}`
 const RUNTIME_CACHE = `fg-runtime-${VERSION}`
 const API_CACHE = `fg-api-${VERSION}`
