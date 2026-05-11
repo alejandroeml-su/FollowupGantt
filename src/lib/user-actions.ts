@@ -10,9 +10,10 @@ export async function getAllUsersWithRoles() {
   return prisma.user.findMany({
     include: {
       roles: { include: { role: true } },
-      teams: { include: { team: true } }
+      teams: { include: { team: true } },
+      gerencia: { select: { id: true, name: true } },
     },
-    orderBy: { name: 'asc' }
+    orderBy: [{ archivedAt: 'asc' }, { name: 'asc' }],
   })
 }
 

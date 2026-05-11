@@ -810,6 +810,92 @@ export async function createUser(formData: FormData) {
   revalidatePath('/settings/users')
 }
 
+export async function updateUser(formData: FormData) {
+  const id = formData.get('id') as string
+  const name = formData.get('name') as string
+  const email = formData.get('email') as string
+  const roleIds = formData.getAll('roleIds') as string[]
+  const gerenciaIdRaw = formData.get('gerenciaId')
+  const gerenciaId =
+    typeof gerenciaIdRaw === 'string' && gerenciaIdRaw.trim()
+      ? gerenciaIdRaw.trim()
+      : null
+
+  if (!id) throw new Error('[INVALID_INPUT] id requerido')
+  if (!name || !email) throw new Error('[INVALID_INPUT] Nombre y email son requeridos')
+
+  const assignedRoles = await prisma.role.findMany({
+    where: { id: { in: roleIds } },
+    select: { name: true },
+  })
+  const isGerenteArea = assignedRoles.some((r) => r.name === 'GERENTE_AREA')
+
+  if (isGerenteArea) {
+    if (!gerenciaId) {
+      throw new Error('[GERENCIA_REQUIRED] Selecciona una gerencia para el Gerente de Área.')
+    }
+    const existing = await prisma.user.findFirst({
+      where: {
+        id: { not: id },
+        gerenciaId,
+        roles: { some: { role: { name: 'GERENTE_AREA' } } },
+      },
+      select: { id: true, name: true, email: true },
+    })
+    if (existing) {
+      throw new Error(
+        `[GERENCIA_ALREADY_HAS_MANAGER] La gerencia ya tiene un Gerente activo (${existing.name} · ${existing.email}). Revoca su rol primero antes de asignar otro.`,
+      )
+    }
+  }
+
+  // Reemplaza roles · M2M con catálogo externo, más simple deleteMany + create.
+  await prisma.$transaction([
+    prisma.userRole.deleteMany({ where: { userId: id } }),
+    prisma.user.update({
+      where: { id },
+      data: {
+        name,
+        email,
+        gerenciaId,
+        roles: {
+          create: roleIds.map((roleId) => ({ roleId })),
+        },
+      },
+    }),
+  ])
+
+  await invalidateCatalog(TAG_CATALOG_USERS)
+  revalidatePath('/settings/users')
+  revalidatePath('/workload')
+}
+
+export async function deactivateUser(formData: FormData) {
+  const id = formData.get('id') as string
+  if (!id) throw new Error('[INVALID_INPUT] id requerido')
+
+  await prisma.user.update({
+    where: { id },
+    data: { archivedAt: new Date() },
+  })
+  await invalidateCatalog(TAG_CATALOG_USERS)
+  revalidatePath('/settings/users')
+  revalidatePath('/workload')
+}
+
+export async function reactivateUser(formData: FormData) {
+  const id = formData.get('id') as string
+  if (!id) throw new Error('[INVALID_INPUT] id requerido')
+
+  await prisma.user.update({
+    where: { id },
+    data: { archivedAt: null },
+  })
+  await invalidateCatalog(TAG_CATALOG_USERS)
+  revalidatePath('/settings/users')
+  revalidatePath('/workload')
+}
+
 // =============================================
 // CRUD: ROLES Y PERMISOS
 // =============================================
