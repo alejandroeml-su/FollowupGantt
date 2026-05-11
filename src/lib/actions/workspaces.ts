@@ -53,6 +53,8 @@ import {
   requireWorkspaceManager,
 } from '@/lib/auth/check-workspace-access'
 import { ensureDefaultPolicies } from '@/lib/retention/defaults'
+// Wave R4-E · Plan enforcement (FREE: 3 users, PRO: 25, ENT: unlimited).
+import { requireMemberCapacity } from '@/lib/billing/enforce'
 
 // ───────────────────────── Errores tipados ─────────────────────────
 
@@ -311,6 +313,10 @@ export async function inviteMember(input: {
   const { workspaceId, email, role } = parsed.data
 
   const { user } = await requireWorkspaceManager(workspaceId)
+
+  // Wave R4-E · Plan enforcement — bloquea si el workspace está al tope
+  // de su tier (FREE=3, PRO=25, ENT=∞). Lanza `[CAPACITY_EXCEEDED]`.
+  await requireMemberCapacity(workspaceId)
 
   // Si el email corresponde a un usuario que YA es miembro, lanzamos
   // ALREADY_MEMBER (UX feedback rápido, evita ruido de invitaciones).

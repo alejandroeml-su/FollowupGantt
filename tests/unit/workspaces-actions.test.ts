@@ -113,6 +113,23 @@ vi.mock('@/lib/auth/check-workspace-access', () => ({
 
 vi.mock('server-only', () => ({}))
 
+// Wave R4-E · Mock enforcement billing — no-op para no romper tests
+// existentes que ya validan el flujo de inviteMember sin considerar el
+// gating por tier. Tests específicos de enforce viven en billing-enforce.test.ts.
+vi.mock('@/lib/billing/enforce', () => ({
+  requireMemberCapacity: vi.fn(async () => undefined),
+  requireProjectCapacity: vi.fn(async () => undefined),
+  requireFeature: vi.fn(async () => undefined),
+  requireCapacity: vi.fn(async () => undefined),
+  requireBrainCapacity: vi.fn(async () => undefined),
+}))
+
+// `ensureDefaultPolicies` también se llama en createWorkspace; stub para no
+// disparar lecturas de prisma en RetentionPolicy.
+vi.mock('@/lib/retention/defaults', () => ({
+  ensureDefaultPolicies: vi.fn(async () => undefined),
+}))
+
 // ─────────────────────────── Reset ───────────────────────────
 
 beforeEach(() => {
