@@ -1,5 +1,3 @@
-import 'server-only'
-
 /**
  * Definiciones de roles y permisos básicos.
  *

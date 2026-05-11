@@ -183,6 +183,12 @@ export const KNOWN_AUDIT_ACTIONS = [
   'retention.policy.updated',
   'retention.purge.run.started',
   'retention.purge.run.completed',
+  // R3-E — Audit Streaming a SIEM externos (Splunk / Datadog / generic webhook).
+  'audit_stream.target_created',
+  'audit_stream.target_updated',
+  'audit_stream.target_deleted',
+  'audit_stream.target_tested',
+  'audit_stream.delivery_retried',
 ] as const
 
 export type AuditAction = (typeof KNOWN_AUDIT_ACTIONS)[number]
@@ -321,6 +327,12 @@ export const ACTION_LABELS: Record<AuditAction, string> = {
   'retention.policy.updated': 'Política de retención actualizada',
   'retention.purge.run.started': 'Ciclo de purge iniciado',
   'retention.purge.run.completed': 'Ciclo de purge completado',
+  // R3-E
+  'audit_stream.target_created': 'Audit streaming · destino creado',
+  'audit_stream.target_updated': 'Audit streaming · destino actualizado',
+  'audit_stream.target_deleted': 'Audit streaming · destino eliminado',
+  'audit_stream.target_tested': 'Audit streaming · prueba ejecutada',
+  'audit_stream.delivery_retried': 'Audit streaming · delivery reintentado',
 }
 
 // ───────────────────────── Tipos de entidad ─────────────────────────

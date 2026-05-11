@@ -2567,6 +2567,80 @@ model AuditEvent {
 }
 
 // ─────────────────────────────────────────────────────────────
+// R3.0 Fase 2 · Equipo R3-E · Audit Streaming a SIEM externos
+//
+// Permite reenviar cada `AuditEvent` persistido a uno o más SIEM
+// (Splunk HEC, Datadog Logs API v2 o un webhook genérico HMAC) por
+// workspace. El flujo es:
+//   1. `recordAuditEvent` persiste la fila en `AuditEvent` (path crítico).
+//   2. Side-channel "no bloqueante": `enqueueEvent` en la cola in-memory
+//      del engine. Si la cola está llena → drop con warning.
+//   3. Un cron (`/api/cron/audit-stream`, default 5 min) llama
+//      `flushBatches()` que agrupa por target, formatea con el adapter
+//      correspondiente y persiste un `AuditStreamDelivery` por batch.
+//   4. Retries exponenciales (1s, 5s, 30s). Tras 3 fallos, marca el
+//      delivery como `FAILED` y propaga el último error al target.
+//
+// Decisión D-R3E-1: cola in-memory (no Redis) — la pérdida en restart
+// es aceptable porque el `AuditEvent` ya está persistido y la cola sólo
+// es buffer de delivery. P22 endurecerá con Redis si la presión sube.
+// Decisión D-R3E-2: open-policy RLS inicial; P18+ endurecerá per-workspace.
+// Decisión D-R3E-3: el `secret` HMAC se guarda en plano (es el patrón del
+// repo para `WebhookSubscription.secret`). Hardening con KMS queda para R4.
+// ─────────────────────────────────────────────────────────────
+
+enum AuditStreamKind {
+  SPLUNK
+  DATADOG
+  GENERIC_WEBHOOK
+}
+
+enum AuditStreamDeliveryStatus {
+  PENDING
+  SUCCESS
+  FAILED
+  RETRYING
+}
+
+model AuditStreamTarget {
+  id          String          @id @default(uuid())
+  workspaceId String
+  kind        AuditStreamKind
+  endpoint    String
+  secret      String
+  batchSize   Int             @default(100)
+  enabled     Boolean         @default(true)
+
+  lastDeliveryAt DateTime?
+  lastError      String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  deliveries AuditStreamDelivery[]
+
+  @@index([workspaceId, enabled])
+}
+
+model AuditStreamDelivery {
+  id        String                    @id @default(uuid())
+  targetId  String
+  batchId   String
+  count     Int
+  status    AuditStreamDeliveryStatus @default(PENDING)
+  attempt   Int                       @default(0)
+  lastError String?
+
+  createdAt   DateTime  @default(now())
+  deliveredAt DateTime?
+
+  target AuditStreamTarget @relation(fields: [targetId], references: [id], onDelete: Cascade)
+
+  @@index([targetId, status, createdAt(sort: Desc)])
+  @@index([batchId])
+}
+
+// ─────────────────────────────────────────────────────────────
 // Módulo Integraciones externas (Ola P4 · Equipo P4-5)
 //
 // Soporta tres tipos de integración:
