@@ -374,6 +374,11 @@ model User {
   // preserva el insight aunque el actor sea eliminado.
   strategistInsightsAcked BrainStrategistInsight[] @relation("StrategistInsightAck")
 
+  /// R3.0 Fase 2 · SSO/SAML — Vínculos a IdP externos (un user puede
+  /// estar federado por varios providers, ej. SAML corporativo + Google).
+  /// Cascade al borrar usuario para no dejar vínculos huérfanos.
+  ssoLinks SsoUserLink[]
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
@@ -2152,6 +2157,10 @@ model Workspace {
   /// Wave P17-C — Plantillas globales clonadas/asociadas a este workspace.
   globalTemplates GlobalTemplate[]
 
+  /// R3.0 Fase 2 · SSO/SAML — Proveedores de identidad SAML por workspace
+  /// (un workspace puede federar contra Azure AD + Okta simultáneamente).
+  ssoProviders SsoProvider[]
+
   createdAt  DateTime  @default(now())
   updatedAt  DateTime  @updatedAt
   /// Wave P17-C — Soft delete. Workspaces archivados no aparecen en el
@@ -3735,4 +3744,102 @@ model BrainStrategistInsight {
 
   @@index([workspaceId, kind, status])
   @@index([severity, createdAt(sort: Desc)])
+}
+
+// ─────────────────────────────────────────────────────────────
+// R3.0 · Fase 2 · SSO / SAML 2.0 (R3-D)
+//
+// Federación enterprise contra IdPs externos (Azure AD, Okta, ADFS,
+// GoogleWorkspace SAML). El proyecto mantiene auth propio HMAC en
+// `src/lib/auth/session.ts`; SSO se integra creando una sesión nativa
+// tras validar el assertion SAML.
+//
+// Decisiones:
+//   D-R3D-1: `SsoProvider.kind` se modela como enum extensible. Por
+//            ahora sólo SAML, dejamos espacio para OIDC en R3.1 sin
+//            migración estructural.
+//   D-R3D-2: `x509Cert` se guarda en plano (no cifrado at-rest). Es la
+//            **clave pública** del IdP — no es secreto. La privada
+//            nunca toca este sistema.
+//   D-R3D-3: `attributeMap` JSON `{ email: string, groups?: string,
+//            name?: string, roleMap?: Record<string,WorkspaceRole> }`.
+//            Permite que cada IdP exponga atributos con nombres
+//            distintos (ej. http://schemas.xmlsoap.org/ws/2005/05/
+//            identity/claims/emailaddress) y mapearlos a campos
+//            internos.
+//   D-R3D-4: `SsoUserLink.externalId` es el `NameID` o `subject` del
+//            assertion SAML. Composite UNIQUE con `providerId` para
+//            permitir el mismo NameID en distintos IdPs.
+// ─────────────────────────────────────────────────────────────
+
+/// R3.0 · Fase 2 — Tipo de IdP. Sólo SAML 2.0 en esta iteración.
+enum SsoProviderKind {
+  SAML
+}
+
+model SsoProvider {
+  id          String    @id @default(uuid())
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  /// Etiqueta human-readable visible en la lista admin. Ej. "Azure AD Avante".
+  name String
+
+  /// Tipo de IdP (SAML). Enum extensible para OIDC futuro.
+  kind SsoProviderKind @default(SAML)
+
+  /// EntityID del IdP — URI única tal cual la expone el metadata.
+  entityId String
+
+  /// URL de Single Sign-On del IdP (HTTP-Redirect o HTTP-POST binding).
+  ssoUrl String
+
+  /// Certificado X.509 público del IdP (PEM, sin headers BEGIN/END opcional).
+  /// Usado para verificar la firma del Assertion.
+  x509Cert String @db.Text
+
+  /// Mapeo de atributos SAML → campos internos. JSON shape documentado
+  /// en `src/lib/sso/types.ts` (`SsoAttributeMap`).
+  attributeMap Json
+
+  /// Toggle para deshabilitar el provider sin borrarlo (mantener auditoría).
+  enabled Boolean @default(true)
+
+  /// Sesiones federadas creadas mediante este provider (audit/forensic).
+  links SsoUserLink[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  /// Un workspace no puede tener dos providers con el mismo entityId
+  /// (mismo IdP duplicado). Distintos workspaces sí pueden compartir
+  /// entityId (mismo IdP federando varios tenants Sync).
+  @@unique([workspaceId, entityId])
+  @@index([workspaceId])
+  @@index([enabled])
+}
+
+model SsoUserLink {
+  id         String      @id @default(uuid())
+  userId     String
+  user       User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  providerId String
+  provider   SsoProvider @relation(fields: [providerId], references: [id], onDelete: Cascade)
+
+  /// NameID / subject del assertion SAML. Identifica al usuario en el IdP.
+  externalId String
+
+  /// Último login federado exitoso vía este vínculo. Útil para detectar
+  /// usuarios "huérfanos" que ya no pueden autenticarse.
+  lastLoginAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  /// Un (provider, externalId) sólo puede mapear a UN user (defensa contra
+  /// múltiples vínculos colisionantes). Un user sí puede tener varios
+  /// providerId distintos (multi-IdP).
+  @@unique([providerId, externalId])
+  @@unique([providerId, userId])
+  @@index([userId])
 }
