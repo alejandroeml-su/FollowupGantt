@@ -17,7 +17,7 @@
 import { useMemo, useState, useTransition } from 'react'
 import { ShieldCheck, ChevronDown, ChevronRight, X, Trash2 } from 'lucide-react'
 import { formatDistanceToNow, format } from 'date-fns'
-import { es } from 'date-fns/locale'
+import { es, enUS } from 'date-fns/locale'
 import { clsx } from 'clsx'
 import {
   queryAuditEvents,
@@ -29,6 +29,7 @@ import {
   type SerializedAuditEvent,
 } from '@/lib/audit/types'
 import { AuditFilters, EMPTY_FILTERS, type AuditFiltersValue } from './AuditFilters'
+import { useTranslation } from '@/lib/i18n/use-translation'
 
 type Props = {
   initialItems: SerializedAuditEvent[]
@@ -49,17 +50,20 @@ function actionLabel(action: string): string {
   return action
 }
 
-function formatAbsolute(iso: string): string {
+function formatAbsolute(iso: string, locale: 'es' | 'en' = 'es'): string {
   try {
-    return format(new Date(iso), "d 'de' MMM yyyy · HH:mm:ss", { locale: es })
+    const dateLocale = locale === 'en' ? enUS : es
+    const pattern = locale === 'en' ? "MMM d, yyyy · HH:mm:ss" : "d 'de' MMM yyyy · HH:mm:ss"
+    return format(new Date(iso), pattern, { locale: dateLocale })
   } catch {
     return iso
   }
 }
 
-function formatRelative(iso: string): string {
+function formatRelative(iso: string, locale: 'es' | 'en' = 'es'): string {
   try {
-    return formatDistanceToNow(new Date(iso), { addSuffix: true, locale: es })
+    const dateLocale = locale === 'en' ? enUS : es
+    return formatDistanceToNow(new Date(iso), { addSuffix: true, locale: dateLocale })
   } catch {
     return iso
   }
@@ -96,6 +100,7 @@ export function AuditLogClient({
   entityTypes,
   canPurge,
 }: Props) {
+  const { t, locale } = useTranslation()
   const [filters, setFilters] = useState<AuditFiltersValue>(EMPTY_FILTERS)
   const [items, setItems] = useState<SerializedAuditEvent[]>(initialItems)
   const [nextCursor, setNextCursor] = useState<string | null>(initialNextCursor)
@@ -121,7 +126,7 @@ export function AuditLogClient({
         setItems(res.items)
         setNextCursor(res.nextCursor)
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'Error al consultar eventos')
+        setError(err instanceof Error ? err.message : t('pages.audit.errorQuery'))
       }
     })
   }
@@ -136,7 +141,7 @@ export function AuditLogClient({
         setItems(res.items)
         setNextCursor(res.nextCursor)
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'Error al consultar eventos')
+        setError(err instanceof Error ? err.message : t('pages.audit.errorQuery'))
       }
     })
   }
@@ -153,7 +158,7 @@ export function AuditLogClient({
         setItems((prev) => [...prev, ...res.items])
         setNextCursor(res.nextCursor)
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'Error al cargar más eventos')
+        setError(err instanceof Error ? err.message : t('pages.audit.errorLoadMore'))
       }
     })
   }
@@ -170,7 +175,7 @@ export function AuditLogClient({
         const preview = await purgeOldAuditEvents({ dryRun: true })
         setPurgePreview({ count: preview.count, cutoffIso: preview.cutoffIso })
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'Error al estimar purge')
+        setError(err instanceof Error ? err.message : t('pages.audit.errorPurgeEstimate'))
       }
     })
   }
@@ -187,9 +192,9 @@ export function AuditLogClient({
         })
         setItems(refresh.items)
         setNextCursor(refresh.nextCursor)
-        setError(`Purga completada: ${res.count} eventos eliminados`)
+        setError(t('pages.audit.purgeDone', { count: res.count }))
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'Error al ejecutar purge')
+        setError(err instanceof Error ? err.message : t('pages.audit.errorPurgeExecute'))
       }
     })
   }
@@ -201,9 +206,9 @@ export function AuditLogClient({
         <div className="flex items-center gap-3">
           <ShieldCheck className="h-5 w-5 text-primary" aria-hidden="true" />
           <div>
-            <h1 className="text-lg font-semibold text-foreground">Auditoría</h1>
+            <h1 className="text-lg font-semibold text-foreground">{t('pages.audit.headerTitle')}</h1>
             <p className="text-[12px] text-muted-foreground">
-              {items.length} eventos · retention 90 días
+              {t('pages.audit.headerSubtitle', { count: items.length })}
             </p>
           </div>
         </div>
@@ -241,6 +246,7 @@ export function AuditLogClient({
             isPending={isPending}
             onConfirm={handlePurgeConfirm}
             onCancel={() => setPurgePreview(null)}
+            locale={locale}
           />
         )}
 
@@ -251,11 +257,11 @@ export function AuditLogClient({
               <thead className="sticky top-0 z-10 bg-muted/40 text-[11px] uppercase tracking-wider text-muted-foreground">
                 <tr>
                   <th className="w-6 px-3 py-2"></th>
-                  <th className="px-3 py-2">Fecha</th>
-                  <th className="px-3 py-2">Actor</th>
-                  <th className="px-3 py-2">Acción</th>
-                  <th className="px-3 py-2">Entidad</th>
-                  <th className="px-3 py-2">IP</th>
+                  <th className="px-3 py-2">{t('pages.audit.colDate')}</th>
+                  <th className="px-3 py-2">{t('pages.audit.colActor')}</th>
+                  <th className="px-3 py-2">{t('pages.audit.colAction')}</th>
+                  <th className="px-3 py-2">{t('pages.audit.colEntity')}</th>
+                  <th className="px-3 py-2">{t('pages.audit.colIp')}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
@@ -267,6 +273,7 @@ export function AuditLogClient({
                       event={ev}
                       isOpen={isOpen}
                       onToggle={() => setExpanded(isOpen ? null : ev.id)}
+                      locale={locale}
                     />
                   )
                 })}
@@ -286,7 +293,7 @@ export function AuditLogClient({
               disabled={isPending}
               className="rounded-md border border-border bg-background px-4 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-accent disabled:cursor-not-allowed disabled:opacity-50"
             >
-              {isPending ? 'Cargando…' : 'Cargar más'}
+              {isPending ? t('buttons.loading') : t('buttons.loadMore')}
             </button>
           </div>
         )}
@@ -301,11 +308,14 @@ function EventRow({
   event,
   isOpen,
   onToggle,
+  locale,
 }: {
   event: SerializedAuditEvent
   isOpen: boolean
   onToggle: () => void
+  locale: 'es' | 'en'
 }) {
+  const { t } = useTranslation()
   const Chevron = isOpen ? ChevronDown : ChevronRight
   return (
     <>
@@ -321,9 +331,9 @@ function EventRow({
           <Chevron className="h-3.5 w-3.5" aria-hidden="true" />
         </td>
         <td className="px-3 py-2 align-top">
-          <div className="text-foreground">{formatAbsolute(event.createdAt)}</div>
+          <div className="text-foreground">{formatAbsolute(event.createdAt, locale)}</div>
           <div className="text-[10px] text-muted-foreground">
-            {formatRelative(event.createdAt)}
+            {formatRelative(event.createdAt, locale)}
           </div>
         </td>
         <td className="px-3 py-2 align-top">
@@ -337,7 +347,7 @@ function EventRow({
               )}
             </>
           ) : (
-            <span className="text-muted-foreground italic">(sistema)</span>
+            <span className="text-muted-foreground italic">{t('common.system')}</span>
           )}
         </td>
         <td className="px-3 py-2 align-top">
@@ -369,15 +379,16 @@ function EventRow({
 }
 
 function DetailPanel({ event }: { event: SerializedAuditEvent }) {
+  const { t } = useTranslation()
   return (
     <div className="grid grid-cols-1 gap-3 lg:grid-cols-3">
-      <JsonBlock label="Antes" value={event.before} />
-      <JsonBlock label="Después" value={event.after} />
-      <JsonBlock label="Metadata" value={event.metadata} />
+      <JsonBlock label={t('pages.audit.detailBefore')} value={event.before} />
+      <JsonBlock label={t('pages.audit.detailAfter')} value={event.after} />
+      <JsonBlock label={t('pages.audit.detailMetadata')} value={event.metadata} />
       {event.userAgent && (
         <div className="lg:col-span-3">
           <span className="text-[10px] uppercase tracking-wider text-muted-foreground">
-            User-Agent
+            {t('pages.audit.detailUserAgent')}
           </span>
           <p className="mt-1 break-words font-mono text-[11px] text-muted-foreground">
             {event.userAgent}
@@ -389,6 +400,7 @@ function DetailPanel({ event }: { event: SerializedAuditEvent }) {
 }
 
 function JsonBlock({ label, value }: { label: string; value: unknown }) {
+  const { t } = useTranslation()
   const pretty = useMemo(() => {
     if (value === null || value === undefined) return null
     try {
@@ -408,13 +420,14 @@ function JsonBlock({ label, value }: { label: string; value: unknown }) {
           {pretty}
         </pre>
       ) : (
-        <p className="text-[11px] italic text-muted-foreground">(vacío)</p>
+        <p className="text-[11px] italic text-muted-foreground">{t('pages.audit.detailEmpty')}</p>
       )}
     </div>
   )
 }
 
 function EmptyState({ isPending }: { isPending: boolean }) {
+  const { t } = useTranslation()
   return (
     <div className="flex h-64 items-center justify-center px-6 text-center">
       <div>
@@ -423,10 +436,10 @@ function EmptyState({ isPending }: { isPending: boolean }) {
           aria-hidden="true"
         />
         <p className="mt-3 text-sm font-medium text-foreground">
-          {isPending ? 'Buscando eventos…' : 'Sin eventos para los filtros actuales'}
+          {isPending ? t('pages.audit.emptySearching') : t('pages.audit.emptyTitle')}
         </p>
         <p className="mt-1 text-[12px] text-muted-foreground">
-          Los eventos críticos del sistema aparecerán aquí en cuanto ocurran.
+          {t('pages.audit.emptyHint')}
         </p>
       </div>
     </div>
@@ -439,33 +452,34 @@ function PurgeConfirmDialog({
   isPending,
   onConfirm,
   onCancel,
+  locale,
 }: {
   count: number
   cutoffIso: string
   isPending: boolean
   onConfirm: () => void
   onCancel: () => void
+  locale: 'es' | 'en'
 }) {
+  const { t } = useTranslation()
   return (
     <div className="rounded-lg border border-destructive/40 bg-destructive/5 p-4">
       <div className="mb-2 flex items-center justify-between">
         <h3 className="flex items-center gap-2 text-sm font-semibold text-destructive">
           <Trash2 className="h-4 w-4" aria-hidden="true" />
-          Confirmar purga de eventos antiguos
+          {t('pages.audit.purgeTitle')}
         </h3>
         <button
           type="button"
           onClick={onCancel}
           className="rounded p-1 text-muted-foreground hover:bg-accent"
-          aria-label="Cancelar"
+          aria-label={t('buttons.cancel')}
         >
           <X className="h-4 w-4" aria-hidden="true" />
         </button>
       </div>
       <p className="text-xs text-foreground">
-        Se eliminarán <strong>{count}</strong> eventos con fecha anterior a{' '}
-        <strong>{formatAbsolute(cutoffIso)}</strong>. Esta operación es
-        irreversible.
+        {t('pages.audit.purgeBody', { count, date: formatAbsolute(cutoffIso, locale) })}
       </p>
       <div className="mt-3 flex gap-2">
         <button
@@ -474,7 +488,7 @@ function PurgeConfirmDialog({
           disabled={isPending || count === 0}
           className="rounded-md bg-destructive px-3 py-1.5 text-xs font-medium text-destructive-foreground transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
         >
-          {isPending ? 'Purgando…' : 'Confirmar purga'}
+          {isPending ? t('buttons.purging') : t('pages.audit.purgeConfirm')}
         </button>
         <button
           type="button"
@@ -482,7 +496,7 @@ function PurgeConfirmDialog({
           disabled={isPending}
           className="rounded-md border border-border bg-background px-3 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-accent"
         >
-          Cancelar
+          {t('buttons.cancel')}
         </button>
       </div>
     </div>

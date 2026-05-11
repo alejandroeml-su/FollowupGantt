@@ -8,10 +8,12 @@
 
 import { ApiKeysAdmin } from '@/components/api-v2/ApiKeysAdmin'
 import { listApiKeys, type ApiKeyListItem } from '@/lib/actions/api-keys'
+import { getServerT } from '@/lib/i18n/server'
 
 export const dynamic = 'force-dynamic'
 
 export default async function ApiKeysSettingsPage() {
+  const t = await getServerT()
   let keys: ApiKeyListItem[] = []
   try {
     keys = await listApiKeys()
@@ -23,10 +25,9 @@ export default async function ApiKeysSettingsPage() {
     <div className="flex h-full flex-col bg-background">
       <header className="flex h-16 shrink-0 items-center justify-between border-b border-border px-8 bg-subtle/50">
         <div>
-          <h1 className="text-xl font-semibold text-white">API Keys v2</h1>
+          <h1 className="text-xl font-semibold text-white">{t('pages.apiKeys.title')}</h1>
           <p className="mt-1 text-xs text-muted-foreground">
-            Credenciales workspace-scoped para integrar Sync con sistemas
-            corporativos. Soportan scopes granulares y rate limiting.
+            {t('pages.apiKeys.subtitle')}
           </p>
         </div>
         <a
@@ -35,7 +36,7 @@ export default async function ApiKeysSettingsPage() {
           rel="noreferrer"
           className="rounded-md border border-border px-3 py-1.5 text-xs text-muted-foreground hover:bg-subtle"
         >
-          OpenAPI v2
+          {t('pages.apiKeys.openapiLink')}
         </a>
       </header>
 

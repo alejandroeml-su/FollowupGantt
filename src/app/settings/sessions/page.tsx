@@ -4,6 +4,7 @@ import {
   revokeSessionAction,
   revokeOtherSessionsAction,
 } from './actions'
+import { getServerT, getServerLocale } from '@/lib/i18n/server'
 
 /**
  * Página "Sesiones activas" (Ola P3 · Auth).
@@ -15,16 +16,18 @@ export const dynamic = 'force-dynamic'
 
 export default async function SessionsPage() {
   const sessions = await listActiveSessions()
+  const t = await getServerT()
+  const locale = await getServerLocale()
 
   return (
     <main className="mx-auto max-w-3xl px-6 py-10">
       <div className="mb-8 flex items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-foreground">
-            Sesiones activas
+            {t('pages.sessions.title')}
           </h1>
           <p className="text-sm text-muted-foreground">
-            Dispositivos donde tu cuenta está iniciada actualmente.
+            {t('pages.sessions.subtitle')}
           </p>
         </div>
         {sessions.length > 1 ? (
@@ -34,7 +37,7 @@ export default async function SessionsPage() {
               data-testid="sessions-revoke-others"
               className="rounded-lg border border-border bg-card px-3 py-2 text-xs font-medium text-foreground hover:bg-accent/40"
             >
-              Cerrar otras sesiones
+              {t('pages.sessions.revokeOthers')}
             </button>
           </form>
         ) : null}
@@ -42,7 +45,7 @@ export default async function SessionsPage() {
 
       {sessions.length === 0 ? (
         <p className="rounded-2xl border border-border bg-card p-6 text-sm text-muted-foreground">
-          No tienes sesiones activas.
+          {t('pages.sessions.emptyState')}
         </p>
       ) : (
         <ul
@@ -70,16 +73,16 @@ export default async function SessionsPage() {
                       data-testid="session-current-badge"
                       className="ml-2 inline-flex rounded-full bg-emerald-500/15 px-2 py-0.5 text-[10px] font-semibold text-emerald-600 dark:text-emerald-400"
                     >
-                      Esta sesión
+                      {t('pages.sessions.currentBadge')}
                     </span>
                   ) : null}
                 </p>
                 <p className="text-xs text-muted-foreground">
-                  {s.ipAddress ?? 'IP desconocida'}
+                  {s.ipAddress ?? t('common.ipUnknown')}
                   {' · '}
                   {s.lastSeenAt
-                    ? `Última actividad: ${formatDate(s.lastSeenAt)}`
-                    : `Iniciada: ${formatDate(s.createdAt)}`}
+                    ? t('pages.sessions.lastSeen', { date: formatDate(s.lastSeenAt, locale) })
+                    : t('pages.sessions.started', { date: formatDate(s.createdAt, locale) })}
                 </p>
               </div>
               {!s.isCurrent ? (
@@ -90,7 +93,7 @@ export default async function SessionsPage() {
                     data-testid={`session-revoke-${s.id}`}
                     className="rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-1.5 text-xs font-semibold text-destructive hover:bg-destructive/20"
                   >
-                    Revocar
+                    {t('pages.sessions.revoke')}
                   </button>
                 </form>
               ) : null}
@@ -102,9 +105,10 @@ export default async function SessionsPage() {
   )
 }
 
-function formatDate(d: Date | null | undefined): string {
+function formatDate(d: Date | null | undefined, locale: string): string {
   if (!d) return '—'
-  return new Intl.DateTimeFormat('es-MX', {
+  const intlLocale = locale === 'en' ? 'en-US' : 'es-MX'
+  return new Intl.DateTimeFormat(intlLocale, {
     dateStyle: 'medium',
     timeStyle: 'short',
   }).format(d)

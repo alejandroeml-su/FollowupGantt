@@ -44,7 +44,18 @@
     "noResults": "No results",
     "empty": "Empty",
     "expand": "Expand",
-    "collapse": "Collapse"
+    "collapse": "Collapse",
+    "loadingDots": "Loading…",
+    "savingDots": "Saving…",
+    "owner": "Owner",
+    "noOwner": "No owner",
+    "date": "Date",
+    "ip": "IP",
+    "action": "Action",
+    "entity": "Entity",
+    "actor": "Actor",
+    "system": "(system)",
+    "ipUnknown": "Unknown IP"
   },
   "buttons": {
     "save": "Save",
@@ -70,7 +81,11 @@
     "unpublish": "Unpublish",
     "open": "Open",
     "selectAll": "Select all",
-    "deselectAll": "Deselect all"
+    "deselectAll": "Deselect all",
+    "loadMore": "Load more",
+    "loading": "Loading…",
+    "purging": "Purging…",
+    "saving": "Saving…"
   },
   "sidebar": {
     "title": "Hybrid Orchestration",
@@ -147,7 +162,6 @@
       "pmiEvm": "EVM · S-curve",
       "pmiLessons": "Lessons Learned",
       "pmiCommunications": "Communications Plan",
-      "pmiReports": "Performance Reports",
       "scrumDaily": "Daily Scrum",
       "scrumImpediments": "Impediments",
       "scrumImprovements": "Improvement Items"
@@ -214,7 +228,16 @@
     "showingCritical": "Showing critical path",
     "criticalOnlyAriaPressed": "Showing only the critical path. Click to show all tasks.",
     "criticalOnlyAriaUnpressed": "Show only tasks on the critical path.",
-    "clearWithCount": "Clear ({count})"
+    "clearWithCount": "Clear ({count})",
+    "activeCountSingular": "{count} active",
+    "activeCountPlural": "{count} active",
+    "epic": "Epic",
+    "noEpic": "No Epic",
+    "filterByEpic": "Filter by Epic",
+    "dateRange": "Date range",
+    "dateRangeActive": "active",
+    "to": "to",
+    "activeChipsLabel": "Active:"
   },
   "pages": {
     "dashboard": {
@@ -246,7 +269,92 @@
     },
     "audit": {
       "title": "Audit log",
-      "subtitle": "System events log"
+      "subtitle": "System events log",
+      "headerTitle": "Audit",
+      "headerSubtitle": "{count} events · 90 days retention",
+      "emptyTitle": "No events match the current filters",
+      "emptySearching": "Searching events…",
+      "emptyHint": "Critical system events will show up here as soon as they happen.",
+      "colDate": "Date",
+      "colActor": "Actor",
+      "colAction": "Action",
+      "colEntity": "Entity",
+      "colIp": "IP",
+      "detailBefore": "Before",
+      "detailAfter": "After",
+      "detailMetadata": "Metadata",
+      "detailEmpty": "(empty)",
+      "detailUserAgent": "User-Agent",
+      "purgeTitle": "Confirm purge of old events",
+      "purgeBody": "{count} events older than {date} will be deleted. This action is irreversible.",
+      "purgeConfirm": "Confirm purge",
+      "errorQuery": "Error querying events",
+      "errorLoadMore": "Error loading more events",
+      "errorPurgeEstimate": "Error estimating purge",
+      "errorPurgeExecute": "Error executing purge",
+      "purgeDone": "Purge complete: {count} events removed"
+    },
+    "profile": {
+      "title": "My profile",
+      "subtitle": "Manage your personal preferences and the channels through which you receive notifications.",
+      "identity": "Identity",
+      "tourTitle": "Welcome tour",
+      "tourBody": "Would you like to see the guided Sync tour again? You can restart it anytime.",
+      "futureTitle": "Coming soon"
+    },
+    "sessions": {
+      "title": "Active sessions",
+      "subtitle": "Devices where your account is currently signed in.",
+      "revokeOthers": "Sign out other sessions",
+      "emptyState": "You have no active sessions.",
+      "currentBadge": "This session",
+      "lastSeen": "Last activity: {date}",
+      "started": "Started: {date}",
+      "revoke": "Revoke"
+    },
+    "apiKeys": {
+      "title": "API Keys v2",
+      "subtitle": "Workspace-scoped credentials to integrate Sync with corporate systems. Supports granular scopes and rate limiting.",
+      "openapiLink": "OpenAPI v2"
+    },
+    "portfolioRisks": {
+      "filteringByCell": "Filtering by cell",
+      "ofRisks": "{shown} of {total} risks",
+      "clearFilter": "Clear filter",
+      "probLabels": {
+        "1": "Very low",
+        "2": "Low",
+        "3": "Medium",
+        "4": "High",
+        "5": "Very high"
+      },
+      "impactLabels": {
+        "1": "Negligible",
+        "2": "Minor",
+        "3": "Moderate",
+        "4": "Major",
+        "5": "Severe"
+      },
+      "detail": "Detail",
+      "print": "Print / PDF",
+      "emptyPortfolio": "No open risks in the portfolio.",
+      "detectedOn": "Detected {date}",
+      "ownerLabel": "Owner: {name}",
+      "mitigationLabel": "Mitigation: {value}",
+      "severityHigh": "High",
+      "severityMedium": "Medium",
+      "severityLow": "Low",
+      "statusOpen": "Open",
+      "statusMitigating": "Mitigating",
+      "statusAccepted": "Accepted",
+      "statusClosed": "Closed"
+    },
+    "projects": {
+      "definitionAndMembers": "Definition & Members",
+      "editDefinitionOf": "Edit definition of {name}",
+      "projectNotFound": "Project not found",
+      "genericError": "Error",
+      "loadingDots": "Loading…"
     }
   },
   "toast": {

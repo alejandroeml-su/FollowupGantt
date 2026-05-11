@@ -11,41 +11,10 @@
 import Link from 'next/link'
 import { Printer } from 'lucide-react'
 import type { ConsolidatedRiskItem } from '@/lib/portfolio/risks'
+import { useTranslation } from '@/lib/i18n/use-translation'
 
-const SEV_TAG: Record<
-  ConsolidatedRiskItem['severity'],
-  { label: string; classes: string }
-> = {
-  HIGH: {
-    label: 'Alto',
-    classes: 'bg-rose-500/20 text-rose-300 border-rose-500/40',
-  },
-  MEDIUM: {
-    label: 'Medio',
-    classes: 'bg-amber-500/20 text-amber-300 border-amber-500/40',
-  },
-  LOW: {
-    label: 'Bajo',
-    classes: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40',
-  },
-}
-
-const STATUS_LABEL: Record<ConsolidatedRiskItem['status'], string> = {
-  OPEN: 'Abierto',
-  MITIGATING: 'Mitigando',
-  ACCEPTED: 'Aceptado',
-  CLOSED: 'Cerrado',
-}
-
-const STATUS_TAG: Record<ConsolidatedRiskItem['status'], string> = {
-  OPEN: 'bg-rose-500/15 text-rose-300',
-  MITIGATING: 'bg-sky-500/15 text-sky-300',
-  ACCEPTED: 'bg-amber-500/15 text-amber-300',
-  CLOSED: 'bg-slate-500/15 text-slate-300',
-}
-
-function formatDate(iso: string): string {
-  return new Date(iso).toLocaleDateString('es-MX', {
+function formatDate(iso: string, locale: string): string {
+  return new Date(iso).toLocaleDateString(locale === 'en' ? 'en-US' : 'es-MX', {
     day: '2-digit',
     month: 'short',
     year: 'numeric',
@@ -57,11 +26,45 @@ export function ConsolidatedRiskList({
 }: {
   items: ConsolidatedRiskItem[]
 }) {
+  const { t, locale } = useTranslation()
+
+  const SEV_TAG: Record<
+    ConsolidatedRiskItem['severity'],
+    { label: string; classes: string }
+  > = {
+    HIGH: {
+      label: t('pages.portfolioRisks.severityHigh'),
+      classes: 'bg-rose-500/20 text-rose-300 border-rose-500/40',
+    },
+    MEDIUM: {
+      label: t('pages.portfolioRisks.severityMedium'),
+      classes: 'bg-amber-500/20 text-amber-300 border-amber-500/40',
+    },
+    LOW: {
+      label: t('pages.portfolioRisks.severityLow'),
+      classes: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40',
+    },
+  }
+
+  const STATUS_LABEL: Record<ConsolidatedRiskItem['status'], string> = {
+    OPEN: t('pages.portfolioRisks.statusOpen'),
+    MITIGATING: t('pages.portfolioRisks.statusMitigating'),
+    ACCEPTED: t('pages.portfolioRisks.statusAccepted'),
+    CLOSED: t('pages.portfolioRisks.statusClosed'),
+  }
+
+  const STATUS_TAG: Record<ConsolidatedRiskItem['status'], string> = {
+    OPEN: 'bg-rose-500/15 text-rose-300',
+    MITIGATING: 'bg-sky-500/15 text-sky-300',
+    ACCEPTED: 'bg-amber-500/15 text-amber-300',
+    CLOSED: 'bg-slate-500/15 text-slate-300',
+  }
+
   if (items.length === 0) {
     return (
       <section className="rounded-xl border border-dashed border-border bg-card p-10 text-center">
         <p className="text-sm text-muted-foreground">
-          Sin riesgos abiertos en el portafolio. 🎉
+          {t('pages.portfolioRisks.emptyPortfolio')}
         </p>
       </section>
     )
@@ -84,14 +87,14 @@ export function ConsolidatedRiskList({
     <section className="rounded-xl border border-border bg-card p-4">
       <div className="flex items-baseline justify-between print:hidden">
         <h3 className="text-sm font-semibold text-foreground">
-          Detalle ({items.length})
+          {t('pages.portfolioRisks.detail')} ({items.length})
         </h3>
         <button
           type="button"
           onClick={() => window.print()}
           className="inline-flex items-center gap-1.5 rounded-md border border-border bg-input px-3 py-1.5 text-xs font-medium text-foreground hover:bg-input/70"
         >
-          <Printer className="h-3.5 w-3.5" /> Imprimir / PDF
+          <Printer className="h-3.5 w-3.5" /> {t('pages.portfolioRisks.print')}
         </button>
       </div>
 
@@ -134,8 +137,8 @@ export function ConsolidatedRiskList({
             )}
 
             <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] text-muted-foreground">
-              <span>Detectado {formatDate(r.detectedAt)}</span>
-              {r.ownerName && <span>· Owner: {r.ownerName}</span>}
+              <span>{t('pages.portfolioRisks.detectedOn', { date: formatDate(r.detectedAt, locale) })}</span>
+              {r.ownerName && <span>· {t('pages.portfolioRisks.ownerLabel', { name: r.ownerName })}</span>}
               {/* Wave P14c — task asociada (origen Brain AI o manual) */}
               {r.taskId && (r.taskMnemonic || r.taskTitle) && (
                 <span>
@@ -145,7 +148,7 @@ export function ConsolidatedRiskList({
                     className="inline-flex items-center gap-1 rounded bg-indigo-500/15 px-1.5 py-0.5 text-indigo-300 hover:bg-indigo-500/25"
                     title={r.taskTitle ?? undefined}
                   >
-                    🔗 {r.taskMnemonic ? `[${r.taskMnemonic}]` : 'task'}
+                    {r.taskMnemonic ? `[${r.taskMnemonic}]` : 'task'}
                     {r.taskTitle && (
                       <span className="hidden sm:inline">{r.taskTitle.slice(0, 40)}</span>
                     )}
@@ -153,7 +156,7 @@ export function ConsolidatedRiskList({
                 </span>
               )}
               {r.mitigation && (
-                <span className="italic">· Mitigación: {r.mitigation}</span>
+                <span className="italic">· {t('pages.portfolioRisks.mitigationLabel', { value: r.mitigation })}</span>
               )}
             </div>
           </li>

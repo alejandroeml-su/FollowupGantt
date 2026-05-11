@@ -14,11 +14,13 @@
 import { getCurrentUser } from '@/lib/auth'
 import { ProfilePushSection } from '@/components/profile/ProfilePushSection'
 import { RestartTourButton } from '@/components/onboarding/RestartTourButton'
+import { getServerT } from '@/lib/i18n/server'
 
 export const dynamic = 'force-dynamic'
 
 export default async function ProfilePage() {
   const user = await getCurrentUser()
+  const t = await getServerT()
 
   return (
     <main
@@ -26,10 +28,9 @@ export default async function ProfilePage() {
       className="mx-auto max-w-3xl px-6 py-10"
     >
       <header className="mb-8">
-        <h1 className="text-2xl font-bold text-foreground">Mi perfil</h1>
+        <h1 className="text-2xl font-bold text-foreground">{t('pages.profile.title')}</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Gestiona tus preferencias personales y los canales por los que
-          recibes notificaciones.
+          {t('pages.profile.subtitle')}
         </p>
       </header>
 
@@ -44,18 +45,18 @@ export default async function ProfilePage() {
               id="profile-identity-title"
               className="text-lg font-semibold text-foreground"
             >
-              Identidad
+              {t('pages.profile.identity')}
             </h2>
             <dl className="mt-4 grid grid-cols-1 gap-3 text-sm sm:grid-cols-2">
               <div>
                 <dt className="text-xs uppercase tracking-wider text-muted-foreground">
-                  Nombre
+                  {t('common.name')}
                 </dt>
                 <dd className="mt-1 text-foreground">{user.name || '—'}</dd>
               </div>
               <div>
                 <dt className="text-xs uppercase tracking-wider text-muted-foreground">
-                  Correo
+                  {t('common.email')}
                 </dt>
                 <dd className="mt-1 text-foreground">{user.email}</dd>
               </div>
@@ -73,11 +74,10 @@ export default async function ProfilePage() {
               id="profile-tour-title"
               className="text-lg font-semibold text-foreground"
             >
-              Tour de bienvenida
+              {t('pages.profile.tourTitle')}
             </h2>
             <p className="mt-1 text-sm text-muted-foreground">
-              ¿Quieres volver a ver el recorrido guiado de Sync? Reinicia el
-              tour en cualquier momento.
+              {t('pages.profile.tourBody')}
             </p>
             <div className="mt-4">
               <RestartTourButton />
@@ -93,7 +93,7 @@ export default async function ProfilePage() {
               id="profile-future-title"
               className="text-lg font-semibold text-muted-foreground"
             >
-              Próximamente
+              {t('pages.profile.futureTitle')}
             </h2>
             <p className="mt-1 text-sm text-muted-foreground">
               Aquí podrás configurar idioma, zona horaria, tema visual y

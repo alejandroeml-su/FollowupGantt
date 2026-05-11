@@ -20,6 +20,7 @@ import type {
 } from '@/lib/portfolio/risks'
 import { RiskMatrix } from './RiskMatrix'
 import { ConsolidatedRiskList } from './ConsolidatedRiskList'
+import { useTranslation } from '@/lib/i18n/use-translation'
 
 interface Props {
   items: ConsolidatedRiskItem[]
@@ -31,10 +32,8 @@ export interface SelectedCell {
   impact: number
 }
 
-const PROB_LABEL = ['', 'Muy baja', 'Baja', 'Media', 'Alta', 'Muy alta']
-const IMPACT_LABEL = ['', 'Insignif.', 'Menor', 'Moderado', 'Mayor', 'Severo']
-
 export function PortfolioRisksClient({ items, matrix }: Props): React.JSX.Element {
+  const { t } = useTranslation()
   const [selected, setSelected] = useState<SelectedCell | null>(null)
 
   const handleCellClick = (p: number, i: number) => {
@@ -65,14 +64,14 @@ export function PortfolioRisksClient({ items, matrix }: Props): React.JSX.Elemen
       {selected && (
         <div className="flex items-center justify-between rounded-md border border-indigo-500/40 bg-indigo-500/10 px-4 py-2 text-sm">
           <div className="text-indigo-200">
-            Filtrando por celda{' '}
+            {t('pages.portfolioRisks.filteringByCell')}{' '}
             <span className="font-mono font-semibold">
               P{selected.probability} × I{selected.impact}
             </span>{' '}
             <span className="text-indigo-300/80">
-              ({PROB_LABEL[selected.probability]} × {IMPACT_LABEL[selected.impact]})
+              ({t(`pages.portfolioRisks.probLabels.${selected.probability}`)} × {t(`pages.portfolioRisks.impactLabels.${selected.impact}`)})
             </span>{' '}
-            · {filtered.length} de {items.length} riesgos
+            · {t('pages.portfolioRisks.ofRisks', { shown: filtered.length, total: items.length })}
           </div>
           <button
             type="button"
@@ -80,7 +79,7 @@ export function PortfolioRisksClient({ items, matrix }: Props): React.JSX.Elemen
             className="inline-flex items-center gap-1 rounded-md border border-border bg-background px-2.5 py-1 text-xs font-medium text-foreground hover:bg-secondary"
           >
             <ClearIcon className="h-3 w-3" />
-            Limpiar filtro
+            {t('pages.portfolioRisks.clearFilter')}
           </button>
         </div>
       )}

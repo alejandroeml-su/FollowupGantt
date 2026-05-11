@@ -174,7 +174,7 @@ export function TaskFiltersBar({
   }
   if (value.epicId) {
     const e = value.epicId === NO_EPIC_VALUE ? null : epics.find((x) => x.id === value.epicId)
-    activeChips.push({ key: 'epicId', label: `Epic: ${value.epicId === NO_EPIC_VALUE ? 'Sin Epic' : (e?.name ?? value.epicId)}` })
+    activeChips.push({ key: 'epicId', label: `${t('filters.epic')}: ${value.epicId === NO_EPIC_VALUE ? t('filters.noEpic') : (e?.name ?? value.epicId)}` })
   }
   if (value.dateFrom) activeChips.push({ key: 'dateFrom', label: `${t('filters.dateFrom')}: ${value.dateFrom}` })
   if (value.dateTo) activeChips.push({ key: 'dateTo', label: `${t('filters.dateTo')}: ${value.dateTo}` })
@@ -211,7 +211,9 @@ export function TaskFiltersBar({
           </span>
           {active > 0 && (
             <span className="rounded-full bg-indigo-500/15 px-2 py-0.5 text-xs font-medium text-indigo-300">
-              {active} activo{active === 1 ? '' : 's'}
+              {active === 1
+                ? t('filters.activeCountSingular', { count: active })
+                : t('filters.activeCountPlural', { count: active })}
             </span>
           )}
         </button>
@@ -406,15 +408,15 @@ export function TaskFiltersBar({
 
             {visible('epicId') && epics.length > 0 && (
               <div>
-                <label className={labelClass}>Epic</label>
+                <label className={labelClass}>{t('filters.epic')}</label>
                 <select
                   value={value.epicId ?? ''}
                   onChange={(e) => set('epicId', e.target.value)}
                   className={inputClass}
-                  aria-label="Filtrar por Epic"
+                  aria-label={t('filters.filterByEpic')}
                 >
                   <option value="">{t('common.all')}</option>
-                  <option value={NO_EPIC_VALUE}>Sin Epic</option>
+                  <option value={NO_EPIC_VALUE}>{t('filters.noEpic')}</option>
                   {(value.projectId
                     ? epics.filter((ep) => ep.projectId === value.projectId)
                     : epics
@@ -443,10 +445,10 @@ export function TaskFiltersBar({
                   <ChevronUp className="h-3.5 w-3.5" />
                 )}
                 <CalendarIcon className="h-3.5 w-3.5" />
-                Rango de fechas
+                {t('filters.dateRange')}
                 {(value.dateFrom || value.dateTo) && (
                   <span className="rounded-full bg-indigo-500/15 px-1.5 py-0.5 text-[10px] text-indigo-300">
-                    activo
+                    {t('filters.dateRangeActive')}
                   </span>
                 )}
               </button>
@@ -470,7 +472,7 @@ export function TaskFiltersBar({
                   {visible('dateTo') && (
                     <div>
                       <label className={labelClass}>
-                        hasta
+                        {t('filters.to')}
                       </label>
                       <input
                         type="date"
@@ -493,7 +495,7 @@ export function TaskFiltersBar({
       {activeChips.length > 0 && (
         <footer className="flex flex-wrap items-center gap-2 border-t border-border/60 bg-muted/20 px-5 py-2.5">
           <span className="text-xs font-medium text-muted-foreground">
-            Activos:
+            {t('filters.activeChipsLabel')}
           </span>
           {activeChips.map((c) => (
             <button

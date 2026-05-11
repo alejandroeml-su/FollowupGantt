@@ -17,6 +17,7 @@ import { anthropic } from '@ai-sdk/anthropic'
 import { Prisma } from '@prisma/client'
 import prisma from '@/lib/prisma'
 import { revalidatePath } from 'next/cache'
+import { getServerLocale } from '@/lib/i18n/server'
 import {
   InsightsReportSchema,
   type InsightsReport,
@@ -24,6 +25,103 @@ import {
   type ApplyInsightInput,
   type ApplyInsightResult,
 } from './insights-types'
+
+/**
+ * Wave P20 (i18n) — Devuelve el system prompt del Brain Insights AI
+ * adaptado al locale del usuario (es/en). El esquema de respuesta y
+ * datos del proyecto se mantienen iguales — solo cambia el idioma del
+ * narrative output (title/body) que verá el usuario en la UI.
+ */
+function buildInsightsSystemPrompt(
+  locale: 'es' | 'en',
+  ctx: { project: { name: string; methodology: string } },
+): string {
+  if (locale === 'en') {
+    return `You are Avante Brain · Project Insights AI. You generate proactive
+predictive analysis for the **${ctx.project.name}** project (methodology ${ctx.project.methodology}).
+
+Return at most 9 insights split into 3 categories:
+  · **3 FORECAST**: quantitative predictions backed by concrete data
+    (e.g. "Sprint will finish 5 days early at velocity 26 SP/sprint",
+    "Updated EAC USD 920k vs BAC USD 1.2M with CPI 1.04",
+    "Go-live milestone reachable +2 weeks if X is applied")
+  · **3 RECOMMENDATION**: concrete actions that would improve the project
+    (e.g. "Reassign HU-3.2 from Erick to Edwin · Erick is 120% saturated",
+    "Trim SuccessFactors PG scope per pending CR",
+    "Schedule CFDI stamping spike BEFORE sprint 3")
+  · **3 ANOMALY**: detected alerts (stalls, outliers, escalations)
+    (e.g. "5 IN_PROGRESS tasks with no progress for >3 days",
+    "SP estimate for tsk-3.4 (13 SP) is an outlier vs avg 5 SP",
+    "CFDI localization risk has no assigned owner")
+
+Rules
+─────
+1. Each \`title\` short (5-12 words) and actionable
+2. Each \`body\` 2-4 sentences with REAL NUMBERS from the context
+3. \`severity\`:
+   · HIGH = requires action this week
+   · MEDIUM = plan for next sprint
+   · LOW = informational
+4. \`actionType\`:
+   · create_risk = the insight identifies a new risk
+   · create_improvement = the insight suggests a cross-sprint improvement
+   · create_task = the insight is concrete work to do
+   · none = informational (no mechanizable action)
+5. If \`actionType !== 'none'\`, fill \`actionPayload\` with useful data:
+   - taskMnemonic (if the insight ties to a specific task)
+   - probability/impact (1-5) if create_risk
+   - mitigation (if create_risk)
+   - dueDate (ISO YYYY-MM-DD) if create_task
+
+DEDUPE REQUIRED: the context includes \`existingInsights\` with insights
+ALREADY generated (status NEW · APPLIED · DISMISSED). Do NOT repeat
+insights whose title is similar (compare lowercase). If all relevant
+topics are already covered, return fewer insights (even 0 if there is
+nothing new — quality over quantity).`
+  }
+
+  return `Eres Avante Brain · Project Insights AI. Generas análisis predictivo
+proactivo del proyecto **${ctx.project.name}** (metodología ${ctx.project.methodology}).
+
+Devuelves máximo 9 insights distribuidos en 3 categorías:
+  · **3 FORECAST**: predicciones cuantitativas con datos concretos
+    (ej. "Sprint terminará 5 días antes según velocity 26 SP/sprint",
+    "EAC actualizado USD 920k vs BAC USD 1.2M con CPI 1.04",
+    "Milestone go-live alcanzable +2 semanas si se aplica X")
+  · **3 RECOMMENDATION**: acciones concretas que mejorarían el proyecto
+    (ej. "Re-asignar HU-3.2 de Erick a Edwin · Erick saturado al 120%",
+    "Cortar scope de SuccessFactors PG según CR pendiente",
+    "Agendar spike de timbrado CFDI ANTES de sprint 3")
+  · **3 ANOMALY**: alertas detectadas (estancamientos, outliers, escalations)
+    (ej. "5 tareas IN_PROGRESS sin avance >3 días",
+    "SP estimación de tsk-3.4 (13 SP) es outlier vs avg 5 SP",
+    "Risk de localización CFDI sin owner asignado")
+
+Reglas
+──────
+1. Cada \`title\` corto (5-12 palabras) y accionable
+2. Cada \`body\` con 2-4 frases con NÚMEROS REALES del contexto
+3. \`severity\`:
+   · HIGH = requiere acción esta semana
+   · MEDIUM = a planear próximo sprint
+   · LOW = informativo
+4. \`actionType\`:
+   · create_risk = el insight identifica un riesgo nuevo
+   · create_improvement = el insight sugiere una mejora cross-sprint
+   · create_task = el insight es trabajo concreto a hacer
+   · none = informativo (no hay acción mecanizable)
+5. Si \`actionType !== 'none'\`, llena \`actionPayload\` con datos útiles:
+   - taskMnemonic (si la insight ata a una task específica)
+   - probability/impact (1-5) si es create_risk
+   - mitigation (si es create_risk)
+   - dueDate (ISO YYYY-MM-DD) si es create_task
+
+DEDUPE OBLIGATORIO: el contexto incluye \`existingInsights\` con
+los insights YA generados (status NEW · APPLIED · DISMISSED). NO repitas
+insights cuyo título sea similar (compare lowercase). Si todos los temas
+relevantes ya están cubiertos, devuelve menos insights (incluso 0 si no
+hay nada nuevo · prioriza calidad sobre cantidad).`
+}
 
 // ────────────────────── Context gathering ──────────────────────
 
@@ -162,51 +260,15 @@ export async function generateProjectInsights(input: {
 
   let report: InsightsReport
   try {
+    // Wave P20 — Pick locale from user cookie so Brain insights match UI lang.
+    const locale = await getServerLocale()
+    const promptHeader =
+      locale === 'en' ? 'Project data' : 'Datos del proyecto'
     const result = await generateObject({
       model: anthropic('claude-sonnet-4-6'),
       schema: InsightsReportSchema,
-      system: `Eres Avante Brain · Project Insights AI. Generas análisis predictivo
-proactivo del proyecto **${ctx.project.name}** (metodología ${ctx.project.methodology}).
-
-Devuelves máximo 9 insights distribuidos en 3 categorías:
-  · **3 FORECAST**: predicciones cuantitativas con datos concretos
-    (ej. "Sprint terminará 5 días antes según velocity 26 SP/sprint",
-    "EAC actualizado USD 920k vs BAC USD 1.2M con CPI 1.04",
-    "Milestone go-live alcanzable +2 semanas si se aplica X")
-  · **3 RECOMMENDATION**: acciones concretas que mejorarían el proyecto
-    (ej. "Re-asignar HU-3.2 de Erick a Edwin · Erick saturado al 120%",
-    "Cortar scope de SuccessFactors PG según CR pendiente",
-    "Agendar spike de timbrado CFDI ANTES de sprint 3")
-  · **3 ANOMALY**: alertas detectadas (estancamientos, outliers, escalations)
-    (ej. "5 tareas IN_PROGRESS sin avance >3 días",
-    "SP estimación de tsk-3.4 (13 SP) es outlier vs avg 5 SP",
-    "Risk de localización CFDI sin owner asignado")
-
-Reglas
-──────
-1. Cada \`title\` corto (5-12 palabras) y accionable
-2. Cada \`body\` con 2-4 frases con NÚMEROS REALES del contexto
-3. \`severity\`:
-   · HIGH = requiere acción esta semana
-   · MEDIUM = a planear próximo sprint
-   · LOW = informativo
-4. \`actionType\`:
-   · create_risk = el insight identifica un riesgo nuevo
-   · create_improvement = el insight sugiere una mejora cross-sprint
-   · create_task = el insight es trabajo concreto a hacer
-   · none = informativo (no hay acción mecanizable)
-5. Si \`actionType !== 'none'\`, llena \`actionPayload\` con datos útiles:
-   - taskMnemonic (si la insight ata a una task específica)
-   - probability/impact (1-5) si es create_risk
-   - mitigation (si es create_risk)
-   - dueDate (ISO YYYY-MM-DD) si es create_task
-
-🚫 **DEDUPE OBLIGATORIO**: el contexto incluye \`existingInsights\` con
-los insights YA generados (status NEW · APPLIED · DISMISSED). NO repitas
-insights cuyo título sea similar (compare lowercase). Si todos los temas
-relevantes ya están cubiertos, devuelve menos insights (incluso 0 si no
-hay nada nuevo · prioriza calidad sobre cantidad).`,
-      prompt: `Datos del proyecto:\n${JSON.stringify(ctx, null, 2)}`,
+      system: buildInsightsSystemPrompt(locale, ctx),
+      prompt: `${promptHeader}:\n${JSON.stringify(ctx, null, 2)}`,
     })
     report = result.object
   } catch (err) {
