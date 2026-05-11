@@ -12,12 +12,10 @@ export default defineConfig({
       'tests/a11y/**',
       'tests/perf/**',
       'node_modules/**',
-      // R3.0-A · Wave P19-B (#184) `src/lib/brain/strategist/scenarios.ts`
-      // nunca llegó a master pero el test sí (PR #186). Equipo R3-B
-      // restaurará el módulo en su wave paralela. Mientras tanto el test
-      // queda excluido del runner para que la suite se mantenga verde.
-      // TODO(R3-B): rehabilitar al reintroducir `scenarios.ts`.
-      'tests/unit/brain-strategist-scenarios.test.ts',
+      // R3.0-G · Módulo `src/lib/brain/strategist/scenarios.ts` restaurado
+      // desde commit `6a39403` (PR #184). Test rehabilitado con 23 cases
+      // verdes. UI consumers (ScenarioPlanner.tsx) + server actions siguen
+      // diferidos a P20-B/C.
     ],
     // P3-5D · Bajado de 15s → 5s tras refactor de
     // `dependencies-update.test.ts` (eliminados `mockResolvedValueOnce`
@@ -57,6 +55,7 @@ export default defineConfig({
         // Todos son funciones puras sin Prisma/Next, perfectos para v8
         // coverage:
         'src/lib/brain/strategist/detectors.ts',
+        'src/lib/brain/strategist/scenarios.ts',
         'src/lib/risks/risk-score.ts',
       ],
       exclude: [
@@ -64,11 +63,16 @@ export default defineConfig({
         'src/lib/prisma.ts',
         'src/**/__tests__/**',
       ],
+      // R3.0-G · Coverage Debt Sweep · Subimos a 95/95/95/95 tras
+      // restaurar scenarios.ts (PR #184), expandir reorder.test.ts y
+      // ui-store.test.ts. Actual: 99.72/95.75/100/99.72.
+      // Dejamos ~5pp de holgura para que P20-B/C puedan agregar archivos
+      // al include sin romper el threshold el primer día.
       thresholds: {
-        lines: 80,
-        functions: 80,
-        branches: 80,
-        statements: 80,
+        lines: 95,
+        functions: 95,
+        branches: 95,
+        statements: 95,
       },
     },
   },
