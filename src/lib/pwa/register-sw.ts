@@ -116,22 +116,29 @@ export function useServiceWorkerUpdate(): {
     // Cuando el SW nuevo activa, recargamos para asegurar consistencia
     // entre HTML/RSC y bundles. Se dispara solo una vez por sesion.
     let reloaded = false;
-    const onControllerChange = () => {
+    const reloadOnce = () => {
       if (reloaded) return;
       reloaded = true;
       window.location.reload();
     };
-    navigator.serviceWorker.addEventListener(
-      "controllerchange",
-      onControllerChange,
-    );
+    navigator.serviceWorker.addEventListener("controllerchange", reloadOnce);
+
+    // Backup: el SW v2+ envía `SW_VERSION_UPDATED` desde su handler
+    // `activate` tras borrar caches viejos. Es redundante con
+    // controllerchange pero asegura el reload incluso si por algún
+    // motivo el controller no cambia (caso de cache muy stale).
+    const onSwMessage = (event: MessageEvent) => {
+      const data = event.data as { type?: string } | null;
+      if (data?.type === "SW_VERSION_UPDATED") {
+        reloadOnce();
+      }
+    };
+    navigator.serviceWorker.addEventListener("message", onSwMessage);
 
     return () => {
       cancelled = true;
-      navigator.serviceWorker.removeEventListener(
-        "controllerchange",
-        onControllerChange,
-      );
+      navigator.serviceWorker.removeEventListener("controllerchange", reloadOnce);
+      navigator.serviceWorker.removeEventListener("message", onSwMessage);
     };
   }, []);
 
