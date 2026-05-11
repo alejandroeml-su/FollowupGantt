@@ -357,6 +357,11 @@ model User {
   gerenciaId String?
   gerencia   Gerencia? @relation("GerenteArea", fields: [gerenciaId], references: [id], onDelete: SetNull)
 
+  /// Soft delete · darse de baja sin perder historial (audit/sesiones
+  /// pasadas/tareas asignadas). NULL = activo, NOT NULL = inactivo
+  /// desde esa fecha. `signIn()` rechaza usuarios con archivedAt set.
+  archivedAt DateTime?
+
   // Wave P12 (Scrum 100%) — Impediments & Daily Scrum & Improvements
   impedimentsRaised  Impediment[]      @relation("ImpedimentRaiser")
   impedimentsOwned   Impediment[]      @relation("ImpedimentOwner")
