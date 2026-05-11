@@ -179,6 +179,10 @@ export const KNOWN_AUDIT_ACTIONS = [
   'sso.provider.deleted',
   'sso.login.success',
   'sso.login.failed',
+  // R3.0-F — Data Retention Policies (Wave R3 Fase 2 · Compliance)
+  'retention.policy.updated',
+  'retention.purge.run.started',
+  'retention.purge.run.completed',
 ] as const
 
 export type AuditAction = (typeof KNOWN_AUDIT_ACTIONS)[number]
@@ -313,6 +317,10 @@ export const ACTION_LABELS: Record<AuditAction, string> = {
   'sso.provider.deleted': 'Proveedor SSO eliminado',
   'sso.login.success': 'Login SSO exitoso',
   'sso.login.failed': 'Login SSO fallido',
+  // R3.0-F
+  'retention.policy.updated': 'Política de retención actualizada',
+  'retention.purge.run.started': 'Ciclo de purge iniciado',
+  'retention.purge.run.completed': 'Ciclo de purge completado',
 }
 
 // ───────────────────────── Tipos de entidad ─────────────────────────

@@ -46,6 +46,7 @@ import prisma from '@/lib/prisma'
 import { requireSuperAdminOrThrow } from '@/lib/auth/check-super-admin'
 import { recordAuditEventSafe } from '@/lib/audit/events'
 import { ROLE_NAMES, type RoleName } from '@/lib/auth/permissions'
+import { ensureDefaultPolicies } from '@/lib/retention/defaults'
 
 // ───────────────────────── Errores tipados ─────────────────────────
 
@@ -278,6 +279,10 @@ export async function createAdminWorkspace(input: {
         members: { create: { userId: actor.id, role: 'OWNER' } },
       },
       select: { id: true, slug: true },
+    })
+    // R3.0-F · Siembra retention defaults (idempotente, defensivo).
+    await ensureDefaultPolicies(ws.id).catch((err) => {
+      console.error('[Retention] ensureDefaultPolicies failed', err)
     })
     await recordAuditEventSafe({
       action: 'workspace.created',

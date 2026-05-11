@@ -4,6 +4,7 @@ import prisma from '@/lib/prisma'
 import { getCurrentUser } from '@/lib/auth/get-current-user'
 import { hasAdminRole } from '@/lib/auth/permissions'
 import type { SessionUser } from '@/lib/auth/session'
+import { ensureDefaultPolicies } from '@/lib/retention/defaults'
 
 /**
  * Ola P4 · Equipo P4-1 — Multi-tenancy.
@@ -179,6 +180,12 @@ export async function getDefaultWorkspaceForUser(
       },
     },
     select: { id: true, slug: true },
+  })
+
+  // R3.0-F · Siembra retention defaults. Defensivo: no rompe la
+  // creación del workspace personal si falla (el cron las re-aplicará).
+  await ensureDefaultPolicies(created.id).catch((err) => {
+    console.error('[Retention] ensureDefaultPolicies failed', err)
   })
 
   return created
