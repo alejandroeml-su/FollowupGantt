@@ -8,9 +8,9 @@
     { "path": "/api/cron/currency-rates",     "schedule": "0 6 * * *" },
     { "path": "/api/cron/daily-standup",      "schedule": "0 8 * * 1-5" },
     { "path": "/api/cron/refresh-allocation", "schedule": "0 4 * * 1" },
-    { "path": "/api/cron/calendar-sync",      "schedule": "0 */6 * * *" },
+    { "path": "/api/cron/calendar-sync",      "schedule": "0 12 * * *" },
     { "path": "/api/cron/recurrence",         "schedule": "5 0 * * *" },
     { "path": "/api/cron/retention",          "schedule": "0 3 * * *" },
-    { "path": "/api/cron/audit-stream",       "schedule": "*/5 * * * *" }
+    { "path": "/api/cron/audit-stream",       "schedule": "0 2 * * *" }
   ]
 }
