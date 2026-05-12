@@ -65,6 +65,27 @@ export function useTypingIndicator(
     const timeouts = timeoutsRef.current
     let channel: RealtimeChannel | null = null
     try {
+      // Purgar channel cached con el mismo topic. Sin este guard, un mount
+      // anterior cuya cleanup `removeChannel` no completó deja el channel
+      // ya `subscribe()`d y el `.on('broadcast', …)` siguiente arroja
+      // "cannot add broadcast callbacks after subscribe()", que rompe el
+      // árbol React (mismo patrón que useVersionCheck/usePresence).
+      const getChannelsFn = (
+        supabase as unknown as { getChannels?: () => RealtimeChannel[] }
+      ).getChannels
+      if (typeof getChannelsFn === 'function') {
+        const stale = getChannelsFn
+          .call(supabase)
+          .find((c) => c.topic === `realtime:${channelName}`)
+        if (stale) {
+          try {
+            supabase.removeChannel(stale)
+          } catch {
+            /* no-op */
+          }
+        }
+      }
+
       channel = supabase
         .channel(channelName, { config: { broadcast: { self: false } } })
         .on(

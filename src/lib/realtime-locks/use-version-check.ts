@@ -123,6 +123,31 @@ export function useVersionCheck(
 
     const table = TABLE_BY_ENTITY[entityType]
     const channelName = `${entityType}:${entityId}:version`
+
+    // Si un mount anterior dejó cached un channel con este `topic`
+    // (cleanup async aún en vuelo, StrictMode doble-mount, o navegación
+    // entre tabs reaprovechando la pestaña), llamar `.on()` sobre él
+    // arroja "cannot add postgres_changes callbacks after 'subscribe()'"
+    // y mata la página entera con React error #418. Lo purgamos antes
+    // de crear uno nuevo. `getChannels()` está documentado en
+    // supabase-js v2; los tests con mocks ad-hoc pueden no implementarlo,
+    // de ahí el guard `typeof === 'function'`.
+    const getChannelsFn = (
+      client as unknown as { getChannels?: () => RealtimeChannel[] }
+    ).getChannels
+    if (typeof getChannelsFn === 'function') {
+      const stale = getChannelsFn
+        .call(client)
+        .find((c) => c.topic === `realtime:${channelName}`)
+      if (stale) {
+        try {
+          client.removeChannel(stale)
+        } catch {
+          // Si ya fue removido (HMR / unmount doble) ignoramos.
+        }
+      }
+    }
+
     const channel = client.channel(channelName)
 
     channel.on(

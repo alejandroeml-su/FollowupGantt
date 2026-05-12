@@ -144,8 +144,31 @@ export function useTaskComments(
 
     let channel: RealtimeChannel | null = null
     try {
+      // Purgar channel cached con el mismo topic antes de re-crear. Sin
+      // esto, un mount anterior cuya cleanup `removeChannel` no terminó
+      // deja un channel `realtime:task:<id>:comments` ya `subscribe()`d
+      // y el `.on('postgres_changes', …)` siguiente arroja
+      // "cannot add postgres_changes callbacks after subscribe()", que
+      // mata el árbol React (incidente reportado 2026-05-12).
+      const channelName = `task:${taskId}:comments`
+      const getChannelsFn = (
+        supabase as unknown as { getChannels?: () => RealtimeChannel[] }
+      ).getChannels
+      if (typeof getChannelsFn === 'function') {
+        const stale = getChannelsFn
+          .call(supabase)
+          .find((c) => c.topic === `realtime:${channelName}`)
+        if (stale) {
+          try {
+            supabase.removeChannel(stale)
+          } catch {
+            /* no-op */
+          }
+        }
+      }
+
       channel = supabase
-        .channel(`task:${taskId}:comments`)
+        .channel(channelName)
         .on(
           // @ts-expect-error — overload de `.on('postgres_changes', …)` no
           // está expuesto en el typing público pero es la API documentada
