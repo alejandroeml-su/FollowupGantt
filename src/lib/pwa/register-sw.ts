@@ -53,14 +53,49 @@ export function getServiceWorkerSupport(): ServiceWorkerSupport {
  * Registra el SW canonico. Idempotente: si ya hay un registro, lo
  * devuelve sin re-registrarlo. Si el browser no soporta SW o estamos
  * en dev, resuelve `null`.
+ *
+ * Como side-effect, desregistra cualquier SW legacy `/sw.js` que siga
+ * activo en el cliente. El SW legacy fue reemplazado por el canónico
+ * tras Wave P20-A pero los clientes que se conectaron antes pueden
+ * tenerlo registrado y, peor, interceptando requests con caches que el
+ * handler `activate` del canónico ya no controla. Para destrabar el
+ * crash recurrente "This page couldn't load" hay que purgar al legacy.
  */
 export async function registerServiceWorker(): Promise<ServiceWorkerRegistration | null> {
   const support = getServiceWorkerSupport();
   if (!support.supported) return null;
 
+  // Purga SWs legacy. `getRegistrations()` (plural) devuelve TODOS los SW
+  // registrados para este origen, incluido `/sw.js` que precede al canónico
+  // y cuyo scope `/` colisiona con el actual. Si el browser muestra dos
+  // entradas en DevTools → Application → Service Workers, esta es la
+  // limpieza.
+  try {
+    const all = await navigator.serviceWorker.getRegistrations();
+    for (const reg of all) {
+      const url = reg.active?.scriptURL ?? reg.installing?.scriptURL ?? reg.waiting?.scriptURL ?? "";
+      if (url && !url.endsWith(SW_URL)) {
+        await reg.unregister();
+      }
+    }
+  } catch {
+    // getRegistrations no disponible en algunos browsers; ignoramos.
+  }
+
   try {
     const existing = await navigator.serviceWorker.getRegistration(SW_SCOPE);
-    if (existing) return existing;
+    if (existing) {
+      // Empuja al browser a revisar si hay un SW nuevo en cada page-load.
+      // Sin esto, el browser sólo revisa el SW cada 24h (heurística HTTP
+      // cache) — un cliente atascado en una versión vieja podría tardar
+      // un día en migrar a v5. `update()` es no-op si ya está fresco.
+      try {
+        await existing.update();
+      } catch {
+        // Failed update no es bloqueante; el registro existente sirve.
+      }
+      return existing;
+    }
     return await navigator.serviceWorker.register(SW_URL, { scope: SW_SCOPE });
   } catch (err) {
     console.warn("[pwa] service-worker registration failed", err);

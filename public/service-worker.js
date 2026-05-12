@@ -42,7 +42,12 @@
 // v4 · 2026-05-11 · fix navegación HTML siempre a red (causa real del
 // React error #482: cache HTML stale → bundle JS viejo → Server Action
 // IDs faltantes → use(rejected promise) → "This page couldn't load").
-const VERSION = "v4-r4-2026-05-11-no-html-cache";
+// v5 · 2026-05-12 · click sobre tarea en /gantt sigue crashando con
+// "page couldn't load". Causa: clientes con SW v1/v2/v3 todavía activo
+// que cachean chunks Next.js no-`/_next/` (legacy paths). Bump fuerza
+// install→activate ciclo en TODOS los clientes y elimina cualquier
+// cache nombrada `sync-*-${OLD}` (handler `activate` ya lo hace).
+const VERSION = "v5-r4-2026-05-12-gantt-task-click";
 const STATIC_CACHE = `sync-static-${VERSION}`;
 const RUNTIME_CACHE = `sync-runtime-${VERSION}`;
 const API_CACHE = `sync-api-${VERSION}`;

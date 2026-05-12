@@ -23,7 +23,10 @@
 // `/service-worker.js` (v2-r4-2026-05-11). Mismo motivo: invalidar
 // bundles Next.js + Server Action IDs del deploy previo.
 // v5 · 2026-05-11 · sincronizado con SW canónico v4-no-html-cache.
-const VERSION = 'v5'
+// v6 · 2026-05-12 · sincronizado con SW canónico v5 — bump fuerza
+// install→activate en clientes legacy todavía con `/sw.js` registrado
+// (los que migran al canónico ya están en v5 vía service-worker.js).
+const VERSION = 'v6'
 const STATIC_CACHE = `fg-static-${VERSION}`
 const RUNTIME_CACHE = `fg-runtime-${VERSION}`
 const API_CACHE = `fg-api-${VERSION}`
