@@ -6,6 +6,8 @@ import { ViewSwitcher } from '@/components/interactions/ViewSwitcher'
 import { NewTaskButton } from '@/components/interactions/NewTaskButton'
 import { CalendarBoardClient } from '@/components/interactions/CalendarBoardClient'
 import { getCurrentUserPresence } from '@/lib/auth/get-current-user-presence'
+import { getCurrentUser } from '@/lib/auth/get-current-user'
+import { resolveProjectVisibility } from '@/lib/auth/visibility'
 
 export const dynamic = 'force-dynamic'
 
@@ -47,6 +49,9 @@ export default async function CalendarPage({
   // Wave P7 · C-DEBT-2 — Identidad del usuario activo para drillarla al
   // drawer (presence + edit locks).
   const currentUser = await getCurrentUserPresence()
+  // HU "Acceso Transversal por Asignación de Proyecto" (2026-05-12).
+  const sessionUser = await getCurrentUser()
+  const visibility = await resolveProjectVisibility(sessionUser)
   // Extendemos la ventana a +/- 1 semana para cubrir las celdas de overflow
   // que muestran días del mes anterior/siguiente en el mismo grid.
   const paddedStart = new Date(+win.start - 7 * 86_400_000)
@@ -54,16 +59,21 @@ export default async function CalendarPage({
 
   const dbTasks = await prisma.task.findMany({
     where: {
-      archivedAt: null,
-      OR: [
-        { startDate: { gte: paddedStart, lt: paddedEnd } },
-        { endDate: { gte: paddedStart, lt: paddedEnd } },
+      AND: [
         {
-          AND: [
-            { startDate: { lt: paddedStart } },
-            { endDate: { gte: paddedEnd } },
+          archivedAt: null,
+          OR: [
+            { startDate: { gte: paddedStart, lt: paddedEnd } },
+            { endDate: { gte: paddedStart, lt: paddedEnd } },
+            {
+              AND: [
+                { startDate: { lt: paddedStart } },
+                { endDate: { gte: paddedEnd } },
+              ],
+            },
           ],
         },
+        visibility.taskWhere,
       ],
     },
     include: {
@@ -86,6 +96,7 @@ export default async function CalendarPage({
 
   const [projects, users, gerencias, areas, allTasksRaw] = await Promise.all([
     prisma.project.findMany({
+      where: visibility.projectWhere,
       select: { id: true, name: true, areaId: true },
       orderBy: { name: 'asc' },
     }),
@@ -102,7 +113,7 @@ export default async function CalendarPage({
       orderBy: { name: 'asc' },
     }),
     prisma.task.findMany({
-      where: { archivedAt: null },
+      where: { AND: [{ archivedAt: null }, visibility.taskWhere] },
       select: {
         id: true,
         title: true,

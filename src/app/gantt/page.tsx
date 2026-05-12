@@ -18,6 +18,8 @@ import { NewTaskButton } from '@/components/interactions/NewTaskButton'
 import { getCachedCpmForProject } from '@/lib/scheduling/cache'
 import { getBaselinesForProject } from '@/lib/actions/baselines'
 import { getCurrentUserPresence } from '@/lib/auth/get-current-user-presence'
+import { getCurrentUser } from '@/lib/auth/get-current-user'
+import { resolveProjectVisibility } from '@/lib/auth/visibility'
 
 export const dynamic = 'force-dynamic'
 
@@ -121,19 +123,29 @@ export default async function GanttTimeline({
   // Gantt (B1 ya tipa la prop, sólo le faltaba que la page la cargara).
   const currentUser = await getCurrentUserPresence()
 
+  // HU "Acceso Transversal por Asignación de Proyecto" (2026-05-12) — el
+  // Gantt global solo debe mostrar tareas de proyectos visibles.
+  const sessionUser = await getCurrentUser()
+  const visibility = await resolveProjectVisibility(sessionUser)
+
   const dbTasks = await prisma.task.findMany({
     where: {
-      archivedAt: null,
-      OR: [
-        { startDate: { gte: win.start, lt: rangeEnd } },
-        { endDate: { gte: win.start, lt: rangeEnd } },
+      AND: [
         {
-          AND: [
-            { startDate: { lt: win.start } },
-            { endDate: { gte: rangeEnd } },
+          archivedAt: null,
+          OR: [
+            { startDate: { gte: win.start, lt: rangeEnd } },
+            { endDate: { gte: win.start, lt: rangeEnd } },
+            {
+              AND: [
+                { startDate: { lt: win.start } },
+                { endDate: { gte: rangeEnd } },
+              ],
+            },
+            { AND: [{ startDate: null }, { endDate: null }] },
           ],
         },
-        { AND: [{ startDate: null }, { endDate: null }] },
+        visibility.taskWhere,
       ],
     },
     // Cargamos subtree completo (no sólo nivel 1) para que el rollup
@@ -151,10 +163,14 @@ export default async function GanttTimeline({
 
   const [projects, users, allTasksRaw, gerencias, areas, epics, taskCountsRaw, baselineCountsRaw] =
     await Promise.all([
-      prisma.project.findMany({ select: { id: true, name: true, areaId: true }, orderBy: { name: 'asc' } }),
+      prisma.project.findMany({
+        where: visibility.projectWhere,
+        select: { id: true, name: true, areaId: true },
+        orderBy: { name: 'asc' },
+      }),
       prisma.user.findMany({ orderBy: { name: 'asc' } }),
       prisma.task.findMany({
-        where: { archivedAt: null },
+        where: { AND: [{ archivedAt: null }, visibility.taskWhere] },
         select: { id: true, title: true, mnemonic: true, projectId: true, project: { select: { id: true, name: true } } },
         orderBy: [{ project: { name: 'asc' } }, { title: 'asc' }],
       }),
