@@ -26,6 +26,44 @@ import { useCallback, useEffect, useState } from "react";
 const SW_URL = "/service-worker.js";
 const SW_SCOPE = "/";
 
+/**
+ * Guard contra reload-loop. Cuando el usuario clickea "Recargar" guardamos
+ * el timestamp en sessionStorage; si el hook se re-monta y detecta otro
+ * update dentro de esta ventana (60s), NO muestra el banner y NO permite
+ * que `controllerchange`/`SW_VERSION_UPDATED` dispare otro reload. Esto
+ * rompe el ciclo "banner aparece → reload → banner reaparece tras montar"
+ * que ocurría al desplegar el SW múltiples veces en intervalos cortos.
+ */
+const RELOAD_GUARD_KEY = "sync:pwa:last-reload-at";
+const RELOAD_GUARD_WINDOW_MS = 60_000;
+
+/**
+ * Throttle del `registration.update()` agresivo. Llamarlo en cada page-load
+ * (PR #228) descubre SW nuevos rápido pero, combinado con deploys frecuentes,
+ * convierte cada recarga en disparador del banner. Permitimos el update
+ * sólo cada 5 minutos por pestaña.
+ */
+const UPDATE_THROTTLE_KEY = "sync:pwa:last-update-check-at";
+const UPDATE_THROTTLE_MS = 5 * 60_000;
+
+function isWithinReloadGuard(): boolean {
+  if (typeof sessionStorage === "undefined") return false;
+  const raw = sessionStorage.getItem(RELOAD_GUARD_KEY);
+  if (!raw) return false;
+  const ts = Number(raw);
+  if (!Number.isFinite(ts)) return false;
+  return Date.now() - ts < RELOAD_GUARD_WINDOW_MS;
+}
+
+function markReloadGuard(): void {
+  if (typeof sessionStorage === "undefined") return;
+  try {
+    sessionStorage.setItem(RELOAD_GUARD_KEY, String(Date.now()));
+  } catch {
+    // localStorage/sessionStorage puede estar lleno o deshabilitado.
+  }
+}
+
 export type ServiceWorkerSupport =
   | { supported: true }
   | { supported: false; reason: "no-window" | "no-sw-api" | "dev-mode" | "automated" };
@@ -85,12 +123,29 @@ export async function registerServiceWorker(): Promise<ServiceWorkerRegistration
   try {
     const existing = await navigator.serviceWorker.getRegistration(SW_SCOPE);
     if (existing) {
-      // Empuja al browser a revisar si hay un SW nuevo en cada page-load.
-      // Sin esto, el browser sólo revisa el SW cada 24h (heurística HTTP
-      // cache) — un cliente atascado en una versión vieja podría tardar
-      // un día en migrar a v5. `update()` es no-op si ya está fresco.
+      // Empuja al browser a revisar si hay un SW nuevo, pero throttleado:
+      // sin gate, cada navegación + deploy frecuente convierte el banner
+      // "Nueva versión disponible" en un ciclo de recargas (#231). El
+      // browser todavía revisa el SW por su heurística HTTP cache si no
+      // forzamos `update()`, así que no perdemos descubribilidad — sólo
+      // dejamos de presionar en cada tick.
       try {
-        await existing.update();
+        const lastCheck = Number(
+          (typeof sessionStorage !== "undefined" &&
+            sessionStorage.getItem(UPDATE_THROTTLE_KEY)) ||
+            0,
+        );
+        const elapsed = Date.now() - (Number.isFinite(lastCheck) ? lastCheck : 0);
+        if (elapsed > UPDATE_THROTTLE_MS) {
+          await existing.update();
+          if (typeof sessionStorage !== "undefined") {
+            try {
+              sessionStorage.setItem(UPDATE_THROTTLE_KEY, String(Date.now()));
+            } catch {
+              // Storage lleno/no disponible — ignoramos.
+            }
+          }
+        }
       } catch {
         // Failed update no es bloqueante; el registro existente sirve.
       }
@@ -129,7 +184,11 @@ export function useServiceWorkerUpdate(): {
     const handleStateChange = (worker: ServiceWorker) => {
       const listener = () => {
         if (worker.state === "installed" && navigator.serviceWorker.controller) {
-          if (!cancelled) setUpdateAvailable(true);
+          // Guard: si acabamos de recargar por update, no volver a mostrar
+          // el banner — el SW recién activado sigue propagando eventos.
+          if (!cancelled && !isWithinReloadGuard()) {
+            setUpdateAvailable(true);
+          }
         }
       };
       worker.addEventListener("statechange", listener);
@@ -141,7 +200,11 @@ export function useServiceWorkerUpdate(): {
       if (cancelled || !reg) return;
       setRegistration(reg);
 
-      if (reg.waiting && navigator.serviceWorker.controller) {
+      if (
+        reg.waiting &&
+        navigator.serviceWorker.controller &&
+        !isWithinReloadGuard()
+      ) {
         setUpdateAvailable(true);
       }
 
@@ -170,7 +233,14 @@ export function useServiceWorkerUpdate(): {
     let reloaded = false;
     const reloadOnce = () => {
       if (reloaded || isAutomated) return;
+      // Si ya recargamos en esta sesión por update, NO volver a recargar
+      // aunque el SW siga propagando `controllerchange` o
+      // `SW_VERSION_UPDATED`. Sin este guard, deploys frecuentes generan
+      // un loop visible para el usuario (banner aparece → reload → banner
+      // reaparece → reload). Incidente reportado 2026-05-12.
+      if (isWithinReloadGuard()) return;
       reloaded = true;
+      markReloadGuard();
       window.location.reload();
     };
     navigator.serviceWorker.addEventListener("controllerchange", reloadOnce);
@@ -195,9 +265,20 @@ export function useServiceWorkerUpdate(): {
   }, []);
 
   const applyUpdate = useCallback(async () => {
+    // Marcar guard ANTES del postMessage para que cuando el SW recién
+    // activado dispare `controllerchange` + `SW_VERSION_UPDATED` el
+    // listener decida una sola recarga (y sólo si no hubo otra dentro
+    // de la ventana). Ocultar el banner de inmediato evita el flash
+    // de "banner sigue durante el reload" que veía el usuario.
+    markReloadGuard();
+    setUpdateAvailable(false);
+
     const reg =
       registration ?? (await navigator.serviceWorker.getRegistration(SW_SCOPE));
-    if (!reg) return;
+    if (!reg) {
+      window.location.reload();
+      return;
+    }
     const worker = reg.waiting ?? reg.installing;
     if (worker) {
       worker.postMessage({ type: "SKIP_WAITING" });
