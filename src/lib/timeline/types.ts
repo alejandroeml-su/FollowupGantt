@@ -32,12 +32,18 @@ export interface TimelineTask {
   isMilestone: boolean
   projectId: string
   projectName: string
+  /** Gerencia heredada del Project.area.gerencia para reusar TaskFilters. */
+  gerenciaId: string | null
+  /** Área heredada del Project.area para reusar TaskFilters. */
+  areaId: string | null
   epicId: string | null
   epicName: string | null
   epicColor: string | null
   sprintId: string | null
   sprintName: string | null
   assignee: { id: string; name: string } | null
+  /** Espejo de `assignee?.id` para casar con `TaskFilters.assigneeId`. */
+  assigneeId: string | null
 }
 
 export interface TimelineGroup {

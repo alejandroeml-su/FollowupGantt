@@ -35,11 +35,25 @@ import type {
   TimelineTask,
   TimelineZoom,
 } from '@/lib/timeline/types'
+import { TaskFiltersBar } from '@/components/interactions/TaskFiltersBar'
+import {
+  EMPTY_TASK_FILTERS,
+  matchesFilters,
+  type TaskFilters,
+} from '@/lib/taskFilters'
+import type { SerializedTask } from '@/lib/types'
 
 type Props = {
   tasks: TimelineTask[]
   initialZoom?: TimelineZoom
   initialGroupBy?: TimelineGroupBy
+  /** Catálogos para `<TaskFiltersBar>`. Opcionales — sin ellos los selects
+   * caen a vacío y el filtro sigue funcionando para los campos disponibles. */
+  projects?: { id: string; name: string; areaId?: string | null }[]
+  users?: { id: string; name: string }[]
+  gerencias?: { id: string; name: string }[]
+  areas?: { id: string; name: string; gerenciaId?: string | null }[]
+  epics?: { id: string; name: string; color: string; projectId: string }[]
 }
 
 const STATUS_TONE: Record<string, string> = {
@@ -139,16 +153,40 @@ export function TimelineBoardClient({
   tasks,
   initialZoom = 'MONTHS',
   initialGroupBy = 'PROJECT',
+  projects = [],
+  users = [],
+  gerencias = [],
+  areas = [],
+  epics = [],
 }: Props) {
   const [zoom, setZoom] = useState<TimelineZoom>(initialZoom)
   const [groupBy, setGroupBy] = useState<TimelineGroupBy>(initialGroupBy)
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set())
+  const [filters, setFilters] = useState<TaskFilters>(EMPTY_TASK_FILTERS)
   const openDrawer = useUIStore((s) => s.openDrawer)
   const router = useRouter()
   void router
 
   const win = useMemo(() => buildTimelineWindow(zoom), [zoom])
-  const groups = useMemo(() => groupTasks(tasks, groupBy), [tasks, groupBy])
+
+  // Aplicar `TaskFilters` antes de agrupar — el helper `matchesFilters`
+  // espera `SerializedTask` pero el subset de campos que lee
+  // (gerenciaId/areaId/projectId/status/type/priority/assigneeId/epicId/
+  // startDate/endDate) ya está cubierto por `TimelineTask` tras el
+  // extender de tipos. El cast preserva type-safety en la lectura del
+  // helper sin alterar el shape ligero del Timeline.
+  const filteredTasks = useMemo(
+    () =>
+      tasks.filter((t) =>
+        matchesFilters(t as unknown as SerializedTask, filters),
+      ),
+    [tasks, filters],
+  )
+
+  const groups = useMemo(
+    () => groupTasks(filteredTasks, groupBy),
+    [filteredTasks, groupBy],
+  )
   const todayPct = useMemo(() => todayMarkerPct(win), [win])
 
   const toggleGroup = (key: string) => {
@@ -178,6 +216,17 @@ export function TimelineBoardClient({
 
   return (
     <div className="flex h-full flex-col">
+      {/* Filtros estándar (Wave P13) — mismo componente que List/Kanban/Gantt. */}
+      <TaskFiltersBar
+        value={filters}
+        onChange={setFilters}
+        gerencias={gerencias}
+        areas={areas}
+        projects={projects}
+        users={users}
+        epics={epics}
+      />
+
       {/* Toolbar — Wave P16-C · stack vertical en mobile, padding compacto. */}
       <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-border bg-card px-3 py-2 md:gap-3 md:px-6 md:py-3">
         <div className="flex items-center gap-1.5">
@@ -405,24 +454,41 @@ function TimelineRow({
   const statusBg = STATUS_TONE[task.status] ?? 'bg-slate-500'
   const priorityBorder = PRIORITY_BORDER[task.priority] ?? 'border-slate-500'
 
+  // Edwin pidió pasar de single-click a doble-click para evitar abrir el
+  // drawer por descuido al hacer scroll/seleccionar. Mantenemos un
+  // handler de Enter por accesibilidad (la barra sigue siendo `<button>`
+  // y los lectores de pantalla esperan activarla con teclado).
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLButtonElement>) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault()
+      onOpen()
+    }
+  }
+  // `onDoubleClick` se dispara una sola vez por doble pulsación. Para
+  // evitar que un `onClick` accidental abra el drawer NO ponemos handler
+  // de click, sólo dblclick. El title/hover sigue mostrando la info.
+  const title = `${task.title} · ${task.priority} · ${task.startDate ? new Date(task.startDate).toLocaleDateString() : ''} → ${task.endDate ? new Date(task.endDate).toLocaleDateString() : ''}\nDoble click para abrir`
+
   return (
     <div className="relative h-9 border-b border-border/30 hover:bg-secondary/20">
       {/* Bar */}
       {task.isMilestone ? (
         <button
           type="button"
-          onClick={onOpen}
+          onDoubleClick={onOpen}
+          onKeyDown={handleKeyDown}
           className="absolute top-1/2 -translate-x-1/2 -translate-y-1/2 cursor-pointer"
           style={{ left: `${geom.leftPct}%` }}
-          title={`${task.title}${task.startDate ? ` · ${new Date(task.startDate).toLocaleDateString()}` : ''}`}
+          title={`${task.title}${task.startDate ? ` · ${new Date(task.startDate).toLocaleDateString()}` : ''}\nDoble click para abrir`}
         >
           <Diamond className="h-4 w-4 fill-amber-400 text-amber-400" />
         </button>
       ) : (
         <button
           type="button"
-          onClick={onOpen}
-          aria-label={`Abrir ${task.title}`}
+          onDoubleClick={onOpen}
+          onKeyDown={handleKeyDown}
+          aria-label={`Abrir ${task.title} (doble click)`}
           className={clsx(
             'absolute top-1.5 flex h-6 cursor-pointer items-center gap-1.5 rounded-md border-l-2 px-1.5 text-[10px] font-medium text-white shadow-sm transition-all hover:opacity-90 hover:shadow-md',
             statusBg,
@@ -433,7 +499,7 @@ function TimelineRow({
             width: `${geom.widthPct}%`,
             minWidth: '12px',
           }}
-          title={`${task.title} · ${task.priority} · ${task.startDate ? new Date(task.startDate).toLocaleDateString() : ''} → ${task.endDate ? new Date(task.endDate).toLocaleDateString() : ''}`}
+          title={title}
         >
           {task.progress > 0 && task.progress < 100 && (
             <div
