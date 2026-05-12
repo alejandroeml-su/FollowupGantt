@@ -21,30 +21,65 @@ export const dynamic = 'force-dynamic'
  * 12 semanas / 12 meses / 8 trimestres como máximo).
  */
 export default async function TimelinePage() {
-  const tasks = await prisma.task.findMany({
-    where: {
-      archivedAt: null,
-      startDate: { not: null },
-      endDate: { not: null },
-    },
-    select: {
-      id: true,
-      mnemonic: true,
-      title: true,
-      status: true,
-      priority: true,
-      type: true,
-      startDate: true,
-      endDate: true,
-      progress: true,
-      isMilestone: true,
-      project: { select: { id: true, name: true } },
-      epic: { select: { id: true, name: true, color: true } },
-      sprint: { select: { id: true, name: true } },
-      assignee: { select: { id: true, name: true } },
-    },
-    orderBy: [{ startDate: 'asc' }],
-  })
+  // Cargamos catálogos en paralelo para alimentar `<TaskFiltersBar>` y el
+  // selector de agrupamiento del Timeline. Mismo patrón que /list, /kanban
+  // y /gantt: una sola RSC pasa todo el contexto al client component.
+  const [tasks, projects, users, gerencias, areas, epics] = await Promise.all([
+    prisma.task.findMany({
+      where: {
+        archivedAt: null,
+        startDate: { not: null },
+        endDate: { not: null },
+      },
+      select: {
+        id: true,
+        mnemonic: true,
+        title: true,
+        status: true,
+        priority: true,
+        type: true,
+        startDate: true,
+        endDate: true,
+        progress: true,
+        isMilestone: true,
+        assigneeId: true,
+        project: {
+          select: {
+            id: true,
+            name: true,
+            areaId: true,
+            area: { select: { gerenciaId: true } },
+          },
+        },
+        epic: { select: { id: true, name: true, color: true } },
+        sprint: { select: { id: true, name: true } },
+        assignee: { select: { id: true, name: true } },
+      },
+      orderBy: [{ startDate: 'asc' }],
+    }),
+    prisma.project.findMany({
+      select: { id: true, name: true, areaId: true },
+      orderBy: { name: 'asc' },
+    }),
+    prisma.user.findMany({
+      where: { archivedAt: null },
+      select: { id: true, name: true },
+      orderBy: { name: 'asc' },
+    }),
+    prisma.gerencia.findMany({
+      select: { id: true, name: true },
+      orderBy: { name: 'asc' },
+    }),
+    prisma.area.findMany({
+      select: { id: true, name: true, gerenciaId: true },
+      orderBy: { name: 'asc' },
+    }),
+    prisma.epic.findMany({
+      where: { archivedAt: null },
+      select: { id: true, name: true, color: true, projectId: true },
+      orderBy: [{ projectId: 'asc' }, { position: 'asc' }],
+    }),
+  ])
 
   const serialized: TimelineTask[] = tasks.map((t) => ({
     id: t.id,
@@ -59,12 +94,15 @@ export default async function TimelinePage() {
     isMilestone: t.isMilestone,
     projectId: t.project.id,
     projectName: t.project.name,
+    gerenciaId: t.project.area?.gerenciaId ?? null,
+    areaId: t.project.areaId ?? null,
     epicId: t.epic?.id ?? null,
     epicName: t.epic?.name ?? null,
     epicColor: t.epic?.color ?? null,
     sprintId: t.sprint?.id ?? null,
     sprintName: t.sprint?.name ?? null,
     assignee: t.assignee,
+    assigneeId: t.assigneeId ?? null,
   }))
 
   return (
@@ -85,7 +123,14 @@ export default async function TimelinePage() {
       </header>
 
       <div className="flex-1 overflow-hidden">
-        <TimelineBoardClient tasks={serialized} />
+        <TimelineBoardClient
+          tasks={serialized}
+          projects={projects}
+          users={users}
+          gerencias={gerencias}
+          areas={areas}
+          epics={epics}
+        />
       </div>
     </div>
   )
