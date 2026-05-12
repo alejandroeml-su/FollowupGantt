@@ -28,7 +28,7 @@ const SW_SCOPE = "/";
 
 export type ServiceWorkerSupport =
   | { supported: true }
-  | { supported: false; reason: "no-window" | "no-sw-api" | "dev-mode" };
+  | { supported: false; reason: "no-window" | "no-sw-api" | "dev-mode" | "automated" };
 
 export function getServiceWorkerSupport(): ServiceWorkerSupport {
   if (typeof window === "undefined") return { supported: false, reason: "no-window" };
@@ -37,6 +37,14 @@ export function getServiceWorkerSupport(): ServiceWorkerSupport {
   }
   if (process.env.NODE_ENV !== "production") {
     return { supported: false, reason: "dev-mode" };
+  }
+  // Playwright / Selenium / Puppeteer setean `navigator.webdriver = true`.
+  // El SW interfiere con `page.evaluate` cuando se reinstala a mitad de
+  // un test (controllerchange → reload → context destroyed). Mejor no
+  // registrarlo en automatizado · los tests siguen funcionando porque
+  // las navegaciones HTML van directo a red.
+  if (navigator.webdriver === true) {
+    return { supported: false, reason: "automated" };
   }
   return { supported: true };
 }
@@ -115,9 +123,18 @@ export function useServiceWorkerUpdate(): {
 
     // Cuando el SW nuevo activa, recargamos para asegurar consistencia
     // entre HTML/RSC y bundles. Se dispara solo una vez por sesion.
+    //
+    // CRÍTICO: bypass en entornos automatizados (Playwright/Selenium ponen
+    // `navigator.webdriver === true`). Un reload a mitad de `page.evaluate`
+    // destruye el contexto y rompe los tests E2E + a11y axe-core con
+    // "Execution context was destroyed, most likely because of a navigation"
+    // (incidente CI 2026-05-11).
+    const isAutomated =
+      typeof navigator !== "undefined" && navigator.webdriver === true;
+
     let reloaded = false;
     const reloadOnce = () => {
-      if (reloaded) return;
+      if (reloaded || isAutomated) return;
       reloaded = true;
       window.location.reload();
     };
