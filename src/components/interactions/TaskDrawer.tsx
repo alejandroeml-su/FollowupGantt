@@ -50,6 +50,15 @@ export function TaskDrawer({
           className="fixed inset-y-0 right-0 z-50 flex h-full w-full max-w-[520px] flex-col border-l border-slate-200 bg-white shadow-xl outline-none md:max-w-[520px] max-md:max-w-full dark:border-border dark:bg-background"
           onOpenAutoFocus={(e) => e.preventDefault()}
         >
+          {/* Radix exige Dialog.Title para a11y (screen readers). El diseño
+              actual usa breadcrumbs como heading visible, así que ocultamos
+              el título visualmente pero lo exponemos al árbol accesible.
+              Fix warnings "DialogContent requires a DialogTitle" (incidente
+              2026-05-12 reportado en DevTools Issues). */}
+          <Dialog.Title className="sr-only">Detalle de tarea</Dialog.Title>
+          <Dialog.Description className="sr-only">
+            Panel lateral con la información completa de la tarea seleccionada
+          </Dialog.Description>
           <header className="flex items-center gap-2 border-b border-slate-200 px-4 py-3 dark:border-border">
             <button
               type="button"
