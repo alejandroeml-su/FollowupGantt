@@ -80,14 +80,14 @@ type SupabaseClientLike = {
  */
 async function resolveSupabaseClient(): Promise<SupabaseClientLike | null> {
   if (typeof window === 'undefined') return null
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
-  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-  if (!url || !anonKey) return null
+  // Reusar el singleton de realtime para evitar `Multiple GoTrueClient
+  // instances detected` y la pelea de websockets que causaba el crash
+  // `cannot add 'presence' callbacks after 'subscribe()'` al abrir el
+  // drawer de tarea en `/gantt`. Antes de este fix este hook creaba su
+  // propio `createClient(...)` y abría un segundo WS a realtime/v1.
   try {
-    const mod = await import('@supabase/supabase-js')
-    return mod.createClient(url, anonKey, {
-      realtime: { params: { eventsPerSecond: 30 } },
-    }) as unknown as SupabaseClientLike
+    const mod = await import('@/lib/realtime/supabase-client')
+    return (mod.getBrowserClient() as unknown as SupabaseClientLike) ?? null
   } catch {
     return null
   }
