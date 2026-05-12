@@ -156,6 +156,29 @@ export function useEditPresence(
       return
     }
 
+    // Si un mount anterior dejó cached un channel con este `topic` (cleanup
+    // async aún en vuelo o StrictMode doble-mount), llamar `.on()` sobre él
+    // arroja "cannot add 'presence' callbacks after 'subscribe()'" y rompe
+    // el árbol de React con error #418. Purgar antes de crear uno nuevo
+    // garantiza idempotencia. `getChannels` está disponible cuando el
+    // cliente es el de `@supabase/supabase-js` real; los tests inyectan un
+    // mock que puede no implementarlo, por eso el guard.
+    const getChannelsFn = (client as unknown as {
+      getChannels?: () => RealtimeChannel[]
+    }).getChannels
+    if (typeof getChannelsFn === 'function') {
+      const stale = getChannelsFn
+        .call(client)
+        .find((c) => c.topic === `realtime:${channelName}`)
+      if (stale) {
+        try {
+          client.removeChannel(stale)
+        } catch {
+          // Si ya fue removido (HMR / unmount doble) ignoramos.
+        }
+      }
+    }
+
     const channel = client.channel(channelName, {
       config: { presence: { key: userRef.current.id } },
     })
