@@ -370,7 +370,50 @@ function GanttBoardClientImpl({
   }
 
   const totalWidth = rangeDays * DAY_WIDTH
-  const canvasHeight = Math.max(ROW_HEIGHT, visibleLocal.length * ROW_HEIGHT)
+
+  // HU 2026-05-12 — Agrupar visualmente por proyecto, igual que en Timeline.
+  // `rowsLayout` mezcla filas de encabezado (kind=group) con filas de tarea
+  // (kind=task). El header de proyecto se inserta antes del primer task de
+  // cada projectId distinto. El canvas y la columna de labels iteran sobre
+  // este mismo array para mantener alineación perfecta.
+  type GanttRow =
+    | { kind: 'group'; key: string; label: string; count: number }
+    | { kind: 'task'; task: (typeof visibleLocal)[number] }
+  const rowsLayout: GanttRow[] = useMemo(() => {
+    // Agrupar respetando el orden actual de `visibleLocal` (ya ordenado por
+    // startDate asc). Para cada projectId, se calcula su count total para
+    // mostrarlo en el header.
+    const out: GanttRow[] = []
+    const counts: Record<string, number> = {}
+    for (const t of visibleLocal) {
+      const pid =
+        ((t as unknown as { projectId?: string | null }).projectId ?? null) ||
+        '__no_project__'
+      counts[pid] = (counts[pid] ?? 0) + 1
+    }
+    let lastPid: string | null = null
+    for (const t of visibleLocal) {
+      const pid =
+        ((t as unknown as { projectId?: string | null }).projectId ?? null) ||
+        '__no_project__'
+      if (pid !== lastPid) {
+        const projectName =
+          (t as unknown as { project?: { name?: string } }).project?.name ??
+          projects.find((p) => p.id === pid)?.name ??
+          (pid === '__no_project__' ? 'Sin proyecto' : pid)
+        out.push({
+          kind: 'group',
+          key: pid,
+          label: projectName,
+          count: counts[pid],
+        })
+        lastPid = pid
+      }
+      out.push({ kind: 'task', task: t })
+    }
+    return out
+  }, [visibleLocal, projects])
+  const canvasHeight = Math.max(ROW_HEIGHT, rowsLayout.length * ROW_HEIGHT)
 
   // ─── HU-1.3: modo conexión (drag-handle para crear dependencia) ───
   //
@@ -493,7 +536,13 @@ function GanttBoardClientImpl({
   // dentro del rango aparecen aquí; el resto no tiene flechas.
   const positions = useMemo<GanttTaskPosition[]>(() => {
     const result: GanttTaskPosition[] = []
-    visibleLocal.forEach((task, i) => {
+    // Iteramos sobre `rowsLayout` para que el `middleY` (eje vertical de
+    // las flechas SVG) se calcule con el índice REAL — el mismo que usa
+    // <GanttBarSlot/> tras intercalar headers de proyecto. Sin esto las
+    // flechas quedaban descolocadas verticalmente respecto a las barras.
+    rowsLayout.forEach((row, i) => {
+      if (row.kind !== 'task') return
+      const task = row.task
       const s = parseISO(task.startDate)
       const e = parseISO(task.endDate)
       if (!s || !e) return
@@ -507,7 +556,7 @@ function GanttBoardClientImpl({
       result.push({ id: task.id, left, right, middleY })
     })
     return result
-  }, [visibleLocal, start, rangeDays])
+  }, [rowsLayout, start, rangeDays])
 
   // Edges para la capa SVG: solo los que conectan tareas visibles. La capa
   // del POC ya filtra por type !== 'FS'; las demás se difieren a HU-1.3.
@@ -875,17 +924,32 @@ function GanttBoardClientImpl({
           </div>
         ) : (
           <div className="flex">
-            {/* Columna de labels — una fila por tarea, alineada en altura con el canvas. */}
+            {/* Columna de labels — encabezados de proyecto + filas de tarea. */}
             <div className="w-64 shrink-0 border-r border-border">
-              {visibleLocal.map((task) => (
-                <GanttLabelRow
-                  key={task.id}
-                  task={task}
-                  focused={focusedId === task.id}
-                  onFocus={() => setFocusedId(task.id)}
-                  rowHeight={ROW_HEIGHT}
-                />
-              ))}
+              {rowsLayout.map((row) =>
+                row.kind === 'group' ? (
+                  <div
+                    key={`g-${row.key}`}
+                    style={{ height: ROW_HEIGHT }}
+                    className="flex items-center gap-2 border-b border-border bg-secondary/60 px-3 text-xs font-semibold uppercase tracking-wider text-foreground"
+                    data-testid={`gantt-group-${row.key}`}
+                  >
+                    <span className="h-1.5 w-1.5 rounded-full bg-indigo-400" />
+                    <span className="truncate">{row.label}</span>
+                    <span className="ml-auto rounded bg-input/60 px-1.5 py-0.5 text-[10px] font-bold text-muted-foreground">
+                      {row.count}
+                    </span>
+                  </div>
+                ) : (
+                  <GanttLabelRow
+                    key={row.task.id}
+                    task={row.task}
+                    focused={focusedId === row.task.id}
+                    onFocus={() => setFocusedId(row.task.id)}
+                    rowHeight={ROW_HEIGHT}
+                  />
+                ),
+              )}
             </div>
 
             {/* Canvas único: relative para anclar la capa SVG global y todas las barras. */}
@@ -963,38 +1027,51 @@ function GanttBoardClientImpl({
                 })}
               </div>
 
-              {/* Líneas horizontales por fila + zona clickeable de la fila. */}
-              {visibleLocal.map((task, i) => (
-                <GanttBarSlot
-                  key={task.id}
-                  task={task}
-                  index={i}
-                  focused={focusedId === task.id}
-                  onFocus={() => setFocusedId(task.id)}
-                  rangeStart={start}
-                  rangeDays={rangeDays}
-                  rowHeight={ROW_HEIGHT}
-                  cpm={cpmByTaskId?.[task.id]}
-                  variance={varianceMap.get(task.id) ?? null}
-                  onShift={(delta) => commitShift(task.id, delta)}
-                  onResizeStart={(delta) => {
-                    const s = parseISO(task.startDate)
-                    const e = parseISO(task.endDate)
-                    if (!s || !e) return
-                    commitDates(task.id, addDays(s, delta), e, 'resize-start')
-                  }}
-                  onResizeEnd={(delta) => {
-                    const s = parseISO(task.startDate)
-                    const e = parseISO(task.endDate)
-                    if (!s || !e) return
-                    commitDates(task.id, s, addDays(e, delta), 'resize-end')
-                  }}
-                  // HU-1.3: drag-handle activo solo si la tarea tiene fechas;
-                  // se renderiza un círculo en el borde derecho de la barra.
-                  isConnectionTarget={connection?.targetTaskId === task.id}
-                  onConnectStart={(x, y) => beginConnection(task.id, x, y)}
-                />
-              ))}
+              {/* Líneas horizontales por fila + zona clickeable de la fila.
+                  Iteramos sobre `rowsLayout` (no `visibleLocal`) para que
+                  las barras se alineen con la columna de labels que también
+                  intercala headers de proyecto. Los headers reservan un
+                  slot vacío (banda gris) para mantener la cuadrícula. */}
+              {rowsLayout.map((row, i) =>
+                row.kind === 'group' ? (
+                  <div
+                    key={`gbg-${row.key}`}
+                    aria-hidden
+                    className="pointer-events-none absolute inset-x-0 border-b border-border bg-secondary/20"
+                    style={{ top: i * ROW_HEIGHT, height: ROW_HEIGHT }}
+                  />
+                ) : (
+                  <GanttBarSlot
+                    key={row.task.id}
+                    task={row.task}
+                    index={i}
+                    focused={focusedId === row.task.id}
+                    onFocus={() => setFocusedId(row.task.id)}
+                    rangeStart={start}
+                    rangeDays={rangeDays}
+                    rowHeight={ROW_HEIGHT}
+                    cpm={cpmByTaskId?.[row.task.id]}
+                    variance={varianceMap.get(row.task.id) ?? null}
+                    onShift={(delta) => commitShift(row.task.id, delta)}
+                    onResizeStart={(delta) => {
+                      const s = parseISO(row.task.startDate)
+                      const e = parseISO(row.task.endDate)
+                      if (!s || !e) return
+                      commitDates(row.task.id, addDays(s, delta), e, 'resize-start')
+                    }}
+                    onResizeEnd={(delta) => {
+                      const s = parseISO(row.task.startDate)
+                      const e = parseISO(row.task.endDate)
+                      if (!s || !e) return
+                      commitDates(row.task.id, s, addDays(e, delta), 'resize-end')
+                    }}
+                    // HU-1.3: drag-handle activo solo si la tarea tiene fechas;
+                    // se renderiza un círculo en el borde derecho de la barra.
+                    isConnectionTarget={connection?.targetTaskId === row.task.id}
+                    onConnectStart={(x, y) => beginConnection(row.task.id, x, y)}
+                  />
+                ),
+              )}
 
               {/* Capa SVG superpuesta — flechas de dependencias FS (HU-1.2).
                   HU-1.4: clic derecho sobre la flecha abre el mini-menú. */}

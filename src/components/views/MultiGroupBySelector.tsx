@@ -29,6 +29,7 @@ export type GroupOption = {
 }
 
 const DEFAULT_OPTIONS: GroupOption[] = [
+  { value: 'project', label: 'Proyecto' },
   { value: 'assignee', label: 'Responsable' },
   { value: 'sprint', label: 'Sprint' },
   { value: 'phase', label: 'Fase' },

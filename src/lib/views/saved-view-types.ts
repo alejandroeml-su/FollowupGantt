@@ -16,6 +16,7 @@ export type ViewSurfaceLiteral = (typeof VIEW_SURFACES)[number]
  * customFieldIds posibles.
  */
 export const GROUPING_KEYS = [
+  'project',
   'assignee',
   'sprint',
   'phase',
