@@ -5,6 +5,8 @@ import { GlobalBreadcrumbs } from '@/components/interactions/GlobalBreadcrumbs'
 import { ViewSwitcher } from '@/components/interactions/ViewSwitcher'
 import { NewTaskButton } from '@/components/interactions/NewTaskButton'
 import { getCurrentUserPresence } from '@/lib/auth/get-current-user-presence'
+import { getCurrentUser } from '@/lib/auth/get-current-user'
+import { resolveProjectVisibility } from '@/lib/auth/visibility'
 import {
   buildTaskTreeInclude,
   DEFAULT_TREE_DEPTH,
@@ -24,13 +26,17 @@ export default async function KanbanBoard() {
   // drawer (presence + edit locks).
   const currentUser = await getCurrentUserPresence()
 
+  // HU "Acceso Transversal por Asignación de Proyecto" (2026-05-12).
+  const sessionUser = await getCurrentUser()
+  const visibility = await resolveProjectVisibility(sessionUser)
+
   // Bug fix 2026-05-06: antes filtrabamos `parentId: null`, así que
   // las subtareas (y más allá) nunca aparecían en Kanban aunque el
   // drag&drop entre columnas debe poder moverlas. Ahora cargamos
   // todas las activas + subtree completo para el rollup; cada tarea
   // aparece en la columna que le corresponde según `status`.
   const tasks = await prisma.task.findMany({
-    where: { archivedAt: null },
+    where: { AND: [{ archivedAt: null }, visibility.taskWhere] },
     include: buildTaskTreeInclude({ depth: DEFAULT_TREE_DEPTH }),
     orderBy: [{ position: 'asc' }, { priority: 'desc' }],
   })
@@ -45,10 +51,14 @@ export default async function KanbanBoard() {
   )
 
   const [projects, users, allTasksRaw, gerencias, areas, phases, sprints, epics] = await Promise.all([
-    prisma.project.findMany({ select: { id: true, name: true, areaId: true }, orderBy: { name: 'asc' } }),
+    prisma.project.findMany({
+      where: visibility.projectWhere,
+      select: { id: true, name: true, areaId: true },
+      orderBy: { name: 'asc' },
+    }),
     prisma.user.findMany({ orderBy: { name: 'asc' } }),
     prisma.task.findMany({
-      where: { archivedAt: null },
+      where: { AND: [{ archivedAt: null }, visibility.taskWhere] },
       select: { id: true, title: true, mnemonic: true, projectId: true, project: { select: { id: true, name: true } } },
       orderBy: [{ project: { name: 'asc' } }, { title: 'asc' }],
     }),

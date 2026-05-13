@@ -4,6 +4,8 @@ import { TimelineBoardClient } from '@/components/timeline/TimelineBoardClient'
 import { GlobalBreadcrumbs } from '@/components/interactions/GlobalBreadcrumbs'
 import { ViewSwitcher } from '@/components/interactions/ViewSwitcher'
 import type { TimelineTask } from '@/lib/timeline/types'
+import { getCurrentUser } from '@/lib/auth/get-current-user'
+import { resolveProjectVisibility } from '@/lib/auth/visibility'
 
 export const dynamic = 'force-dynamic'
 
@@ -21,15 +23,26 @@ export const dynamic = 'force-dynamic'
  * 12 semanas / 12 meses / 8 trimestres como máximo).
  */
 export default async function TimelinePage() {
+  // HU "Acceso Transversal por Asignación de Proyecto" (2026-05-12) —
+  // limita tareas y proyectos visibles a la gerencia base + asignaciones
+  // cross-gerencia.
+  const sessionUser = await getCurrentUser()
+  const visibility = await resolveProjectVisibility(sessionUser)
+
   // Cargamos catálogos en paralelo para alimentar `<TaskFiltersBar>` y el
   // selector de agrupamiento del Timeline. Mismo patrón que /list, /kanban
   // y /gantt: una sola RSC pasa todo el contexto al client component.
   const [tasks, projects, users, gerencias, areas, epics] = await Promise.all([
     prisma.task.findMany({
       where: {
-        archivedAt: null,
-        startDate: { not: null },
-        endDate: { not: null },
+        AND: [
+          {
+            archivedAt: null,
+            startDate: { not: null },
+            endDate: { not: null },
+          },
+          visibility.taskWhere,
+        ],
       },
       select: {
         id: true,
@@ -58,6 +71,7 @@ export default async function TimelinePage() {
       orderBy: [{ startDate: 'asc' }],
     }),
     prisma.project.findMany({
+      where: visibility.projectWhere,
       select: { id: true, name: true, areaId: true },
       orderBy: { name: 'asc' },
     }),

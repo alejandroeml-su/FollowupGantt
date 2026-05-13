@@ -8,12 +8,17 @@ import 'server-only'
  *   ┌──────────────────┬─────────┬──────────┬─────────┬─────────┬────────┐
  *   │ Rol              │ Asign.  │ Gerencia │ Espacio │ Otros   │ Config │
  *   ├──────────────────┼─────────┼──────────┼─────────┼─────────┼────────┤
- *   │ USER (AGENTE)    │   ✓     │    —     │   —     │   —     │   —    │
+ *   │ USER (AGENTE)    │   ✓     │    ✓*    │   —     │   —     │   —    │
  *   │ GERENTE_AREA     │   ✓     │    ✓     │   —     │   —     │   —    │
  *   │ GERENCIA_GENERAL │   ✓     │    ✓     │   ✓     │   —     │   —    │
  *   │ ADMIN            │   ✓     │    ✓     │   ✓     │   ✓     │   —    │
  *   │ SUPER_ADMIN      │   ✓     │    ✓     │   ✓     │   ✓     │   ✓    │
  *   └──────────────────┴─────────┴──────────┴─────────┴─────────┴────────┘
+ *
+ *   *USER ve los proyectos de su Gerencia base (criterio 1 de la HU
+ *   "Acceso Transversal por Asignación") + los proyectos externos a los
+ *   que está explícitamente asignado vía ProjectAssignment. Otros
+ *   proyectos de gerencias ajenas siguen ocultos.
  *
  * Cada rol hereda los permisos del rol inferior y agrega un nuevo alcance.
  *
@@ -89,17 +94,21 @@ export async function getProjectAccessFilter(
     }
   }
 
-  // 4. USER · solo asignación directa o por equipo, dentro del WS activo.
+  // 4. USER · gerencia base + asignación directa cross-gerencia + equipos.
+  //    HU "Acceso Transversal por Asignación de Proyecto" (2026-05-12):
+  //    el usuario debe ver por defecto su gerencia base y, como excepción,
+  //    los proyectos de OTRAS gerencias donde tiene asignación explícita.
+  //    Sin gerencia base (`user.gerenciaId` nulo) cae al comportamiento
+  //    legacy de "solo proyectos asignados".
+  const orClauses: Prisma.ProjectWhereInput[] = [
+    { assignments: { some: { userId: user.id } } },
+    { teamProjects: { some: { team: { members: { some: { userId: user.id } } } } } },
+  ]
+  if (user.gerenciaId) {
+    orClauses.push({ area: { gerenciaId: user.gerenciaId } })
+  }
   return {
-    AND: [
-      wsScope,
-      {
-        OR: [
-          { assignments: { some: { userId: user.id } } },
-          { teamProjects: { some: { team: { members: { some: { userId: user.id } } } } } },
-        ],
-      },
-    ],
+    AND: [wsScope, { OR: orClauses }],
   }
 }
 
@@ -168,4 +177,98 @@ export async function getVisibleProjectIds(
     select: { id: true },
   })
   return projects.map((p) => p.id)
+}
+
+/**
+ * Devuelve un `Prisma.TaskWhereInput` que limita las tareas a los proyectos
+ * visibles para el usuario. Pensado para los listados globales (`/list`,
+ * `/gantt`, `/timeline`, `/kanban`, `/calendar`) que cargan tareas sin
+ * filtro de proyecto explícito y, antes de esta HU, exponían tareas de
+ * todas las gerencias a cualquier usuario autenticado.
+ *
+ * El filtro devuelve `{ projectId: { in: [] } }` cuando no hay proyectos
+ * visibles, lo que efectivamente vacía el resultado sin lanzar.
+ *
+ * Para SUPER_ADMIN/ADMIN devuelve `{}` (sin restricción) porque
+ * `getProjectAccessFilter` ya retornó `{}` y no tendría sentido el `IN`.
+ */
+export async function getTaskAccessFilter(
+  user: SessionUser & {
+    gerenciaId?: string | null
+    workspaceId?: string | null
+  },
+): Promise<Prisma.TaskWhereInput> {
+  const projectFilter = await getProjectAccessFilter(user)
+  // Si el filtro de proyectos es `{}` el usuario es ADMIN/SUPER_ADMIN: no
+  // restringimos tareas. `Object.keys` cubre `{ AND: [{...}] }` y `{}`.
+  if (Object.keys(projectFilter).length === 0) {
+    return {}
+  }
+  const visibleIds = await getVisibleProjectIds(user)
+  if (visibleIds.length === 0) {
+    return { projectId: { in: [] } }
+  }
+  return { projectId: { in: visibleIds } }
+}
+
+/**
+ * Resuelve la visibilidad de proyectos en una sola pasada y devuelve los
+ * insumos que los listados globales necesitan:
+ *
+ *   - `unrestricted: true` para ADMIN/SUPER_ADMIN (sin filtros).
+ *   - `unrestricted: false, visibleIds: [...]` para el resto.
+ *   - `unrestricted: false, visibleIds: []` si no hay sesión.
+ *
+ * Los callers consumen:
+ *   - `taskWhere`: spread en `prisma.task.findMany({ where: {...} })`.
+ *   - `projectWhere`: spread en `prisma.project.findMany({ where: {...} })`.
+ *
+ * Pensado para reducir boilerplate y centralizar el comportamiento de la
+ * HU "Acceso Transversal por Asignación de Proyecto" en todas las pages.
+ */
+export async function resolveProjectVisibility(
+  user:
+    | (SessionUser & {
+        gerenciaId?: string | null
+        workspaceId?: string | null
+      })
+    | null,
+): Promise<{
+  unrestricted: boolean
+  visibleIds: string[]
+  taskWhere: Prisma.TaskWhereInput
+  projectWhere: Prisma.ProjectWhereInput
+}> {
+  if (!user) {
+    return {
+      unrestricted: false,
+      visibleIds: [],
+      taskWhere: { projectId: { in: [] } },
+      projectWhere: { id: { in: [] } },
+    }
+  }
+  const projectFilter = await getProjectAccessFilter(user)
+  if (Object.keys(projectFilter).length === 0) {
+    return {
+      unrestricted: true,
+      visibleIds: [],
+      taskWhere: {},
+      projectWhere: {},
+    }
+  }
+  const visibleIds = await getVisibleProjectIds(user)
+  if (visibleIds.length === 0) {
+    return {
+      unrestricted: false,
+      visibleIds: [],
+      taskWhere: { projectId: { in: [] } },
+      projectWhere: { id: { in: [] } },
+    }
+  }
+  return {
+    unrestricted: false,
+    visibleIds,
+    taskWhere: { projectId: { in: visibleIds } },
+    projectWhere: { id: { in: visibleIds } },
+  }
 }

@@ -5,6 +5,8 @@ import { GlobalBreadcrumbs } from '@/components/interactions/GlobalBreadcrumbs'
 import { ViewSwitcher } from '@/components/interactions/ViewSwitcher'
 import { NewTaskButton } from '@/components/interactions/NewTaskButton'
 import { getCurrentUserPresence } from '@/lib/auth/get-current-user-presence'
+import { getCurrentUser } from '@/lib/auth/get-current-user'
+import { resolveProjectVisibility } from '@/lib/auth/visibility'
 import { buildTaskTreeInclude, DEFAULT_TREE_DEPTH } from '@/lib/tasks/load-tree'
 
 export const dynamic = 'force-dynamic'
@@ -15,17 +17,28 @@ export default async function ListViewPage() {
   // y el drawer degrada (sin presence pero la UX de tarea sigue OK).
   const currentUser = await getCurrentUserPresence()
 
+  // HU "Acceso Transversal por Asignación de Proyecto" (2026-05-12) — limita
+  // las tareas y catálogos a los proyectos visibles para el usuario (su
+  // gerencia base + asignaciones cross-gerencia). Sin sesión devolvemos
+  // listas vacías para no exponer datos a anónimos.
+  const sessionUser = await getCurrentUser()
+  const visibility = await resolveProjectVisibility(sessionUser)
+
   const dbTasks = await prisma.task.findMany({
-    where: { parentId: null, archivedAt: null },
+    where: { AND: [{ parentId: null, archivedAt: null }, visibility.taskWhere] },
     include: buildTaskTreeInclude({ depth: DEFAULT_TREE_DEPTH }),
     orderBy: [{ position: 'asc' }, { createdAt: 'desc' }],
   })
 
   const [projects, users, allTasksRaw, gerencias, areas, epics] = await Promise.all([
-    prisma.project.findMany({ select: { id: true, name: true, areaId: true }, orderBy: { name: 'asc' } }),
+    prisma.project.findMany({
+      where: visibility.projectWhere,
+      select: { id: true, name: true, areaId: true },
+      orderBy: { name: 'asc' },
+    }),
     prisma.user.findMany({ orderBy: { name: 'asc' } }),
     prisma.task.findMany({
-      where: { archivedAt: null },
+      where: { AND: [{ archivedAt: null }, visibility.taskWhere] },
       select: { id: true, title: true, mnemonic: true, projectId: true, project: { select: { id: true, name: true } } },
       orderBy: [{ project: { name: 'asc' } }, { title: 'asc' }],
     }),
