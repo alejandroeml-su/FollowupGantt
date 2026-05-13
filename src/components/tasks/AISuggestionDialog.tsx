@@ -222,8 +222,8 @@ function DialogBody({
       aria-labelledby="ai-suggestion-dialog-title"
       data-testid="ai-suggestion-dialog"
     >
-      <div className="bg-white rounded-lg shadow-xl max-w-3xl w-full max-h-[90vh] overflow-y-auto">
-        <header className="border-b border-gray-200 p-4 flex items-center justify-between">
+      <div className="bg-white dark:bg-card rounded-lg shadow-xl max-w-3xl w-full max-h-[90vh] overflow-y-auto">
+        <header className="border-b border-gray-200 dark:border-border p-4 flex items-center justify-between">
           <div>
             <h2
               id="ai-suggestion-dialog-title"
@@ -232,7 +232,7 @@ function DialogBody({
               {title}
             </h2>
             <p
-              className="text-xs text-gray-500"
+              className="text-xs text-gray-500 dark:text-muted-foreground"
               data-testid="ai-suggestion-source"
             >
               {SOURCE_LABELS[source]}
@@ -242,7 +242,7 @@ function DialogBody({
           <button
             type="button"
             onClick={onClose}
-            className="text-gray-500 hover:text-gray-700"
+            className="text-gray-500 hover:text-gray-700 dark:text-muted-foreground dark:hover:text-foreground"
             aria-label="Cerrar"
           >
             ✕
@@ -252,7 +252,7 @@ function DialogBody({
         <div className="p-4 space-y-4">
           {error && (
             <div
-              className="p-2 border border-red-300 bg-red-50 text-red-800 rounded text-sm"
+              className="p-2 border border-red-300 bg-red-50 text-red-800 rounded text-sm dark:border-rose-800/60 dark:bg-rose-950/40 dark:text-rose-200"
               role="alert"
               data-testid="ai-suggestion-error"
             >
@@ -264,30 +264,30 @@ function DialogBody({
           {suggestion.kind === 'description' && (
             <div className="grid md:grid-cols-2 gap-4">
               <section aria-label="Descripción actual">
-                <h3 className="text-sm font-semibold mb-2 text-gray-700">
+                <h3 className="text-sm font-semibold mb-2 text-gray-700 dark:text-foreground/90">
                   Actual
                 </h3>
                 <div
-                  className="text-sm text-gray-800 whitespace-pre-wrap border border-gray-200 rounded p-2 bg-gray-50 min-h-[120px]"
+                  className="text-sm text-gray-800 whitespace-pre-wrap border border-gray-200 rounded p-2 bg-gray-50 min-h-[120px] dark:text-foreground dark:border-border dark:bg-secondary/40"
                   data-testid="ai-current-description"
                 >
                   {currentTask.description || '(vacía)'}
                 </div>
               </section>
               <section aria-label="Descripción sugerida">
-                <h3 className="text-sm font-semibold mb-2 text-blue-700">
+                <h3 className="text-sm font-semibold mb-2 text-blue-700 dark:text-indigo-300">
                   Sugerida
                 </h3>
                 {editing ? (
                   <textarea
-                    className="w-full border border-blue-300 rounded p-2 text-sm min-h-[120px]"
+                    className="w-full border border-blue-300 rounded p-2 text-sm min-h-[120px] dark:border-indigo-700 dark:bg-input dark:text-foreground"
                     value={draftDescription}
                     onChange={(e) => setDraftDescription(e.target.value)}
                     data-testid="ai-suggested-description-edit"
                   />
                 ) : (
                   <div
-                    className="text-sm text-gray-800 whitespace-pre-wrap border border-blue-200 rounded p-2 bg-blue-50 min-h-[120px]"
+                    className="text-sm text-gray-800 whitespace-pre-wrap border border-blue-200 rounded p-2 bg-blue-50 min-h-[120px] dark:text-foreground dark:border-indigo-800/60 dark:bg-indigo-950/40"
                     data-testid="ai-suggested-description"
                   >
                     {suggestion.data.improvedDescription}
@@ -295,10 +295,10 @@ function DialogBody({
                 )}
                 {suggestion.data.acceptanceCriteria.length > 0 && (
                   <div className="mt-3">
-                    <h4 className="text-xs font-semibold text-gray-700">
+                    <h4 className="text-xs font-semibold text-gray-700 dark:text-foreground/90">
                       Criterios de aceptación sugeridos
                     </h4>
-                    <ul className="text-xs text-gray-700 list-disc ml-4 mt-1">
+                    <ul className="text-xs text-gray-700 list-disc ml-4 mt-1 dark:text-foreground/90">
                       {suggestion.data.acceptanceCriteria.map((c, i) => (
                         <li key={i}>{c}</li>
                       ))}
@@ -307,10 +307,10 @@ function DialogBody({
                 )}
                 {suggestion.data.risks.length > 0 && (
                   <div className="mt-3">
-                    <h4 className="text-xs font-semibold text-amber-700">
+                    <h4 className="text-xs font-semibold text-amber-700 dark:text-amber-300">
                       Riesgos identificados
                     </h4>
-                    <ul className="text-xs text-amber-800 list-disc ml-4 mt-1">
+                    <ul className="text-xs text-amber-800 list-disc ml-4 mt-1 dark:text-amber-200">
                       {suggestion.data.risks.map((r, i) => (
                         <li key={i}>{r}</li>
                       ))}
@@ -324,7 +324,7 @@ function DialogBody({
           {/* CHECKLIST */}
           {suggestion.kind === 'checklist' && (
             <section aria-label="Checklist sugerida">
-              <p className="text-xs text-gray-500 mb-2">
+              <p className="text-xs text-gray-500 mb-2 dark:text-muted-foreground">
                 Se anexarán como bloque al final de la descripción.
               </p>
               <ul
@@ -337,7 +337,7 @@ function DialogBody({
                     {editing ? (
                       <input
                         type="text"
-                        className="flex-1 border border-gray-300 rounded px-2 py-1 text-sm"
+                        className="flex-1 border border-gray-300 rounded px-2 py-1 text-sm dark:border-border dark:bg-input dark:text-foreground"
                         value={it.text}
                         onChange={(e) => {
                           const next = [...draftChecklist]
@@ -350,7 +350,7 @@ function DialogBody({
                       <span>{it.text}</span>
                     )}
                     {it.optional && (
-                      <span className="text-xs text-gray-500">(opcional)</span>
+                      <span className="text-xs text-gray-500 dark:text-muted-foreground">(opcional)</span>
                     )}
                   </li>
                 ))}
@@ -362,17 +362,17 @@ function DialogBody({
           {suggestion.kind === 'tags' && (
             <section aria-label="Tags sugeridos">
               <div className="mb-2">
-                <h3 className="text-sm font-semibold text-gray-700">
+                <h3 className="text-sm font-semibold text-gray-700 dark:text-foreground/90">
                   Actuales
                 </h3>
                 <div className="flex flex-wrap gap-1 mt-1">
                   {(currentTask.tags ?? []).length === 0 && (
-                    <span className="text-xs text-gray-500">(sin tags)</span>
+                    <span className="text-xs text-gray-500 dark:text-muted-foreground">(sin tags)</span>
                   )}
                   {(currentTask.tags ?? []).map((t) => (
                     <span
                       key={t}
-                      className="px-2 py-0.5 rounded bg-gray-100 text-xs"
+                      className="px-2 py-0.5 rounded bg-gray-100 text-xs dark:bg-secondary dark:text-foreground"
                     >
                       {t}
                     </span>
@@ -380,7 +380,7 @@ function DialogBody({
                 </div>
               </div>
               <div>
-                <h3 className="text-sm font-semibold text-blue-700">
+                <h3 className="text-sm font-semibold text-blue-700 dark:text-indigo-300">
                   Sugeridos
                 </h3>
                 <div
@@ -392,8 +392,8 @@ function DialogBody({
                       key={t.tag}
                       className={`px-2 py-0.5 rounded text-xs ${
                         t.reused
-                          ? 'bg-blue-100 text-blue-800'
-                          : 'bg-emerald-100 text-emerald-800'
+                          ? 'bg-blue-100 text-blue-800 dark:bg-indigo-900/60 dark:text-indigo-200'
+                          : 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/60 dark:text-emerald-200'
                       }`}
                       title={t.reused ? 'Reutilizado del proyecto' : 'Nuevo'}
                     >
@@ -413,7 +413,7 @@ function DialogBody({
                           .filter((s) => s.length > 0),
                       )
                     }
-                    className="mt-2 w-full border border-gray-300 rounded px-2 py-1 text-sm"
+                    className="mt-2 w-full border border-gray-300 rounded px-2 py-1 text-sm dark:border-border dark:bg-input dark:text-foreground"
                     placeholder="tag1, tag2, tag3"
                     data-testid="ai-suggested-tags-edit"
                   />
@@ -427,18 +427,18 @@ function DialogBody({
             <section aria-label="Categorización sugerida">
               <div className="grid md:grid-cols-2 gap-4">
                 <div>
-                  <h3 className="text-sm font-semibold text-gray-700">
+                  <h3 className="text-sm font-semibold text-gray-700 dark:text-foreground/90">
                     Actual
                   </h3>
-                  <p className="text-xs text-gray-700">
+                  <p className="text-xs text-gray-700 dark:text-foreground/90">
                     Type: <strong>{currentTask.type ?? '?'}</strong>
                   </p>
-                  <p className="text-xs text-gray-700">
+                  <p className="text-xs text-gray-700 dark:text-foreground/90">
                     Priority: <strong>{currentTask.priority ?? '?'}</strong>
                   </p>
                 </div>
                 <div>
-                  <h3 className="text-sm font-semibold text-blue-700">
+                  <h3 className="text-sm font-semibold text-blue-700 dark:text-indigo-300">
                     Sugerida
                   </h3>
                   {editing ? (
@@ -446,7 +446,7 @@ function DialogBody({
                       <select
                         value={draftType}
                         onChange={(e) => setDraftType(e.target.value)}
-                        className="block w-full border border-blue-300 rounded px-2 py-1 text-sm mb-2"
+                        className="block w-full border border-blue-300 rounded px-2 py-1 text-sm mb-2 dark:border-indigo-700 dark:bg-input dark:text-foreground"
                         data-testid="ai-suggested-type-edit"
                       >
                         <option value="PHASE">PHASE</option>
@@ -457,7 +457,7 @@ function DialogBody({
                       <select
                         value={draftPriority}
                         onChange={(e) => setDraftPriority(e.target.value)}
-                        className="block w-full border border-blue-300 rounded px-2 py-1 text-sm"
+                        className="block w-full border border-blue-300 rounded px-2 py-1 text-sm dark:border-indigo-700 dark:bg-input dark:text-foreground"
                         data-testid="ai-suggested-priority-edit"
                       >
                         <option value="LOW">LOW</option>
@@ -468,13 +468,13 @@ function DialogBody({
                     </>
                   ) : (
                     <>
-                      <p className="text-xs text-gray-700">
+                      <p className="text-xs text-gray-700 dark:text-foreground/90">
                         Type:{' '}
                         <strong data-testid="ai-suggested-type">
                           {suggestion.data.suggestedType}
                         </strong>
                       </p>
-                      <p className="text-xs text-gray-700">
+                      <p className="text-xs text-gray-700 dark:text-foreground/90">
                         Priority:{' '}
                         <strong data-testid="ai-suggested-priority">
                           {suggestion.data.suggestedPriority}
@@ -485,7 +485,7 @@ function DialogBody({
                 </div>
               </div>
               <p
-                className="mt-3 text-xs text-gray-600 italic"
+                className="mt-3 text-xs text-gray-600 italic dark:text-muted-foreground"
                 data-testid="ai-suggested-reasoning"
               >
                 {suggestion.data.reasoning}
@@ -498,14 +498,14 @@ function DialogBody({
             <section aria-label="Posibles duplicados">
               {suggestion.data.candidates.length === 0 ? (
                 <p
-                  className="text-sm text-gray-500"
+                  className="text-sm text-gray-500 dark:text-muted-foreground"
                   data-testid="ai-duplicates-empty"
                 >
                   No se detectaron duplicados con similarity &gt; 0.7.
                 </p>
               ) : (
                 <>
-                  <p className="text-xs text-gray-500 mb-2">
+                  <p className="text-xs text-gray-500 mb-2 dark:text-muted-foreground">
                     Selecciona la tarea canónica. Esta tarea quedará archivada
                     con una nota de referencia.
                   </p>
@@ -516,7 +516,7 @@ function DialogBody({
                     {suggestion.data.candidates.map((c) => (
                       <li
                         key={c.taskId}
-                        className="border border-gray-200 rounded p-2"
+                        className="border border-gray-200 rounded p-2 dark:border-border dark:bg-secondary/30"
                       >
                         <label className="flex items-start gap-2 text-sm cursor-pointer">
                           <input
@@ -529,13 +529,13 @@ function DialogBody({
                             data-testid={`ai-duplicate-radio-${c.taskId}`}
                           />
                           <span className="flex-1">
-                            <span className="font-mono text-xs text-gray-500">
+                            <span className="font-mono text-xs text-gray-500 dark:text-muted-foreground">
                               {c.taskId.slice(0, 8)}
                             </span>{' '}
-                            <span className="text-xs text-blue-700">
+                            <span className="text-xs text-blue-700 dark:text-indigo-300">
                               ({Math.round(c.similarity * 100)}%)
                             </span>
-                            <p className="text-xs text-gray-700 mt-1">
+                            <p className="text-xs text-gray-700 mt-1 dark:text-foreground/90">
                               {c.reason}
                             </p>
                           </span>
@@ -549,11 +549,11 @@ function DialogBody({
           )}
         </div>
 
-        <footer className="border-t border-gray-200 p-3 flex items-center justify-end gap-2">
+        <footer className="border-t border-gray-200 p-3 flex items-center justify-end gap-2 dark:border-border">
           <button
             type="button"
             onClick={onClose}
-            className="px-3 py-1 text-sm rounded border border-gray-300 bg-white hover:bg-gray-50"
+            className="px-3 py-1 text-sm rounded border border-gray-300 bg-white hover:bg-gray-50 dark:border-border dark:bg-card dark:text-foreground dark:hover:bg-secondary"
             data-testid="ai-suggestion-dismiss"
           >
             Descartar
@@ -562,7 +562,7 @@ function DialogBody({
             <button
               type="button"
               onClick={() => setEditing(true)}
-              className="px-3 py-1 text-sm rounded border border-gray-300 bg-white hover:bg-gray-50"
+              className="px-3 py-1 text-sm rounded border border-gray-300 bg-white hover:bg-gray-50 dark:border-border dark:bg-card dark:text-foreground dark:hover:bg-secondary"
               data-testid="ai-suggestion-edit"
             >
               Editar antes de aplicar

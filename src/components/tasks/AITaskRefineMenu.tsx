@@ -157,7 +157,7 @@ export function AITaskRefineMenu({
         aria-expanded={menuOpen}
         onClick={() => setMenuOpen((v) => !v)}
         disabled={pendingKind !== null}
-        className="px-3 py-1 text-sm rounded border border-blue-300 bg-blue-50 text-blue-800 hover:bg-blue-100 disabled:opacity-50 inline-flex items-center gap-1"
+        className="px-3 py-1 text-sm rounded border border-blue-300 bg-blue-50 text-blue-800 hover:bg-blue-100 disabled:opacity-50 inline-flex items-center gap-1 dark:border-indigo-700/60 dark:bg-indigo-950/60 dark:text-indigo-200 dark:hover:bg-indigo-900/60"
         data-testid="ai-task-refine-trigger"
       >
         <span aria-hidden>✨</span>
@@ -168,7 +168,7 @@ export function AITaskRefineMenu({
       {menuOpen && (
         <ul
           role="menu"
-          className="absolute right-0 mt-1 z-10 min-w-[220px] bg-white border border-gray-200 rounded shadow-lg py-1"
+          className="absolute right-0 mt-1 z-10 min-w-[220px] bg-white border border-gray-200 rounded shadow-lg py-1 dark:bg-card dark:border-border dark:text-foreground"
           data-testid="ai-task-refine-list"
         >
           {MENU_ITEMS.map((it) => (
@@ -177,7 +177,7 @@ export function AITaskRefineMenu({
                 role="menuitem"
                 type="button"
                 onClick={() => runAction(it.kind)}
-                className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 flex items-center gap-2"
+                className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 flex items-center gap-2 dark:hover:bg-secondary"
                 data-testid={`ai-task-refine-item-${it.kind}`}
               >
                 <span aria-hidden>{it.emoji}</span>
@@ -190,7 +190,7 @@ export function AITaskRefineMenu({
 
       {error && (
         <div
-          className="absolute right-0 mt-1 z-10 max-w-xs p-2 border border-red-300 bg-red-50 text-red-800 rounded text-xs"
+          className="absolute right-0 mt-1 z-10 max-w-xs p-2 border border-red-300 bg-red-50 text-red-800 rounded text-xs dark:border-rose-800/60 dark:bg-rose-950/60 dark:text-rose-200"
           role="alert"
           data-testid="ai-task-refine-error"
         >
