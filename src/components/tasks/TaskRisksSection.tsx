@@ -89,10 +89,12 @@ export function TaskRisksSection({
     }
   }, [taskId])
 
+  /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
     if (!open || loaded) return
     void reload()
   }, [open, loaded, reload])
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   // Cuando el usuario aplica una sugerencia de IA con risks, el server crea
   // las filas Risk; recargamos al recibir el evento global.
