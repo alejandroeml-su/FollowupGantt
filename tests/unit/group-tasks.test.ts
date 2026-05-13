@@ -198,6 +198,46 @@ describe('groupTasks', () => {
     expect(groups).toHaveLength(1)
     expect(groups[0].key).toBe('__all__')
   })
+
+  it('agrupa por project usando project.name embebido', () => {
+    const tasks = [
+      makeTask({
+        id: 'a',
+        projectId: 'p1',
+        project: { id: 'p1', name: 'Migración SAP' },
+      }),
+      makeTask({
+        id: 'b',
+        projectId: 'p1',
+        project: { id: 'p1', name: 'Migración SAP' },
+      }),
+      makeTask({
+        id: 'c',
+        projectId: 'p2',
+        project: { id: 'p2', name: 'SGC ISO 9001' },
+      }),
+      makeTask({ id: 'd', projectId: null }),
+    ]
+    const groups = groupTasks(tasks, 'project')
+    const byKey = new Map(groups.map((g) => [g.key, g]))
+    expect(byKey.get('p1')?.label).toBe('Migración SAP')
+    expect(byKey.get('p1')?.tasks.map((t) => t.id)).toEqual(['a', 'b'])
+    expect(byKey.get('p2')?.label).toBe('SGC ISO 9001')
+    expect(byKey.get('__no_project__')?.label).toBe('Sin proyecto')
+    // El bucket "Sin proyecto" debe quedar al final.
+    expect(groups[groups.length - 1].key).toBe('__no_project__')
+  })
+
+  it('agrupa por project usando ctx.projects cuando no hay project embebido', () => {
+    const tasks = [
+      makeTask({ id: 'a', projectId: 'p1' }),
+      makeTask({ id: 'b', projectId: 'p1' }),
+    ]
+    const groups = groupTasks(tasks, 'project', {
+      projects: [{ id: 'p1', name: 'Proyecto X' }],
+    })
+    expect(groups[0].label).toBe('Proyecto X')
+  })
 })
 
 describe('groupTasksMulti (multi-nivel)', () => {
