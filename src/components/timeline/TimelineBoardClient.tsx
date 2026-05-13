@@ -454,20 +454,18 @@ function TimelineRow({
   const statusBg = STATUS_TONE[task.status] ?? 'bg-slate-500'
   const priorityBorder = PRIORITY_BORDER[task.priority] ?? 'border-slate-500'
 
-  // Edwin pidió pasar de single-click a doble-click para evitar abrir el
-  // drawer por descuido al hacer scroll/seleccionar. Mantenemos un
-  // handler de Enter por accesibilidad (la barra sigue siendo `<button>`
-  // y los lectores de pantalla esperan activarla con teclado).
+  // 2026-05-13 · Edwin: revertimos a single-click para abrir.
+  // El doble-click previo (introducido para evitar aperturas accidentales
+  // al scrollear) resultó poco descubrible y Edwin pidió volver a click.
+  // El scroll del timeline ocurre en el contenedor padre (no en la barra),
+  // así que un click sobre la barra siempre es intencional.
   const handleKeyDown = (e: React.KeyboardEvent<HTMLButtonElement>) => {
     if (e.key === 'Enter' || e.key === ' ') {
       e.preventDefault()
       onOpen()
     }
   }
-  // `onDoubleClick` se dispara una sola vez por doble pulsación. Para
-  // evitar que un `onClick` accidental abra el drawer NO ponemos handler
-  // de click, sólo dblclick. El title/hover sigue mostrando la info.
-  const title = `${task.title} · ${task.priority} · ${task.startDate ? new Date(task.startDate).toLocaleDateString() : ''} → ${task.endDate ? new Date(task.endDate).toLocaleDateString() : ''}\nDoble click para abrir`
+  const title = `${task.title} · ${task.priority} · ${task.startDate ? new Date(task.startDate).toLocaleDateString() : ''} → ${task.endDate ? new Date(task.endDate).toLocaleDateString() : ''}\nClick para abrir`
 
   return (
     <div className="relative h-9 border-b border-border/30 hover:bg-secondary/20">
@@ -475,20 +473,20 @@ function TimelineRow({
       {task.isMilestone ? (
         <button
           type="button"
-          onDoubleClick={onOpen}
+          onClick={onOpen}
           onKeyDown={handleKeyDown}
           className="absolute top-1/2 -translate-x-1/2 -translate-y-1/2 cursor-pointer"
           style={{ left: `${geom.leftPct}%` }}
-          title={`${task.title}${task.startDate ? ` · ${new Date(task.startDate).toLocaleDateString()}` : ''}\nDoble click para abrir`}
+          title={`${task.title}${task.startDate ? ` · ${new Date(task.startDate).toLocaleDateString()}` : ''}\nClick para abrir`}
         >
           <Diamond className="h-4 w-4 fill-amber-400 text-amber-400" />
         </button>
       ) : (
         <button
           type="button"
-          onDoubleClick={onOpen}
+          onClick={onOpen}
           onKeyDown={handleKeyDown}
-          aria-label={`Abrir ${task.title} (doble click)`}
+          aria-label={`Abrir ${task.title}`}
           className={clsx(
             'absolute top-1.5 flex h-6 cursor-pointer items-center gap-1.5 rounded-md border-l-2 px-1.5 text-[10px] font-medium text-white shadow-sm transition-all hover:opacity-90 hover:shadow-md',
             statusBg,
