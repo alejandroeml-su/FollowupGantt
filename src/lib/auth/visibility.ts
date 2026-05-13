@@ -77,6 +77,28 @@ export async function getProjectAccessFilter(
     return wsScope
   }
 
+  // Cláusulas de "asignación directa al proyecto" — comunes a GERENTE_AREA
+  // y USER. Edwin reportó 2026-05-13 que tener una *tarea* asignada en un
+  // proyecto ajeno no era suficiente para ver el proyecto. La regla de
+  // negocio real es: si el usuario tiene cualquier vínculo de trabajo con
+  // el proyecto (membresía formal, equipo, asignación de tarea, o
+  // colaboración en una tarea), debe verlo. Ampliamos el OR.
+  const directAccessClauses: Prisma.ProjectWhereInput[] = [
+    { assignments: { some: { userId: user.id } } },
+    { teamProjects: { some: { team: { members: { some: { userId: user.id } } } } } },
+    // 2026-05-13 · Edwin — tarea asignada al usuario dentro del proyecto.
+    { tasks: { some: { assigneeId: user.id, archivedAt: null } } },
+    // 2026-05-13 · Edwin — colaborador en alguna tarea del proyecto.
+    {
+      tasks: {
+        some: {
+          archivedAt: null,
+          collaborators: { some: { userId: user.id } },
+        },
+      },
+    },
+  ]
+
   // 3. Por gerencia · GERENTE_AREA ve proyectos cuyo área pertenece a su gerencia.
   //    Si no tiene gerencia asignada, cae al alcance de USER.
   if (canViewOwnGerencia(roles) && user.gerenciaId) {
@@ -86,8 +108,7 @@ export async function getProjectAccessFilter(
         {
           OR: [
             { area: { gerenciaId: user.gerenciaId } },
-            { assignments: { some: { userId: user.id } } },
-            { teamProjects: { some: { team: { members: { some: { userId: user.id } } } } } },
+            ...directAccessClauses,
           ],
         },
       ],
@@ -100,10 +121,7 @@ export async function getProjectAccessFilter(
   //    los proyectos de OTRAS gerencias donde tiene asignación explícita.
   //    Sin gerencia base (`user.gerenciaId` nulo) cae al comportamiento
   //    legacy de "solo proyectos asignados".
-  const orClauses: Prisma.ProjectWhereInput[] = [
-    { assignments: { some: { userId: user.id } } },
-    { teamProjects: { some: { team: { members: { some: { userId: user.id } } } } } },
-  ]
+  const orClauses: Prisma.ProjectWhereInput[] = [...directAccessClauses]
   if (user.gerenciaId) {
     orClauses.push({ area: { gerenciaId: user.gerenciaId } })
   }
