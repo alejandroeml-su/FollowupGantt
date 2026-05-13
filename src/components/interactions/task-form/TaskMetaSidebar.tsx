@@ -73,7 +73,7 @@ type Props = {
 }
 
 const FIELD_LABEL =
-  'text-xs font-semibold uppercase tracking-wider text-foreground/75 dark:text-slate-200'
+  'text-xs font-semibold uppercase tracking-wider text-foreground'
 const SELECT_BASE =
   'w-full rounded-md border border-border bg-input py-1.5 px-2 text-sm text-input-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-ring'
 const INPUT_BASE = SELECT_BASE

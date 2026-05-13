@@ -446,7 +446,7 @@ export function TaskForm({
             {task.mnemonic || task.id.substring(0, 8).toUpperCase()}
           </span>
           {task.parentId && (
-            <span className="inline-flex items-center gap-1 rounded bg-secondary border border-border px-2 py-0.5 text-xs font-medium text-foreground/85 dark:text-slate-200">
+            <span className="inline-flex items-center gap-1 rounded bg-secondary border border-border px-2 py-0.5 text-xs font-medium text-foreground">
               <Link2 className="h-3 w-3" />
               Subtarea de #{task.parentId.substring(0, 6)}
             </span>
@@ -487,7 +487,7 @@ export function TaskForm({
         <div className="space-y-1.5">
           <label
             htmlFor="task-parent"
-            className="text-xs font-semibold uppercase tracking-wider text-foreground/75 dark:text-slate-200"
+            className="text-xs font-semibold uppercase tracking-wider text-foreground"
           >
             Tarea padre <span className="text-destructive">*</span>
           </label>
@@ -517,7 +517,7 @@ export function TaskForm({
       <div className="space-y-1.5">
         <label
           htmlFor="task-title"
-          className="text-xs font-semibold uppercase tracking-wider text-foreground/75 dark:text-slate-200"
+          className="text-xs font-semibold uppercase tracking-wider text-foreground"
         >
           Título {isCreate && <span className="text-destructive">*</span>}
         </label>
@@ -546,7 +546,7 @@ export function TaskForm({
       <div className="space-y-1.5">
         <label
           htmlFor="task-description"
-          className="text-xs font-semibold uppercase tracking-wider text-foreground/75 dark:text-slate-200"
+          className="text-xs font-semibold uppercase tracking-wider text-foreground"
         >
           Descripción
         </label>
@@ -571,7 +571,7 @@ export function TaskForm({
       <div className="space-y-1.5">
         <label
           htmlFor="task-tags"
-          className="text-xs font-semibold uppercase tracking-wider text-foreground/75 dark:text-slate-200 flex items-center gap-1"
+          className="text-xs font-semibold uppercase tracking-wider text-foreground flex items-center gap-1"
         >
           <Tag className="h-3 w-3" /> Etiquetas
         </label>
@@ -601,7 +601,7 @@ export function TaskForm({
 
       {/* Prioridad */}
       <div className="space-y-1.5">
-        <label className="text-xs font-semibold uppercase tracking-wider text-foreground/75 dark:text-slate-200">
+        <label className="text-xs font-semibold uppercase tracking-wider text-foreground">
           Prioridad
         </label>
         <PriorityPills
@@ -615,7 +615,7 @@ export function TaskForm({
         <div className="space-y-1.5">
           <label
             htmlFor="task-type"
-            className="text-xs font-semibold uppercase tracking-wider text-foreground/75 dark:text-slate-200"
+            className="text-xs font-semibold uppercase tracking-wider text-foreground"
           >
             Tipo
           </label>

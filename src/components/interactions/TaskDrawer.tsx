@@ -76,7 +76,7 @@ export function TaskDrawer({
             >
               <ChevronRight className="h-4 w-4" />
             </button>
-            <div className="min-w-0 flex-1 truncate text-xs text-foreground/85 dark:text-slate-200">
+            <div className="min-w-0 flex-1 truncate text-xs text-foreground">
               {breadcrumbs}
             </div>
             <Dialog.Close asChild>
