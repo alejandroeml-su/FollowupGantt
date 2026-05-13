@@ -47,7 +47,11 @@
 // que cachean chunks Next.js no-`/_next/` (legacy paths). Bump fuerza
 // install→activate ciclo en TODOS los clientes y elimina cualquier
 // cache nombrada `sync-*-${OLD}` (handler `activate` ya lo hace).
-const VERSION = "v5-r4-2026-05-12-gantt-task-click";
+// v6 · 2026-05-13 · dark mode labels invisibles. Causa raíz: faltaba
+// `@custom-variant dark` en globals.css → Tailwind generaba `dark:*` via
+// @media query del SO, no via clase `.dark` que pone next-themes. Bump
+// fuerza re-fetch del CSS chunk con el nuevo variant compilado.
+const VERSION = "v6-2026-05-13-dark-mode-class-variant";
 const STATIC_CACHE = `sync-static-${VERSION}`;
 const RUNTIME_CACHE = `sync-runtime-${VERSION}`;
 const API_CACHE = `sync-api-${VERSION}`;

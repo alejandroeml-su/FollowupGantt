@@ -1,5 +1,21 @@
 @import "tailwindcss";
 
+/* ───────────────────────────────────────────────────────────────
+   Dark mode · class-based (NO media query).
+   Sin esta línea, Tailwind 4 genera los variantes `dark:*` dentro
+   de `@media (prefers-color-scheme: dark)`. Pero la app usa
+   `next-themes` que pone la clase `.dark` en `<html>` según la
+   preferencia explícita del usuario (no del SO). Sin este custom
+   variant, `dark:text-…` solo aplica cuando el SO también está en
+   dark — causando que en SO=light + App=dark los textos con
+   `text-foreground/75 dark:text-slate-200` queden faded a 75%
+   blanco (poco contraste) en lugar del slate-200 esperado.
+
+   Edwin reportó 2026-05-13: labels invisibles en dark mode aún
+   tras varios fixes. Causa raíz: este custom-variant faltaba.
+   ─────────────────────────────────────────────────────────────── */
+@custom-variant dark (&:where(.dark, .dark *));
+
 @theme {
   --color-border: var(--border);
   --color-input: var(--input);
