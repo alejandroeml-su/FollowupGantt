@@ -57,7 +57,7 @@ export function TaskFormTabs({ tabs, active, onChange, className }: Props) {
           ? 'border-transparent text-muted-foreground/50 cursor-not-allowed'
           : isActive
             ? 'border-indigo-500 text-indigo-400'
-            : 'border-transparent text-muted-foreground hover:text-foreground/90'
+            : 'border-transparent text-foreground/70 dark:text-slate-300 hover:text-foreground/95 dark:hover:text-slate-100'
 
         return (
           <button

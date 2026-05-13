@@ -35,7 +35,7 @@ export default function PresenceIndicator({ count, label, text }: Props) {
 
   return (
     <div
-      className="inline-flex items-center gap-2 text-xs text-foreground/75"
+      className="inline-flex items-center gap-2 text-xs text-foreground dark:text-slate-100"
       role="status"
       aria-live="polite"
     >
