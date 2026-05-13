@@ -788,6 +788,7 @@ export function TaskForm({
           mode={isCreate ? 'create' : 'edit'}
           value={pmiAttributes}
           onChange={setPmiAttributes}
+          users={users}
           disabled={isEdit && !isEditing}
           onAutosave={
             isEdit && task
