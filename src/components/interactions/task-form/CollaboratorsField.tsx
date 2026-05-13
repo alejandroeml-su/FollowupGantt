@@ -28,7 +28,7 @@ type Props = {
 }
 
 const FIELD_LABEL =
-  'text-xs font-semibold uppercase tracking-wider text-foreground/75 dark:text-slate-200'
+  'text-xs font-semibold uppercase tracking-wider text-foreground'
 
 const AVATAR_BASE =
   'inline-flex h-7 w-7 items-center justify-center rounded-full bg-secondary text-foreground border border-border text-[10px] font-bold uppercase'
