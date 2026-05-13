@@ -16,6 +16,13 @@ import { EpicBadge } from '@/components/epics/EpicBadge'
 import { useTableColumnPrefs } from '@/lib/views/use-table-column-prefs'
 import { getColumnDef, type TableColumnId } from '@/lib/views/table-columns'
 import { TableColumnsConfigurator } from '@/components/views/TableColumnsConfigurator'
+import { MultiGroupBySelector } from '@/components/views/MultiGroupBySelector'
+import {
+  groupTasks,
+  groupTasksMulti,
+  type GroupKey,
+  type TaskGroupTree,
+} from '@/lib/views/group-tasks'
 
 type ParentOption = Pick<SerializedTask, 'id' | 'title' | 'mnemonic'> & {
   project?: { id: string; name: string } | null
@@ -61,6 +68,9 @@ export function TableBoardClient({
 
   const [search, setSearch] = useState('')
   const [filters, setFilters] = useState<TaskFilters>(EMPTY_TASK_FILTERS)
+  // HU 2026-05-12 — agrupar por proyecto por defecto, igual que en Timeline.
+  // Multi-nivel: el usuario puede combinar campos (ej. Proyecto → Estado).
+  const [groupBy, setGroupBy] = useState<GroupKey[]>(['project'])
   const drawerTaskId = useUIStore((s) => s.drawerTaskId)
   const openDrawer = useUIStore((s) => s.openDrawer)
 
@@ -104,6 +114,25 @@ export function TableBoardClient({
       (t.project?.name.toLowerCase().includes(q) ?? false)
     )
   }, [tasks, filters, search])
+
+  // Agrupamiento. 1 nivel usa el flat path (camino rápido); 2+ niveles
+  // construye el árbol recursivo. Sin agrupamiento devuelve `null` y la
+  // tabla renderiza filas planas.
+  const flatGroups = useMemo(
+    () =>
+      groupBy.length === 1
+        ? groupTasks(filtered, groupBy[0], { users, projects })
+        : null,
+    [filtered, groupBy, users, projects],
+  )
+  const groupTree = useMemo(
+    () =>
+      groupBy.length > 1
+        ? groupTasksMulti(filtered, groupBy, { users, projects })
+        : null,
+    [filtered, groupBy, users, projects],
+  )
+  const showGroups = groupBy.length > 0
 
   const drawerTask = tasks.find(t => t.id === drawerTaskId)
 
@@ -169,6 +198,10 @@ export function TableBoardClient({
         epics={epics}
       />
 
+      <div className="flex items-center gap-3 border-b border-border bg-muted/10 px-6 py-2">
+        <MultiGroupBySelector value={groupBy} onChange={setGroupBy} />
+      </div>
+
       {/* Wave P16-C · mobile-first: padding reducido en mobile, table
           interna ya tiene `overflow-x-auto` (scroll horizontal correcto). */}
       <div className="flex-1 overflow-auto p-3 md:p-6">
@@ -194,28 +227,48 @@ export function TableBoardClient({
                 </tr>
               </thead>
               <tbody className="divide-y divide-border bg-card">
-                {filtered.map((task) => (
-                  <tr
-                    key={task.id}
-                    onClick={() => openDrawer(task.id)}
-                    className={`group hover:bg-indigo-500/5 cursor-pointer transition-colors ${drawerTaskId === task.id ? 'bg-indigo-500/10' : ''}`}
-                  >
-                    {visibleColumns.map((col) => (
-                      <td
-                        key={col.id}
-                        className={`px-4 py-3 ${
-                          col.align === 'center'
-                            ? 'text-center'
-                            : col.align === 'right'
-                              ? 'text-right'
-                              : ''
-                        } ${cellClassFor(col.id)}`}
+                {showGroups && flatGroups
+                  ? flatGroups.map((g) =>
+                      renderGroupRows(
+                        g,
+                        0,
+                        visibleColumns,
+                        openDrawer,
+                        drawerTaskId,
+                      ),
+                    )
+                  : showGroups && groupTree
+                  ? groupTree.flatMap((g) =>
+                      renderTreeRows(
+                        g,
+                        0,
+                        visibleColumns,
+                        openDrawer,
+                        drawerTaskId,
+                      ),
+                    )
+                  : filtered.map((task) => (
+                      <tr
+                        key={task.id}
+                        onClick={() => openDrawer(task.id)}
+                        className={`group hover:bg-indigo-500/5 cursor-pointer transition-colors ${drawerTaskId === task.id ? 'bg-indigo-500/10' : ''}`}
                       >
-                        {renderCell(col.id, task)}
-                      </td>
+                        {visibleColumns.map((col) => (
+                          <td
+                            key={col.id}
+                            className={`px-4 py-3 ${
+                              col.align === 'center'
+                                ? 'text-center'
+                                : col.align === 'right'
+                                  ? 'text-right'
+                                  : ''
+                            } ${cellClassFor(col.id)}`}
+                          >
+                            {renderCell(col.id, task)}
+                          </td>
+                        ))}
+                      </tr>
                     ))}
-                  </tr>
-                ))}
                 {filtered.length === 0 && (
                   <tr>
                     <td
@@ -467,4 +520,111 @@ function formatDate(value: string | null | undefined): string {
   } catch {
     return '—'
   }
+}
+
+/** Renderiza una fila de encabezado de grupo + las filas de tareas. */
+function renderGroupRows(
+  group: { key: string; label: string; count: number; tasks: SerializedTask[] },
+  depth: number,
+  visibleColumns: Array<{ id: TableColumnId; align?: string }>,
+  openDrawer: (id: string) => void,
+  drawerTaskId: string | null,
+): React.ReactNode[] {
+  const out: React.ReactNode[] = []
+  out.push(
+    <tr key={`g-${depth}-${group.key}`} className="bg-secondary/50">
+      <td
+        colSpan={visibleColumns.length || 1}
+        className="px-4 py-2 text-xs font-semibold uppercase tracking-wider text-foreground"
+        style={{ paddingLeft: 16 + depth * 16 }}
+      >
+        <span className="mr-2 inline-flex items-center gap-1.5">
+          <span className="h-1.5 w-1.5 rounded-full bg-indigo-400" />
+          {group.label}
+        </span>
+        <span className="rounded bg-input/60 px-1.5 py-0.5 text-[10px] font-bold text-muted-foreground">
+          {group.count}
+        </span>
+      </td>
+    </tr>,
+  )
+  for (const task of group.tasks) {
+    const t = task as SerializedTask & { commentCount?: number; depth?: number }
+    out.push(
+      <tr
+        key={task.id}
+        onClick={() => openDrawer(task.id)}
+        className={`group hover:bg-indigo-500/5 cursor-pointer transition-colors ${drawerTaskId === task.id ? 'bg-indigo-500/10' : ''}`}
+      >
+        {visibleColumns.map((col) => (
+          <td
+            key={col.id}
+            className={`px-4 py-3 ${
+              col.align === 'center'
+                ? 'text-center'
+                : col.align === 'right'
+                  ? 'text-right'
+                  : ''
+            } ${cellClassFor(col.id)}`}
+            style={col.id === 'title' ? { paddingLeft: 16 + depth * 16 } : undefined}
+          >
+            {renderCell(col.id, t as SerializedTask & { commentCount: number; depth?: number })}
+          </td>
+        ))}
+      </tr>,
+    )
+  }
+  return out
+}
+
+/** Recursivo: niveles internos llaman renderTreeRows con children;
+ * hojas (con tasks) delegan a renderGroupRows. */
+function renderTreeRows(
+  group: TaskGroupTree,
+  depth: number,
+  visibleColumns: Array<{ id: TableColumnId; align?: string }>,
+  openDrawer: (id: string) => void,
+  drawerTaskId: string | null,
+): React.ReactNode[] {
+  if (group.tasks) {
+    return renderGroupRows(
+      {
+        key: group.key,
+        label: group.label,
+        count: group.count,
+        tasks: group.tasks,
+      },
+      depth,
+      visibleColumns,
+      openDrawer,
+      drawerTaskId,
+    )
+  }
+  const out: React.ReactNode[] = []
+  out.push(
+    <tr key={`g-${depth}-${group.key}`} className="bg-secondary/30">
+      <td
+        colSpan={visibleColumns.length || 1}
+        className="px-4 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-foreground/80"
+        style={{ paddingLeft: 16 + depth * 16 }}
+      >
+        <span className="mr-2">{group.label}</span>
+        <span className="rounded bg-input/60 px-1.5 py-0.5 text-[10px] text-muted-foreground">
+          {group.count}
+        </span>
+      </td>
+    </tr>,
+  )
+  for (const child of group.children ?? []) {
+    out.push(
+      ...renderTreeRows(
+        child,
+        depth + 1,
+        visibleColumns,
+        openDrawer,
+        drawerTaskId,
+      ),
+    )
+  }
+  return out
 }

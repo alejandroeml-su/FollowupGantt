@@ -20,6 +20,7 @@
 import type { SerializedTask } from '@/lib/types'
 
 export type GroupKey =
+  | 'project'
   | 'assignee'
   | 'sprint'
   | 'phase'
@@ -56,6 +57,10 @@ export interface GroupContext {
   users?: ReadonlyArray<{ id: string; name: string }>
   sprints?: ReadonlyArray<{ id: string; name: string }>
   phases?: ReadonlyArray<{ id: string; name: string }>
+  /** Catálogo opcional para resolver `t.projectId → name` cuando el shape
+   * `SerializedTask.project` no viene embebido. */
+  projects?: ReadonlyArray<{ id: string; name: string }>
+
   customFields?: ReadonlyArray<{
     id: string
     label: string
@@ -150,6 +155,24 @@ export function groupTasks(
     return [
       { key: '__all__', label: 'Todas', count: tasks.length, tasks: [...tasks] },
     ]
+  }
+
+  if (groupBy === 'project') {
+    return groupByScalar(
+      tasks,
+      (t) => {
+        const pid = (t as unknown as Record<string, unknown>).projectId as
+          | string
+          | null
+          | undefined
+        const projectName =
+          (t as unknown as { project?: { name?: string } }).project?.name ??
+          (pid ? ctx.projects?.find((p) => p.id === pid)?.name : undefined)
+        if (!pid) return { key: '__no_project__', label: 'Sin proyecto' }
+        return { key: pid, label: projectName ?? pid }
+      },
+      '__no_project__',
+    )
   }
 
   if (groupBy === 'assignee') {

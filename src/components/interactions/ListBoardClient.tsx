@@ -117,24 +117,27 @@ export function ListBoardClient({
     () => new Set(tasks.filter((t) => t.subtasks?.length).map((t) => t.id)),
   )
   const [filters, setFilters] = useState<TaskFilters>(EMPTY_TASK_FILTERS)
-  // Ola P2 — agrupación dinámica. Array vacío = sin agrupar. Multi-nivel
-  // (2026-05-12): el usuario puede combinar varios campos (ej. Proyecto →
-  // Asignado). El primer elemento define el nivel raíz.
-  const [groupBy, setGroupBy] = useState<GroupKey[]>([])
+  // Ola P2 — agrupación dinámica. Multi-nivel (2026-05-12): el usuario puede
+  // combinar varios campos (ej. Proyecto → Asignado). El primer elemento
+  // define el nivel raíz.
+  // Default: agrupar por Proyecto al entrar — la HU 2026-05-12 pide que la
+  // Lista, igual que Timeline/Gantt/Tabla, presente las actividades agrupadas
+  // por proyecto. El usuario puede limpiar o cambiar el agrupamiento.
+  const [groupBy, setGroupBy] = useState<GroupKey[]>(['project'])
   const visibleItems = useMemo(() => filterTasksWithSubtasks(items, filters), [items, filters])
   const flatGroups = useMemo(
     () =>
       groupBy.length === 1
-        ? groupTasks(visibleItems, groupBy[0], { users })
+        ? groupTasks(visibleItems, groupBy[0], { users, projects })
         : null,
-    [visibleItems, groupBy, users],
+    [visibleItems, groupBy, users, projects],
   )
   const groupTree = useMemo(
     () =>
       groupBy.length > 1
-        ? groupTasksMulti(visibleItems, groupBy, { users })
+        ? groupTasksMulti(visibleItems, groupBy, { users, projects })
         : null,
-    [visibleItems, groupBy, users],
+    [visibleItems, groupBy, users, projects],
   )
   const showGroups = groupBy.length > 0
   // Para el contador del header del banner.
