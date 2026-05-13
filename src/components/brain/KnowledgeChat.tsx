@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useChat } from '@ai-sdk/react'
 import { DefaultChatTransport, type InferUITools, type UIMessage } from 'ai'
 import { Sparkles, BrainCircuit, Search, ArrowRight, Loader2, Database, CheckCircle2, AlertTriangle } from 'lucide-react'
@@ -26,8 +26,18 @@ const TOOL_LABELS: Record<string, string> = {
 
 export function KnowledgeChat() {
   const [input, setInput] = useState('')
+  // 2026-05-13 · Edwin reportó error React #482 en /brain. Hipótesis: el
+  // `DefaultChatTransport` se construía inline en cada render → cada
+  // render generaba una nueva instancia y `useChat` recibía algo que
+  // posiblemente caía en un `use()` interno del AI SDK sin ser Promise.
+  // Memoizamos para que la instancia sea estable entre renders. Lista
+  // de deps vacía: el endpoint nunca cambia para este componente.
+  const transport = useMemo(
+    () => new DefaultChatTransport({ api: '/api/brain/chat' }),
+    [],
+  )
   const { messages, sendMessage, status, error } = useChat<BrainUIMessage>({
-    transport: new DefaultChatTransport({ api: '/api/brain/chat' }),
+    transport,
   })
   const scrollRef = useRef<HTMLDivElement>(null)
 
