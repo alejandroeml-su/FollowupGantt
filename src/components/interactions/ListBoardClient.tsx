@@ -52,8 +52,9 @@ import { TaskDrawerContent } from './TaskDrawerContent'
 import { TaskFiltersBar } from './TaskFiltersBar'
 import { EMPTY_TASK_FILTERS, filterTasksWithSubtasks, type TaskFilters } from '@/lib/taskFilters'
 import { SavedViewsDropdown, type SavedViewSummary } from '@/components/views/SavedViewsDropdown'
-import { GroupBySelector } from '@/components/views/GroupBySelector'
-import { groupTasks, type GroupKey } from '@/lib/views/group-tasks'
+import { MultiGroupBySelector } from '@/components/views/MultiGroupBySelector'
+import { groupTasks, groupTasksMulti, type GroupKey, type TaskGroupTree } from '@/lib/views/group-tasks'
+import { parseGrouping } from '@/lib/views/saved-view-types'
 import type { CurrentUserPresence } from '@/lib/auth/get-current-user-presence'
 import { useTaskRealtimeRefresh } from '@/lib/realtime/use-task-realtime'
 
@@ -116,14 +117,28 @@ export function ListBoardClient({
     () => new Set(tasks.filter((t) => t.subtasks?.length).map((t) => t.id)),
   )
   const [filters, setFilters] = useState<TaskFilters>(EMPTY_TASK_FILTERS)
-  // Ola P2 — agrupación dinámica. `null` = sin agrupar.
-  const [groupBy, setGroupBy] = useState<GroupKey | null>(null)
+  // Ola P2 — agrupación dinámica. Array vacío = sin agrupar. Multi-nivel
+  // (2026-05-12): el usuario puede combinar varios campos (ej. Proyecto →
+  // Asignado). El primer elemento define el nivel raíz.
+  const [groupBy, setGroupBy] = useState<GroupKey[]>([])
   const visibleItems = useMemo(() => filterTasksWithSubtasks(items, filters), [items, filters])
-  const groups = useMemo(
-    () => groupTasks(visibleItems, groupBy, { users }),
+  const flatGroups = useMemo(
+    () =>
+      groupBy.length === 1
+        ? groupTasks(visibleItems, groupBy[0], { users })
+        : null,
     [visibleItems, groupBy, users],
   )
-  const showGroups = groupBy !== null
+  const groupTree = useMemo(
+    () =>
+      groupBy.length > 1
+        ? groupTasksMulti(visibleItems, groupBy, { users })
+        : null,
+    [visibleItems, groupBy, users],
+  )
+  const showGroups = groupBy.length > 0
+  // Para el contador del header del banner.
+  const groupCount = flatGroups?.length ?? groupTree?.length ?? 0
 
   const selectedIds = useUIStore((s) => s.selectedIds)
   const toggleSelection = useUIStore((s) => s.toggleSelection)
@@ -285,14 +300,16 @@ export function ListBoardClient({
           onApplyView={(v) => {
             if (!v) {
               setFilters(EMPTY_TASK_FILTERS)
-              setGroupBy(null)
+              setGroupBy([])
               return
             }
             setFilters((v.filters as TaskFilters) ?? EMPTY_TASK_FILTERS)
-            setGroupBy((v.grouping as GroupKey | null) ?? null)
+            // SavedView.grouping en BD es `string | null` con CSV multi-key.
+            // `parseGrouping` normaliza al array que MultiGroupBySelector espera.
+            setGroupBy(parseGrouping(v.grouping) as GroupKey[])
           }}
         />
-        <GroupBySelector value={groupBy} onChange={setGroupBy} />
+        <MultiGroupBySelector value={groupBy} onChange={setGroupBy} />
       </div>
       <div className="divide-y divide-border/50">
         {/* Bulk action toolbar (visible solo cuando hay selección) */}
@@ -310,7 +327,7 @@ export function ListBoardClient({
           <div className="flex items-center bg-secondary/20 px-3 py-1.5 text-[11px] md:px-4">
             <span className="rounded border border-indigo-500/20 bg-indigo-500/10 px-2 py-0.5 font-semibold text-indigo-400">
               {visibleItems.length} de {items.length} tareas
-              {showGroups && ` · ${groups.length} grupos`}
+              {showGroups && ` · ${groupCount} grupos`}
             </span>
             <span className="ml-auto hidden text-[10px] text-muted-foreground md:inline">
               Shift + / atajos · / buscar · T nueva tarea
@@ -369,8 +386,8 @@ export function ListBoardClient({
             items={visibleItems.map((i) => i.id)}
             strategy={verticalListSortingStrategy}
           >
-            {showGroups
-              ? groups.map((g) => (
+            {showGroups && flatGroups
+              ? flatGroups.map((g) => (
                   <div key={g.key || '__none__'} data-testid={`task-group-${g.key || 'none'}`}>
                     <div className="flex items-center bg-subtle px-4 py-1.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground border-y border-border/40">
                       <span>{g.label}</span>
@@ -392,6 +409,21 @@ export function ListBoardClient({
                       />
                     ))}
                   </div>
+                ))
+              : showGroups && groupTree
+              ? groupTree.map((g) => (
+                  <NestedTaskGroup
+                    key={g.key || '__none__'}
+                    group={g}
+                    depth={0}
+                    focusedId={focusedId}
+                    selectedIds={selectedIds}
+                    expanded={expanded}
+                    setFocusedId={setFocusedId}
+                    setExpanded={setExpanded}
+                    toggleSelection={toggleSelectionCascade}
+                    users={users}
+                  />
                 ))
               : visibleItems.map((task) => (
                   <RootTaskTree
@@ -865,5 +897,76 @@ function SubtaskBranch({
           ))
         : null}
     </>
+  )
+}
+
+/**
+ * Renderer recursivo para agrupación multi-nivel. Cada nivel imprime un
+ * encabezado con `label` + contador y, según sea hoja o intermedio,
+ * dibuja sus `tasks` o sigue recursando por `children`. La indentación
+ * (`paddingLeft`) escala con `depth` para que el jerarquía sea visible.
+ */
+function NestedTaskGroup({
+  group,
+  depth,
+  focusedId,
+  selectedIds,
+  expanded,
+  setFocusedId,
+  setExpanded,
+  toggleSelection,
+  users,
+}: {
+  group: TaskGroupTree
+  depth: number
+  focusedId: string | null
+  selectedIds: Set<string>
+  expanded: Set<string>
+  setFocusedId: (id: string | null) => void
+  setExpanded: React.Dispatch<React.SetStateAction<Set<string>>>
+  toggleSelection: (id: string, additive: boolean) => void
+  users: { id: string; name: string }[]
+}) {
+  const indent = depth * 12
+  return (
+    <div data-testid={`task-group-${group.key || 'none'}`}>
+      <div
+        className="flex items-center bg-subtle px-4 py-1.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground border-y border-border/40"
+        style={{ paddingLeft: 16 + indent }}
+      >
+        <span>{group.label}</span>
+        <span className="ml-2 rounded bg-secondary px-1.5 py-0.5 text-[10px] text-foreground">
+          {group.count}
+        </span>
+      </div>
+      {group.tasks
+        ? group.tasks.map((task) => (
+            <RootTaskTree
+              key={task.id}
+              task={task}
+              focusedId={focusedId}
+              selectedIds={selectedIds}
+              expanded={expanded}
+              setFocusedId={setFocusedId}
+              setExpanded={setExpanded}
+              toggleSelection={toggleSelection}
+              users={users}
+            />
+          ))
+        : group.children?.map((child) => (
+            <NestedTaskGroup
+              key={child.key || '__none__'}
+              group={child}
+              depth={depth + 1}
+              focusedId={focusedId}
+              selectedIds={selectedIds}
+              expanded={expanded}
+              setFocusedId={setFocusedId}
+              setExpanded={setExpanded}
+              toggleSelection={toggleSelection}
+              users={users}
+            />
+          ))}
+    </div>
   )
 }

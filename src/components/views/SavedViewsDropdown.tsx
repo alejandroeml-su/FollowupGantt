@@ -23,7 +23,9 @@ export type SavedViewSummary = {
   isDefault: boolean
   ownedByCurrentUser: boolean
   filters: Record<string, unknown>
-  grouping: string | null
+  /** Compat: string para SavedViews antiguas (single groupBy), array para
+   * SavedViews creadas con MultiGroupBySelector (Wave 2026-05-12). */
+  grouping: string | string[] | null
   sorting?: { field: string; direction: 'asc' | 'desc' } | null
   columnPrefs?: Record<string, unknown> | null
 }
@@ -33,7 +35,8 @@ type Props = {
   views: SavedViewSummary[]
   /** Estado actual capturable como nueva vista. */
   currentFilters: Record<string, unknown>
-  currentGrouping?: string | null
+  /** Compat: `string`/`null` (legacy single) o `string[]` (multi-group). */
+  currentGrouping?: string | string[] | null
   currentSorting?: { field: string; direction: 'asc' | 'desc' } | null
   currentColumnPrefs?: Record<string, unknown> | null
   /** Callback al elegir una vista; aplica el shape al cliente. */

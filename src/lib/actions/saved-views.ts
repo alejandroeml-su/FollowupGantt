@@ -65,7 +65,9 @@ const surfaceSchema = z.enum(VIEW_SURFACES)
 
 const groupingSchema = z
   .string()
-  .max(96, 'grouping demasiado largo')
+  // Multi-grouping CSV (Wave 2026-05-12) puede combinar hasta ~10 keys; 256
+  // chars cubre con holgura sin abrir la puerta a payloads abusivos.
+  .max(256, 'grouping demasiado largo')
   .nullable()
   .optional()
   .refine(

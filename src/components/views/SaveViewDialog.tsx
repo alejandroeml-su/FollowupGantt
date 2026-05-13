@@ -22,7 +22,8 @@ type Props = {
   surface: ViewSurfaceLiteral
   /** Estado capturado al abrir el diálogo. Sustituye la "vista activa". */
   filters: Record<string, unknown>
-  grouping?: string | null
+  /** Compat: string (legacy single) o string[] (multi-grouping 2026-05-12). */
+  grouping?: string | string[] | null
   sorting?: { field: string; direction: 'asc' | 'desc' } | null
   columnPrefs?: Record<string, unknown> | null
   onSaved?: (view: { id: string; name: string }) => void
@@ -62,11 +63,19 @@ export function SaveViewDialog({
     if (!name.trim() || isPending) return
     startTransition(async () => {
       try {
+        // Multi-grouping (2026-05-12) se serializa como CSV para no migrar
+        // el schema. El reader (lectura de SavedView) parsea con split(',').
+        const groupingSerialized: string | null = Array.isArray(grouping)
+          ? grouping.length > 0
+            ? grouping.join(',')
+            : null
+          : (grouping ?? null)
+
         const created = await createView({
           name: name.trim(),
           surface,
           filters,
-          grouping: grouping ?? null,
+          grouping: groupingSerialized,
           sorting: sorting ?? null,
           columnPrefs: columnPrefs ?? null,
           isShared,
