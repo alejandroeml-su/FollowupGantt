@@ -67,6 +67,11 @@ import { DependenciesTab } from './tabs/DependenciesTab'
 import { computeProgressWithSource } from '@/lib/progress/rollup'
 import { UserStorySection } from '@/components/user-story/UserStorySection'
 import { normalizeUserStory, type UserStory } from '@/lib/user-story/types'
+import { TaskItilSection } from './TaskItilSection'
+import {
+  normalizeItilAttributes,
+  type ItilAttributes,
+} from '@/lib/itil/types'
 
 // ────────────────────────────────────────────────────────────────────────
 // Tipos públicos
@@ -231,6 +236,20 @@ export function TaskForm({
   // lo asigna después de crear la task (cuando ya hay id).
   const [pendingUserStory, setPendingUserStory] = useState<UserStory | null>(null)
 
+  // Fase 1 (2026-05-13) — ITIL Attributes draft (modo create) o snapshot
+  // del server (modo edit). En create se serializa al FormData de createTask;
+  // en edit se autosalva via updateTask onBlur dentro de TaskItilSection.
+  const [itilAttributes, setItilAttributes] = useState<ItilAttributes | null>(
+    () => {
+      if (isEdit && task) {
+        return normalizeItilAttributes(
+          (task as unknown as { itilAttributes?: unknown }).itilAttributes,
+        )
+      }
+      return null
+    },
+  )
+
   // ─── Sugerencias de tags por proyecto ──────────────────────────────
   useEffect(() => {
     const projectId = meta.projectId
@@ -330,6 +349,12 @@ export function TaskForm({
         if (meta.plannedValue) fd.set('plannedValue', meta.plannedValue)
         if (tags.length > 0) fd.set('tags', JSON.stringify(tags))
         if (referenceUrl.trim()) fd.set('referenceUrl', referenceUrl.trim())
+
+        // Fase 1 (2026-05-13) — Serializar ITIL attributes si el tipo es
+        // ITIL_TICKET y el usuario llenó los campos mínimos.
+        if (form.type === 'ITIL_TICKET' && itilAttributes) {
+          fd.set('itilAttributes', JSON.stringify(itilAttributes))
+        }
 
         await createTask(fd)
         toast.success(isSubtask ? 'Subtarea creada' : 'Tarea creada')
@@ -610,26 +635,72 @@ export function TaskForm({
         />
       </div>
 
-      {/* Tipo (sólo create — el drawer no exponía edición de Type). */}
-      {isCreate && (
-        <div className="space-y-1.5">
-          <label
-            htmlFor="task-type"
-            className="text-xs font-semibold uppercase tracking-wider text-foreground"
-          >
-            Tipo
-          </label>
-          <select
-            id="task-type"
-            value={form.type}
-            onChange={(e) => setFormField('type', e.target.value)}
-            className="w-full rounded-md border border-border bg-input py-2 px-3 text-sm text-input-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-ring"
-          >
-            <option value="AGILE_STORY">Agile Story</option>
-            <option value="PMI_TASK">PMI Task</option>
-            <option value="ITIL_TICKET">ITIL Ticket</option>
-          </select>
-        </div>
+      {/* Tipo de tarea (Fase 1, 2026-05-13 · Edwin) — visible siempre
+          (antes solo create). Determina qué secciones se renderizan:
+          AGILE_STORY → UserStorySection; PMI_TASK → Tiempos+Dependencies;
+          ITIL_TICKET → TaskItilSection. Sin cambiar `type` el comportamiento
+          es idéntico al de antes. */}
+      <div className="space-y-1.5">
+        <label
+          htmlFor="task-type"
+          className="text-xs font-semibold uppercase tracking-wider text-foreground"
+        >
+          Metodología
+        </label>
+        <select
+          id="task-type"
+          value={form.type}
+          onChange={(e) => setFormField('type', e.target.value)}
+          disabled={isEdit && !isEditing}
+          className="w-full rounded-md border border-border bg-input py-2 px-3 text-sm text-input-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-ring disabled:opacity-70 disabled:cursor-not-allowed"
+        >
+          <option value="AGILE_STORY">📋 Scrum / Agile Story</option>
+          <option value="PMI_TASK">🏗️ PMI Task</option>
+          <option value="ITIL_TICKET">🚨 ITIL Ticket</option>
+        </select>
+        <p className="text-[11px] text-muted-foreground">
+          {form.type === 'AGILE_STORY' &&
+            'Captura: Historia de Usuario, Criterios de Aceptación, Sprint, Epic, Story Points.'}
+          {form.type === 'PMI_TASK' &&
+            'Captura: Fase, Dependencias, Línea Base, Estimaciones, Hitos, EVM.'}
+          {form.type === 'ITIL_TICKET' &&
+            'Captura: Tipo de registro, Impacto, Urgencia, SLA, Síntoma, Diagnóstico, Resolución.'}
+        </p>
+      </div>
+
+      {/* Fase 1 — Sección ITIL: solo visible para type=ITIL_TICKET. */}
+      {form.type === 'ITIL_TICKET' && (
+        <TaskItilSection
+          mode={isCreate ? 'create' : 'edit'}
+          value={itilAttributes}
+          onChange={setItilAttributes}
+          disabled={isEdit && !isEditing}
+          onAutosave={
+            isEdit && task
+              ? (next) => {
+                  // Autosave del campo `itilAttributes` via updateTask.
+                  // Patrón mismo que `saveField` pero con JSON serializado.
+                  const fd = new FormData()
+                  fd.set('id', task.id)
+                  fd.set('itilAttributes', JSON.stringify(next))
+                  fd.set('userId', users[0]?.id || '')
+                  fd.set('userRoles', JSON.stringify(DEBUG_USER_ROLES))
+                  startTransition(async () => {
+                    try {
+                      await updateTask(fd)
+                      toast.success('ITIL guardado')
+                    } catch (err) {
+                      toast.error(
+                        err instanceof Error
+                          ? err.message
+                          : 'Error al guardar ITIL',
+                      )
+                    }
+                  })
+                }
+              : undefined
+          }
+        />
       )}
 
       {/* Wave P9 · Agile Maturity (HU-9.3) — Historia de Usuario formal.
@@ -662,8 +733,12 @@ export function TaskForm({
 
           Bug Edwin 2026-05-06: antes el campo mostraba `progress` literal
           aunque hubiera horas o subtareas — daba 0% en tareas TODO sin
-          reflejar el avance real del trabajo en el árbol. */}
-      {isEdit && task && (() => {
+          reflejar el avance real del trabajo en el árbol.
+
+          Fase 1 (2026-05-13): Sección oculta para ITIL_TICKET — las
+          horas estimadas/invertidas no aplican al ciclo ITIL (en lugar
+          de eso, ver Resolución/Workaround en TaskItilSection). */}
+      {isEdit && task && form.type !== 'ITIL_TICKET' && (() => {
         const progressInfo = computeProgressWithSource({
           ...task,
           progress,
@@ -800,6 +875,7 @@ export function TaskForm({
             taskId={task.id}
             collaborators={task.collaborators ?? []}
             projectRequired={false}
+            taskType={form.type}
             className="rounded-lg border border-border lg:w-full lg:border-l-0"
           />
         </section>
@@ -918,6 +994,7 @@ export function TaskForm({
               projectRequired={isCreate}
               taskId={task?.id}
               collaborators={task?.collaborators ?? []}
+              taskType={form.type}
             />
           </div>
         </div>
