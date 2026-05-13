@@ -1,5 +1,10 @@
 import { describe, it, expect } from 'vitest'
-import { groupTasks, type GroupKey } from '@/lib/views/group-tasks'
+import {
+  groupTasks,
+  groupTasksMulti,
+  type GroupKey,
+} from '@/lib/views/group-tasks'
+import { parseGrouping, isValidGrouping } from '@/lib/views/saved-view-types'
 import type { SerializedTask } from '@/lib/types'
 
 /**
@@ -192,5 +197,108 @@ describe('groupTasks', () => {
     const groups = groupTasks(tasks, 'unknownKey')
     expect(groups).toHaveLength(1)
     expect(groups[0].key).toBe('__all__')
+  })
+})
+
+describe('groupTasksMulti (multi-nivel)', () => {
+  it('keys=[] → un único grupo Todas (igual a single null)', () => {
+    const tasks = [makeTask({ id: 'a' }), makeTask({ id: 'b' })]
+    const tree = groupTasksMulti(tasks, [])
+    expect(tree).toHaveLength(1)
+    expect(tree[0].key).toBe('__all__')
+    expect(tree[0].tasks).toHaveLength(2)
+  })
+
+  it('keys=[1] funciona como groupTasks single + tasks en hojas', () => {
+    const tasks = [
+      makeTask({ id: 'a', status: 'TODO' }),
+      makeTask({ id: 'b', status: 'DONE' }),
+    ]
+    const tree = groupTasksMulti(tasks, ['status'])
+    expect(tree.map((g) => g.key)).toEqual(['TODO', 'DONE'])
+    expect(tree[0].tasks?.map((t) => t.id)).toEqual(['a'])
+    expect(tree[0].children).toBeUndefined()
+  })
+
+  it('keys=[status, priority] genera children con sub-buckets correctos', () => {
+    const tasks = [
+      makeTask({ id: 'a', status: 'TODO', priority: 'HIGH' }),
+      makeTask({ id: 'b', status: 'TODO', priority: 'LOW' }),
+      makeTask({ id: 'c', status: 'DONE', priority: 'HIGH' }),
+    ]
+    const tree = groupTasksMulti(tasks, ['status', 'priority'])
+    expect(tree).toHaveLength(2) // TODO + DONE
+    const todo = tree.find((g) => g.key === 'TODO')!
+    expect(todo.children).toBeDefined()
+    expect(todo.tasks).toBeUndefined()
+    const todoHigh = todo.children!.find((c) => c.key === 'HIGH')!
+    const todoLow = todo.children!.find((c) => c.key === 'LOW')!
+    expect(todoHigh.tasks?.map((t) => t.id)).toEqual(['a'])
+    expect(todoLow.tasks?.map((t) => t.id)).toEqual(['b'])
+    const done = tree.find((g) => g.key === 'DONE')!
+    expect(done.children).toHaveLength(1)
+    expect(done.children![0].tasks?.map((t) => t.id)).toEqual(['c'])
+  })
+
+  it('keys=[status, priority, assignee] 3 niveles funcionan', () => {
+    const tasks = [
+      makeTask({
+        id: 'a',
+        status: 'TODO',
+        priority: 'HIGH',
+        assigneeId: 'u1',
+        assignee: { id: 'u1', name: 'Ana' },
+      }),
+      makeTask({
+        id: 'b',
+        status: 'TODO',
+        priority: 'HIGH',
+        assigneeId: 'u2',
+        assignee: { id: 'u2', name: 'Bob' },
+      }),
+    ]
+    const tree = groupTasksMulti(tasks, ['status', 'priority', 'assignee'])
+    const todo = tree.find((g) => g.key === 'TODO')!
+    const high = todo.children!.find((c) => c.key === 'HIGH')!
+    expect(high.children).toHaveLength(2) // u1 + u2
+    expect(high.children![0].tasks).toBeDefined()
+  })
+})
+
+describe('parseGrouping / isValidGrouping (CSV multi)', () => {
+  it('parseGrouping admite null/undefined/empty → []', () => {
+    expect(parseGrouping(null)).toEqual([])
+    expect(parseGrouping(undefined)).toEqual([])
+    expect(parseGrouping('')).toEqual([])
+  })
+
+  it('parseGrouping admite string single → [single]', () => {
+    expect(parseGrouping('assignee')).toEqual(['assignee'])
+  })
+
+  it('parseGrouping admite CSV → array', () => {
+    expect(parseGrouping('status,assignee,priority')).toEqual([
+      'status',
+      'assignee',
+      'priority',
+    ])
+  })
+
+  it('parseGrouping admite array directo (compat futuro)', () => {
+    expect(parseGrouping(['a', 'b'])).toEqual(['a', 'b'])
+  })
+
+  it('isValidGrouping acepta keys conocidas y CSV de keys conocidas', () => {
+    expect(isValidGrouping(null)).toBe(true)
+    expect(isValidGrouping('')).toBe(true)
+    expect(isValidGrouping('status')).toBe(true)
+    expect(isValidGrouping('status,assignee')).toBe(true)
+    expect(isValidGrouping('custom_field:abc-123')).toBe(true)
+    expect(isValidGrouping('status,custom_field:abc-123,priority')).toBe(true)
+  })
+
+  it('isValidGrouping rechaza keys desconocidas en CSV', () => {
+    expect(isValidGrouping('status,unknown_key')).toBe(false)
+    expect(isValidGrouping('foo')).toBe(false)
   })
 })

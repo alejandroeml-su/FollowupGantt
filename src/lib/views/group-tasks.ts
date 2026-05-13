@@ -35,6 +35,23 @@ export interface TaskGroup {
   tasks: SerializedTask[]
 }
 
+/**
+ * Multi-nivel: cada grupo puede contener `children` agrupados por la
+ * siguiente clave del array de `groupBy[]`. La hoja contiene `tasks` sin
+ * `children`. UI: render recursivo con indent por profundidad.
+ */
+export interface TaskGroupTree {
+  key: string
+  label: string
+  /** GroupKey usado para construir este nivel — útil para encabezados con tipo. */
+  groupBy: GroupKey
+  count: number
+  /** Sólo presente en hojas (último nivel). */
+  tasks?: SerializedTask[]
+  /** Sólo presente en niveles intermedios. */
+  children?: TaskGroupTree[]
+}
+
 export interface GroupContext {
   users?: ReadonlyArray<{ id: string; name: string }>
   sprints?: ReadonlyArray<{ id: string; name: string }>
@@ -326,4 +343,58 @@ export function groupTasks(
   return [
     { key: '__all__', label: 'Todas', count: tasks.length, tasks: [...tasks] },
   ]
+}
+
+/**
+ * Agrupa tareas en múltiples niveles según el array `keys`. Si `keys` está
+ * vacío o es `null`, devuelve `[{ key:'__all__', tasks }]` como `groupTasks`.
+ * Si `keys.length === 1` es funcionalmente equivalente a `groupTasks(t, k[0])`
+ * con el shape `TaskGroupTree`. Para 2+ niveles, anida `children` por la
+ * siguiente clave del array.
+ *
+ * Implementado por recursión: para cada grupo del primer nivel se vuelve
+ * a aplicar `groupTasksMulti` con `keys.slice(1)`.
+ */
+export function groupTasksMulti(
+  tasks: SerializedTask[],
+  keys: ReadonlyArray<GroupKey> | null | undefined,
+  ctx: GroupContext = {},
+): TaskGroupTree[] {
+  if (!keys || keys.length === 0) {
+    return [
+      {
+        key: '__all__',
+        label: 'Todas',
+        groupBy: 'status', // marker — no se usa en render cuando keys=[]
+        count: tasks.length,
+        tasks: [...tasks],
+      },
+    ]
+  }
+
+  const [head, ...rest] = keys
+  const flat = groupTasks(tasks, head, ctx)
+
+  if (rest.length === 0) {
+    // Último nivel: las hojas llevan `tasks`.
+    return flat.map((g) => ({
+      key: g.key,
+      label: g.label,
+      groupBy: head,
+      count: g.count,
+      tasks: g.tasks,
+    }))
+  }
+
+  // Nivel intermedio: cada grupo recursa con el resto del array.
+  return flat.map((g) => {
+    const children = groupTasksMulti(g.tasks, rest, ctx)
+    return {
+      key: g.key,
+      label: g.label,
+      groupBy: head,
+      count: g.count,
+      children,
+    }
+  })
 }
