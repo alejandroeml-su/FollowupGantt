@@ -1167,6 +1167,39 @@ model Task {
   /// `src/lib/itil/types.ts`.
   itilAttributes Json?
 
+  /// Fase 1.5 (2026-05-13) — Scrum Task Attributes. Aplica sólo a tasks
+  /// con `type = AGILE_STORY`. Json con shape (ver src/lib/scrum/types.ts):
+  ///   {
+  ///     taskKind: 'Dev'|'Test'|'Design'|'Docs'|'Spike'|'TechDebt'|'Bug',
+  ///     boardStatus: 'ToDo'|'InProgress'|'InReview'|'Done',
+  ///     hoursEstimate: number, hoursRemaining: number, hoursLogged?: number,
+  ///     components?: string[],
+  ///     blockers?: Array<{ description: string, since: string }>,
+  ///     dodChecklist: Array<{ item: string, checked: boolean }>,
+  ///     commits?: string[], pullRequests?: string[],
+  ///     reviewNotes?: string
+  ///   }
+  scrumAttributes Json?
+
+  /// Fase 1.5 (2026-05-13) — PMI Task Attributes. Aplica sólo a tasks con
+  /// `type = PMI_TASK`. Json con shape (ver src/lib/pmi/types.ts):
+  ///   {
+  ///     wbsCode?: string, phaseName?: string,
+  ///     deliverable?: string, qualityCriteria?: string,
+  ///     scheduleConstraint?: 'ASAP'|'ALAP'|'MSO'|'MFO'|'SNET'|'SNLT'|'FNET'|'FNLT',
+  ///     raci?: { responsible?: string[], accountable?: string,
+  ///              consulted?: string[], informed?: string[] },
+  ///     assumptions?: string,
+  ///     durationOptimistic?: number, durationPessimistic?: number
+  ///   }
+  pmiAttributes Json?
+
+  /// Fase 4 (2026-05-13) — Indicador "definición completa".
+  /// `true` cuando todas las reglas G/I/P/S aplicables al tipo de la tarea
+  /// pasan. Se calcula en cada `createTask`/`updateTask` y se persiste
+  /// para queries rápidas ("dame las tareas pendientes de definir").
+  definitionComplete Boolean @default(false)
+
   // Enlace externo de referencia (Confluence, Figma, ticket externo, etc.)
   referenceUrl String?
 
