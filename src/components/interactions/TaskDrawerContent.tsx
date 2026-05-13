@@ -17,6 +17,7 @@
  */
 
 import { useEffect, useMemo } from 'react'
+import { useRouter } from 'next/navigation'
 import type { SerializedTask } from '@/lib/types'
 import { TaskBreadcrumbs } from './TaskDrawer'
 import {
@@ -85,6 +86,8 @@ export function TaskDrawerContent({
   allTasks = [],
   currentUser,
 }: Props) {
+  const router = useRouter()
+
   // Resolver currentUser con la misma convención que el resto del módulo
   // (sin sesión real, fallback a `users[0]` mapeado al shape Presence).
   // El hook `useTaskEditLock` espera `{id, name}`; B1/A1 entregan
@@ -204,6 +207,17 @@ export function TaskDrawerContent({
           aria-disabled={lock.isLockedByOther || undefined}
         >
           <TaskForm
+            // 2026-05-13 · Edwin reportó que tras aplicar "Mejorar
+            // descripción" via IA, el campo del drawer no reflejaba el
+            // nuevo valor. Causa: `TaskForm` usa `useState(() => ...)`
+            // inicializado desde `task` prop, y el initializer solo corre
+            // en mount. Al cambiar `task.updatedAt` (server revalidate),
+            // forzamos remount via `key` para re-sincronizar todo el form
+            // con la versión fresca del server. El usuario está en modo
+            // view por default; si estuviera editando inline perdería
+            // drafts — trade-off aceptable porque el flujo de IA típico
+            // es "aplicar y revisar", no "editar al mismo tiempo".
+            key={`task-form-${task.updatedAt ?? task.id}`}
             mode="edit"
             task={task}
             projects={projects}
@@ -233,6 +247,28 @@ export function TaskDrawerContent({
                     type: task.type,
                     priority: task.priority,
                     tags: task.tags ?? [],
+                  }}
+                  onApplied={() => {
+                    // 2026-05-13 · Edwin reportó que el campo descripción
+                    // del modal no se actualizaba tras aplicar IA.
+                    // `applyRefinementAction` ya hace `revalidatePath`
+                    // pero en App Router eso requiere `router.refresh()`
+                    // explícito para re-fetchar el RSC payload de la
+                    // ruta actual. Sin esto, el `task` prop nunca
+                    // cambiaba y el form quedaba con la descripción vieja.
+                    router.refresh()
+                    // La IA también puede crear filas Risk via
+                    // `applyRefinementAction`. `TaskRisksSection` escucha
+                    // este evento (similar a `task-checklist:refresh`)
+                    // para recargar su lista sin esperar al refresh del
+                    // router.
+                    if (typeof window !== 'undefined') {
+                      window.dispatchEvent(
+                        new CustomEvent('task-risks:refresh', {
+                          detail: { taskId: task.id },
+                        }),
+                      )
+                    }
                   }}
                 />
                 <TaskFormHeaderActions ctx={ctx} />
