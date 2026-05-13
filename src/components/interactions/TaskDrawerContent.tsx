@@ -31,6 +31,7 @@ import { TaskChecklistSection } from '@/components/tasks/TaskChecklistSection'
 import { AttachmentList } from '@/components/attachments/AttachmentList'
 import { TaskAuditHistorySection } from '@/components/tasks/TaskAuditHistorySection'
 import { TaskInsightsSection } from '@/components/tasks/TaskInsightsSection'
+import { TaskRisksSection } from '@/components/tasks/TaskRisksSection'
 import { AITaskRefineMenu } from '@/components/tasks/AITaskRefineMenu'
 import { SoftLockProvider } from '@/components/realtime-locks/SoftLockProvider'
 import { EditingByBanner } from '@/components/realtime-locks/EditingByBanner'
@@ -307,6 +308,19 @@ export function TaskDrawerContent({
            */}
           <div className="border-t border-border bg-card/40 px-6 py-4">
             <TaskInsightsSection
+              taskId={task.id}
+              projectId={task.projectId ?? null}
+            />
+          </div>
+          {/*
+           * 2026-05-13 — Sección de Riesgos: lista los `Risk` con
+           * `taskId=task.id`, permite agregar nuevos (matriz 5×5) y avanzar
+           * estado (Abierto → Mitigando → Cerrado). También se alimenta de
+           * los riesgos promovidos automáticamente por la IA cuando el
+           * usuario aplica una sugerencia de "Mejorar descripción".
+           */}
+          <div className="border-t border-border bg-card/40 px-6 py-4">
+            <TaskRisksSection
               taskId={task.id}
               projectId={task.projectId ?? null}
             />
