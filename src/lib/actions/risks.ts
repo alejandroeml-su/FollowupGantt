@@ -82,6 +82,10 @@ const riskCreateSchema = z.object({
   ownerId: z.string().min(1).optional().nullable(),
   mitigation: z.string().trim().max(2000).optional().nullable(),
   triggerDelayDays: z.number().int().min(0).max(3650).optional().nullable(),
+  /** Vínculo opcional con la tarea originadora (Wave P14c). Cuando se
+   * crea un riesgo desde el drawer de una tarea, se persiste para
+   * habilitar drill-down y agrupación por tarea. */
+  taskId: z.string().min(1).optional().nullable(),
 })
 
 export type CreateRiskInput = z.input<typeof riskCreateSchema>
@@ -194,6 +198,7 @@ export async function createRisk(
       ownerId: data.ownerId ?? null,
       mitigation: data.mitigation ?? null,
       triggerDelayDays: data.triggerDelayDays ?? null,
+      taskId: data.taskId ?? null,
     },
     select: { id: true },
   })
@@ -388,6 +393,28 @@ export async function getRisksForProjectPaginated(input: {
     rows: slice.map(serializeRisk),
     nextCursor: hasMore ? slice[slice.length - 1]!.id : null,
   }
+}
+
+/**
+ * Riesgos vinculados a una tarea (vía `Risk.taskId`). Pensado para la
+ * sección de Riesgos del drawer de tarea (Wave 2026-05-13). Orden por
+ * severidad descendente (probability × impact) y luego por createdAt asc.
+ */
+export async function getRisksForTask(taskId: string): Promise<SerializedRisk[]> {
+  if (!taskId) return []
+  const rows = await prisma.risk.findMany({
+    where: { taskId },
+    orderBy: [
+      { probability: 'desc' },
+      { impact: 'desc' },
+      { createdAt: 'asc' },
+    ],
+    include: {
+      project: { select: { name: true } },
+      owner: { select: { name: true } },
+    },
+  })
+  return rows.map(serializeRisk)
 }
 
 export async function getRiskById(id: string): Promise<SerializedRisk | null> {

@@ -190,8 +190,12 @@ export function TaskMetaSidebar({
       </div>
 
       <div className="space-y-1.5">
+        {/* Bug Edwin 2026-05-13: este campo enlaza al `phaseId` (Fase del
+            proyecto, modelo `Phase`) — la label decía "Épica" lo que daba
+            la apariencia de un segundo selector de Epic, confundido con el
+            selector real (`epicId`) más abajo. La label correcta es "Fase". */}
         <label htmlFor="task-meta-phase" className={FIELD_LABEL}>
-          Épica
+          Fase
         </label>
         <select
           id="task-meta-phase"
@@ -204,8 +208,8 @@ export function TaskMetaSidebar({
             {!value.projectId
               ? 'Selecciona un proyecto…'
               : phasesForProject.length === 0
-                ? 'Sin épicas en este proyecto'
-                : 'Sin épica'}
+                ? 'Sin fases en este proyecto'
+                : 'Sin fase'}
           </option>
           {phasesForProject.map((p) => (
             <option key={p.id} value={p.id}>

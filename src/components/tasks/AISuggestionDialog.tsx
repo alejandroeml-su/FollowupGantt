@@ -156,7 +156,18 @@ function DialogBody({
 
       if (suggestion.kind === 'description') {
         kindForServer = 'description'
-        payload = { description: editing ? draftDescription : suggestion.data.improvedDescription }
+        // Bug Edwin 2026-05-13: el dialog mostraba `acceptanceCriteria` y
+        // `risks` en preview pero el payload sólo incluía `description`, así
+        // que al "Aceptar y aplicar" se descartaban. Ahora viajan al server
+        // para que `applyRefinementAction` los inserte en `userStory.criteria`
+        // (si type=AGILE_STORY) y en filas de la tabla `Risk` respectivamente.
+        payload = {
+          description: editing
+            ? draftDescription
+            : suggestion.data.improvedDescription,
+          acceptanceCriteria: suggestion.data.acceptanceCriteria ?? [],
+          risks: suggestion.data.risks ?? [],
+        }
       } else if (suggestion.kind === 'checklist') {
         kindForServer = 'checklist'
         payload = { items: editing ? draftChecklist : suggestion.data.items }
