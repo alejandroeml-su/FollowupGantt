@@ -1227,13 +1227,27 @@ export function TaskForm({
       data-task-form-mode={mode}
     >
       {(renderHeaderActions || renderHeaderLeft) && (
-        <div className="flex items-center justify-between mb-6 shrink-0 px-1">
-          <div className="min-w-0 flex-1">
-            {renderHeaderLeft?.(headerCtx)}
-          </div>
-          <div className="flex items-center gap-2">
-            {renderHeaderActions?.(headerCtx)}
-          </div>
+        // 2026-05-13 · Edwin: antes este header era un único `<div flex
+        // justify-between>` con breadcrumb a la izquierda y botones a la
+        // derecha. Cuando el título era largo (caso reportado:
+        // "Desarrollo de herramienta de gestión de proyectos…"), los
+        // botones ✨IA + Editar/Guardar quedaban *montados* sobre el texto
+        // porque `<nav>` de TaskBreadcrumbs no propagaba el `min-w-0`
+        // necesario para que el `truncate` recortara dentro del flex.
+        // Solución: stack vertical (2 filas) — breadcrumb arriba, botones
+        // abajo a la derecha. Esto deja el título legible completo y los
+        // botones igualmente accesibles.
+        <div className="flex flex-col gap-2 mb-6 shrink-0 px-1">
+          {renderHeaderLeft && (
+            <div className="min-w-0 w-full">
+              {renderHeaderLeft(headerCtx)}
+            </div>
+          )}
+          {renderHeaderActions && (
+            <div className="flex items-center justify-end gap-2">
+              {renderHeaderActions(headerCtx)}
+            </div>
+          )}
         </div>
       )}
 
