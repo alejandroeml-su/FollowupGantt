@@ -684,6 +684,148 @@ export function TaskForm({
         )}
       </div>
 
+      {/* Metodología (movido tras Título 2026-05-13 · Edwin) — selector
+          arriba para que las secciones específicas del tipo aparezcan/
+          desaparezcan inmediatamente al cambiar de metodología.
+          Visible siempre (antes solo create). */}
+      <div className="space-y-1.5">
+        <label
+          htmlFor="task-type"
+          className="text-xs font-semibold uppercase tracking-wider text-foreground"
+        >
+          Metodología
+        </label>
+        <select
+          id="task-type"
+          value={form.type}
+          onChange={(e) => setFormField('type', e.target.value)}
+          disabled={isEdit && !isEditing}
+          className="w-full rounded-md border border-border bg-input py-2 px-3 text-sm text-input-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-ring disabled:opacity-70 disabled:cursor-not-allowed"
+        >
+          <option value="AGILE_STORY">📋 Scrum / Agile Story</option>
+          <option value="PMI_TASK">🏗️ PMI Task</option>
+          <option value="ITIL_TICKET">🚨 ITIL Ticket</option>
+        </select>
+        <p className="text-[11px] text-muted-foreground">
+          {form.type === 'AGILE_STORY' &&
+            'Captura: Historia de Usuario, Criterios de Aceptación, Sprint, Epic, Story Points.'}
+          {form.type === 'PMI_TASK' &&
+            'Captura: Fase, Dependencias, Línea Base, Estimaciones, Hitos, EVM.'}
+          {form.type === 'ITIL_TICKET' &&
+            'Captura: Tipo de registro, Impacto, Urgencia, SLA, Síntoma, Diagnóstico, Resolución.'}
+        </p>
+      </div>
+
+      {/* Sección ITIL — solo visible para type=ITIL_TICKET. */}
+      {form.type === 'ITIL_TICKET' && (
+        <TaskItilSection
+          mode={isCreate ? 'create' : 'edit'}
+          value={itilAttributes}
+          onChange={setItilAttributes}
+          disabled={isEdit && !isEditing}
+          onAutosave={
+            isEdit && task
+              ? (next) => {
+                  const fd = new FormData()
+                  fd.set('id', task.id)
+                  fd.set('itilAttributes', JSON.stringify(next))
+                  fd.set('userId', users[0]?.id || '')
+                  fd.set('userRoles', JSON.stringify(DEBUG_USER_ROLES))
+                  startTransition(async () => {
+                    try {
+                      await updateTask(fd)
+                      toast.success('ITIL guardado')
+                    } catch (err) {
+                      toast.error(
+                        err instanceof Error
+                          ? err.message
+                          : 'Error al guardar ITIL',
+                      )
+                    }
+                  })
+                }
+              : undefined
+          }
+        />
+      )}
+
+      {/* Sección Scrum — solo visible para AGILE_STORY. */}
+      {form.type === 'AGILE_STORY' && (
+        <TaskScrumSection
+          mode={isCreate ? 'create' : 'edit'}
+          value={scrumAttributes}
+          onChange={setScrumAttributes}
+          disabled={isEdit && !isEditing}
+          onAutosave={
+            isEdit && task
+              ? (next) => {
+                  const fd = new FormData()
+                  fd.set('id', task.id)
+                  fd.set('scrumAttributes', JSON.stringify(next))
+                  fd.set('userId', users[0]?.id || '')
+                  fd.set('userRoles', JSON.stringify(DEBUG_USER_ROLES))
+                  startTransition(async () => {
+                    try {
+                      await updateTask(fd)
+                      toast.success('Scrum guardado')
+                    } catch (err) {
+                      toast.error(
+                        err instanceof Error
+                          ? err.message
+                          : 'Error al guardar Scrum',
+                      )
+                    }
+                  })
+                }
+              : undefined
+          }
+        />
+      )}
+
+      {/* Sección PMI — solo visible para PMI_TASK. */}
+      {form.type === 'PMI_TASK' && (
+        <TaskPmiSection
+          mode={isCreate ? 'create' : 'edit'}
+          value={pmiAttributes}
+          onChange={setPmiAttributes}
+          disabled={isEdit && !isEditing}
+          onAutosave={
+            isEdit && task
+              ? (next) => {
+                  const fd = new FormData()
+                  fd.set('id', task.id)
+                  fd.set('pmiAttributes', JSON.stringify(next))
+                  fd.set('userId', users[0]?.id || '')
+                  fd.set('userRoles', JSON.stringify(DEBUG_USER_ROLES))
+                  startTransition(async () => {
+                    try {
+                      await updateTask(fd)
+                      toast.success('PMI guardado')
+                    } catch (err) {
+                      toast.error(
+                        err instanceof Error
+                          ? err.message
+                          : 'Error al guardar PMI',
+                      )
+                    }
+                  })
+                }
+              : undefined
+          }
+        />
+      )}
+
+      {/* Prioridad (movida tras Metodología 2026-05-13 · Edwin). */}
+      <div className="space-y-1.5">
+        <label className="text-xs font-semibold uppercase tracking-wider text-foreground">
+          Prioridad
+        </label>
+        <PriorityPills
+          value={form.priority}
+          onChange={(next) => setFormField('priority', next)}
+        />
+      </div>
+
       {/* Descripción */}
       <div className="space-y-1.5">
         <label
@@ -740,149 +882,6 @@ export function TaskForm({
         value={referenceUrl}
         onChange={setReferenceUrl}
       />
-
-      {/* Prioridad */}
-      <div className="space-y-1.5">
-        <label className="text-xs font-semibold uppercase tracking-wider text-foreground">
-          Prioridad
-        </label>
-        <PriorityPills
-          value={form.priority}
-          onChange={(next) => setFormField('priority', next)}
-        />
-      </div>
-
-      {/* Tipo de tarea (Fase 1, 2026-05-13 · Edwin) — visible siempre
-          (antes solo create). Determina qué secciones se renderizan:
-          AGILE_STORY → UserStorySection; PMI_TASK → Tiempos+Dependencies;
-          ITIL_TICKET → TaskItilSection. Sin cambiar `type` el comportamiento
-          es idéntico al de antes. */}
-      <div className="space-y-1.5">
-        <label
-          htmlFor="task-type"
-          className="text-xs font-semibold uppercase tracking-wider text-foreground"
-        >
-          Metodología
-        </label>
-        <select
-          id="task-type"
-          value={form.type}
-          onChange={(e) => setFormField('type', e.target.value)}
-          disabled={isEdit && !isEditing}
-          className="w-full rounded-md border border-border bg-input py-2 px-3 text-sm text-input-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-ring disabled:opacity-70 disabled:cursor-not-allowed"
-        >
-          <option value="AGILE_STORY">📋 Scrum / Agile Story</option>
-          <option value="PMI_TASK">🏗️ PMI Task</option>
-          <option value="ITIL_TICKET">🚨 ITIL Ticket</option>
-        </select>
-        <p className="text-[11px] text-muted-foreground">
-          {form.type === 'AGILE_STORY' &&
-            'Captura: Historia de Usuario, Criterios de Aceptación, Sprint, Epic, Story Points.'}
-          {form.type === 'PMI_TASK' &&
-            'Captura: Fase, Dependencias, Línea Base, Estimaciones, Hitos, EVM.'}
-          {form.type === 'ITIL_TICKET' &&
-            'Captura: Tipo de registro, Impacto, Urgencia, SLA, Síntoma, Diagnóstico, Resolución.'}
-        </p>
-      </div>
-
-      {/* Fase 1 — Sección ITIL: solo visible para type=ITIL_TICKET. */}
-      {form.type === 'ITIL_TICKET' && (
-        <TaskItilSection
-          mode={isCreate ? 'create' : 'edit'}
-          value={itilAttributes}
-          onChange={setItilAttributes}
-          disabled={isEdit && !isEditing}
-          onAutosave={
-            isEdit && task
-              ? (next) => {
-                  const fd = new FormData()
-                  fd.set('id', task.id)
-                  fd.set('itilAttributes', JSON.stringify(next))
-                  fd.set('userId', users[0]?.id || '')
-                  fd.set('userRoles', JSON.stringify(DEBUG_USER_ROLES))
-                  startTransition(async () => {
-                    try {
-                      await updateTask(fd)
-                      toast.success('ITIL guardado')
-                    } catch (err) {
-                      toast.error(
-                        err instanceof Error
-                          ? err.message
-                          : 'Error al guardar ITIL',
-                      )
-                    }
-                  })
-                }
-              : undefined
-          }
-        />
-      )}
-
-      {/* Fase 1.5 — Sección Scrum: solo visible para AGILE_STORY. */}
-      {form.type === 'AGILE_STORY' && (
-        <TaskScrumSection
-          mode={isCreate ? 'create' : 'edit'}
-          value={scrumAttributes}
-          onChange={setScrumAttributes}
-          disabled={isEdit && !isEditing}
-          onAutosave={
-            isEdit && task
-              ? (next) => {
-                  const fd = new FormData()
-                  fd.set('id', task.id)
-                  fd.set('scrumAttributes', JSON.stringify(next))
-                  fd.set('userId', users[0]?.id || '')
-                  fd.set('userRoles', JSON.stringify(DEBUG_USER_ROLES))
-                  startTransition(async () => {
-                    try {
-                      await updateTask(fd)
-                      toast.success('Scrum guardado')
-                    } catch (err) {
-                      toast.error(
-                        err instanceof Error
-                          ? err.message
-                          : 'Error al guardar Scrum',
-                      )
-                    }
-                  })
-                }
-              : undefined
-          }
-        />
-      )}
-
-      {/* Fase 1.5 — Sección PMI: solo visible para PMI_TASK. */}
-      {form.type === 'PMI_TASK' && (
-        <TaskPmiSection
-          mode={isCreate ? 'create' : 'edit'}
-          value={pmiAttributes}
-          onChange={setPmiAttributes}
-          disabled={isEdit && !isEditing}
-          onAutosave={
-            isEdit && task
-              ? (next) => {
-                  const fd = new FormData()
-                  fd.set('id', task.id)
-                  fd.set('pmiAttributes', JSON.stringify(next))
-                  fd.set('userId', users[0]?.id || '')
-                  fd.set('userRoles', JSON.stringify(DEBUG_USER_ROLES))
-                  startTransition(async () => {
-                    try {
-                      await updateTask(fd)
-                      toast.success('PMI guardado')
-                    } catch (err) {
-                      toast.error(
-                        err instanceof Error
-                          ? err.message
-                          : 'Error al guardar PMI',
-                      )
-                    }
-                  })
-                }
-              : undefined
-          }
-        />
-      )}
 
       {/* Wave P9 · Agile Maturity (HU-9.3) — Historia de Usuario formal.
           Sólo aplica si type=AGILE_STORY. En mode='edit' persiste vía
@@ -1228,13 +1227,27 @@ export function TaskForm({
       data-task-form-mode={mode}
     >
       {(renderHeaderActions || renderHeaderLeft) && (
-        <div className="flex items-center justify-between mb-6 shrink-0 px-1">
-          <div className="min-w-0 flex-1">
-            {renderHeaderLeft?.(headerCtx)}
-          </div>
-          <div className="flex items-center gap-2">
-            {renderHeaderActions?.(headerCtx)}
-          </div>
+        // 2026-05-13 · Edwin: antes este header era un único `<div flex
+        // justify-between>` con breadcrumb a la izquierda y botones a la
+        // derecha. Cuando el título era largo (caso reportado:
+        // "Desarrollo de herramienta de gestión de proyectos…"), los
+        // botones ✨IA + Editar/Guardar quedaban *montados* sobre el texto
+        // porque `<nav>` de TaskBreadcrumbs no propagaba el `min-w-0`
+        // necesario para que el `truncate` recortara dentro del flex.
+        // Solución: stack vertical (2 filas) — breadcrumb arriba, botones
+        // abajo a la derecha. Esto deja el título legible completo y los
+        // botones igualmente accesibles.
+        <div className="flex flex-col gap-2 mb-6 shrink-0 px-1">
+          {renderHeaderLeft && (
+            <div className="min-w-0 w-full">
+              {renderHeaderLeft(headerCtx)}
+            </div>
+          )}
+          {renderHeaderActions && (
+            <div className="flex items-center justify-end gap-2">
+              {renderHeaderActions(headerCtx)}
+            </div>
+          )}
         </div>
       )}
 
