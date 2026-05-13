@@ -101,7 +101,7 @@ export function ReferenceUrlField({
     <div className={clsx('space-y-1.5', className)}>
       <label
         htmlFor="task-reference-url"
-        className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1"
+        className="text-xs font-semibold uppercase tracking-wider text-foreground/75 dark:text-slate-200 flex items-center gap-1"
       >
         <Link2 className="h-3 w-3" /> URL de referencia
       </label>

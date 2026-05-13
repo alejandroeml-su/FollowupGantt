@@ -137,7 +137,11 @@
   --secondary-foreground: #ffffff;
 
   --muted: #2d3859;
-  --muted-foreground: #cbd5e1;     /* slate-300 — 11:1, con /70 da 7.5:1 (sigue AA) */
+  /* 2026-05-13 — Edwin reportó section labels (TÍTULO, ETIQUETAS, etc.) poco
+     legibles en dark mode. Subido de slate-300 a slate-200 (#e2e8f0) para
+     ganar contraste (~12:1 contra el bg) y que los labels uppercase y los
+     placeholders queden más prominentes. /70 aún da 8.5:1 (AAA). */
+  --muted-foreground: #e2e8f0;     /* slate-200 — 12:1 (era slate-300 11:1) */
 
   --accent: #312e81;               /* indigo-900 hover */
   --accent-foreground: #ffffff;    /* blanco puro — era indigo-100 */
