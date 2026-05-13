@@ -1147,6 +1147,26 @@ model Task {
   /// El validador de shape vive en `src/lib/user-story/types.ts`.
   userStory Json?
 
+  /// Fase 1 (2026-05-13) — ITIL Task Attributes. Aplica sólo a tasks con
+  /// `type = ITIL_TICKET`. Json con shape:
+  ///   {
+  ///     recordType: 'Incident'|'Problem'|'Change'|'ServiceRequest'|'Event',
+  ///     impact:     'Bajo'|'Medio'|'Alto',
+  ///     urgency:    'Baja'|'Media'|'Alta',
+  ///     serviceCategory?: string,
+  ///     symptom?: string, diagnosis?: string, workaround?: string,
+  ///     resolution?: string, rootCause?: string,
+  ///     changeType?: 'Standard'|'Normal'|'Emergency',  // solo si recordType=Change
+  ///     riskAssessment?, implementationPlan?, rollbackPlan?, cabApproval?,
+  ///     changeWindowStart?, changeWindowEnd?
+  ///   }
+  ///
+  /// Decisión arquitectura: Json en lugar de tablas tipadas (deuda Fase 2).
+  /// Mismo patrón que `userStory` para acelerar la entrega del flujo de
+  /// captura sin requerir migración pesada. Validador en
+  /// `src/lib/itil/types.ts`.
+  itilAttributes Json?
+
   // Enlace externo de referencia (Confluence, Figma, ticket externo, etc.)
   referenceUrl String?
 

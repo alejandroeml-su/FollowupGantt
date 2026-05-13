@@ -70,6 +70,14 @@ type Props = {
   taskId?: string
   /** Sprint 4 — colaboradores actuales serializados desde el server. */
   collaborators?: CollaboratorOption[]
+
+  /** Fase 1 (2026-05-13) — Tipo de tarea para renderizado condicional:
+   *    AGILE_STORY → Sprint + Epic visibles
+   *    PMI_TASK    → Hito + Estimación + Fechas visibles
+   *    ITIL_TICKET → solo Estado/Responsable/Proyecto/Categoría (sin
+   *                   Sprint/Epic/Hito/Estimación; los SLA dates y
+   *                   detalles ITIL viven en TaskItilSection) */
+  taskType?: 'AGILE_STORY' | 'PMI_TASK' | 'ITIL_TICKET' | string
 }
 
 const FIELD_LABEL =
@@ -98,7 +106,13 @@ export function TaskMetaSidebar({
   className,
   taskId,
   collaborators = [],
+  taskType,
 }: Props) {
+  // Fase 1 — renderizado condicional según metodología. Default a AGILE
+  // si no se pasa (back-compat con callers existentes que no especifican).
+  const isAgile = taskType === 'AGILE_STORY' || !taskType
+  const isPMI = taskType === 'PMI_TASK'
+  const isITIL = taskType === 'ITIL_TICKET'
   const phasesForProject = useMemo(
     () => phases.filter((p) => p.projectId === value.projectId),
     [phases, value.projectId],
@@ -219,7 +233,8 @@ export function TaskMetaSidebar({
         </select>
       </div>
 
-      {/* 4. Sprint / Hito */}
+      {/* 4. Sprint — solo para AGILE_STORY (Fase 1, 2026-05-13). */}
+      {isAgile && (
       <div className="space-y-1.5">
         <label htmlFor="task-meta-sprint" className={FIELD_LABEL}>
           Sprint
@@ -245,9 +260,11 @@ export function TaskMetaSidebar({
           ))}
         </select>
       </div>
+      )}
 
       {/* Wave P9 · Agile Maturity (HU-9.2) — Selector de Epic.
-          Filtrado por projectId. Render con dot del color del Epic. */}
+          Solo para AGILE_STORY (Fase 1, 2026-05-13). */}
+      {isAgile && (
       <div className="space-y-1.5">
         <label htmlFor="task-meta-epic" className={FIELD_LABEL}>
           Epic
@@ -290,7 +307,10 @@ export function TaskMetaSidebar({
           </div>
         )}
       </div>
+      )}
 
+      {/* Hito — solo PMI (Fase 1, 2026-05-13). */}
+      {isPMI && (
       <label className="flex items-center gap-2 text-xs text-foreground">
         <input
           type="checkbox"
@@ -300,11 +320,14 @@ export function TaskMetaSidebar({
         />
         <span>Es hito</span>
       </label>
+      )}
 
-      {/* 5. Fecha de inicio */}
+      {/* 5. Fecha de inicio. ITIL reusa estos campos como "Tiempo de
+          respuesta SLA" semánticamente, pero por ahora mostramos el mismo
+          input con label diferente. (Deuda Fase 2: separar SLA targets.) */}
       <div className="space-y-1.5">
         <label htmlFor="task-meta-start" className={FIELD_LABEL}>
-          Fecha de inicio
+          {isITIL ? 'Inicio / Detección' : 'Fecha de inicio'}
         </label>
         <input
           id="task-meta-start"
@@ -318,7 +341,7 @@ export function TaskMetaSidebar({
       {/* 6. Fecha de entrega */}
       <div className="space-y-1.5">
         <label htmlFor="task-meta-end" className={FIELD_LABEL}>
-          Fecha de entrega
+          {isITIL ? 'Objetivo de resolución' : 'Fecha de entrega'}
         </label>
         <input
           id="task-meta-end"
@@ -329,10 +352,12 @@ export function TaskMetaSidebar({
         />
       </div>
 
-      {/* 7. Estimación (plannedValue en horas) */}
+      {/* 7. Estimación (plannedValue en horas) — solo PMI/AGILE, no aplica
+          a ITIL (allí el "esfuerzo" se mide con SLA targets, no estimación). */}
+      {!isITIL && (
       <div className="space-y-1.5">
         <label htmlFor="task-meta-planned" className={FIELD_LABEL}>
-          Estimación
+          {isAgile ? 'Estimación (horas ideales)' : 'Estimación'}
         </label>
         <div className="flex items-center gap-2">
           <input
@@ -348,6 +373,7 @@ export function TaskMetaSidebar({
           <span className="text-xs text-muted-foreground">horas</span>
         </div>
       </div>
+      )}
 
       {/* Sprint 4: el sidebar ya soporta `mode='edit'` con sección Colaboradores
           funcional (ver CollaboratorsField). El resto de campos comparten contrato

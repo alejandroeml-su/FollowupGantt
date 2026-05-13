@@ -90,6 +90,14 @@ export interface SerializedTask {
   collaborators?: { id: string; name: string }[];
   predecessors?: SerializedDependency[];
   successors?: SerializedDependency[];
+  /** Wave Phase 1 (2026-05-13) — ITIL Task Attributes (Json crudo del server).
+   * El cliente lo normaliza con `normalizeItilAttributes` (src/lib/itil/types.ts).
+   * Sólo se llena cuando `type === 'ITIL_TICKET'`; en otros tipos es null. */
+  itilAttributes?: unknown;
+  /** Limites SLA ITIL — fechas (ya existentes en schema). */
+  slaResponseLimit?: string | null;
+  slaResolutionLimit?: string | null;
+  isEscalated?: boolean;
 }
 
 export type SerializedDependency = {
@@ -176,6 +184,10 @@ type RawTask = {
   }>;
   predecessors?: unknown[];
   successors?: unknown[];
+  itilAttributes?: unknown;
+  slaResponseLimit?: DateLike;
+  slaResolutionLimit?: DateLike;
+  isEscalated?: boolean;
 }
 
 function toISO(d: DateLike): string | null {
@@ -260,5 +272,9 @@ export function serializeTask(task: Record<string, unknown>): SerializedTask {
     })) : [],
     predecessors: Array.isArray(t.predecessors) ? (t.predecessors as SerializedDependency[]) : [],
     successors: Array.isArray(t.successors) ? (t.successors as SerializedDependency[]) : [],
+    itilAttributes: t.itilAttributes ?? null,
+    slaResponseLimit: t.slaResponseLimit ? toISO(t.slaResponseLimit) : null,
+    slaResolutionLimit: t.slaResolutionLimit ? toISO(t.slaResolutionLimit) : null,
+    isEscalated: t.isEscalated ?? false,
   };
 }

@@ -11,6 +11,7 @@ import { notifyMentions } from '@/lib/mentions/notify'
 import { resolveHandlesToUsers } from '@/lib/mentions/resolve'
 import { normalizeUserStory } from '@/lib/user-story/types'
 import { countPendingCriteria } from '@/lib/user-story/types'
+import { normalizeItilAttributes } from '@/lib/itil/types'
 import { recordAuditEventSafe } from '@/lib/audit/events'
 import { nextProgressForStatus } from '@/lib/tasks/status-progress'
 import { seedOnboardingKit, shouldSeedKit } from '@/lib/onboarding/seed-kit'
@@ -346,6 +347,20 @@ export async function createTask(formData: FormData) {
     }
   }
 
+  // Fase 1 (2026-05-13) — ITIL Attributes opcional. Sólo se persiste si
+  // type=ITIL_TICKET y el JSON es bien-formado. Mismo patrón que userStory.
+  let itilAttributesToPersist: ReturnType<typeof normalizeItilAttributes> = null
+  if (type === 'ITIL_TICKET') {
+    const rawItil = formData.get('itilAttributes')
+    if (typeof rawItil === 'string' && rawItil.trim()) {
+      try {
+        itilAttributesToPersist = normalizeItilAttributes(JSON.parse(rawItil))
+      } catch {
+        itilAttributesToPersist = null
+      }
+    }
+  }
+
   // Generar mnemónico automático: PRIM-1, INFRA-1...
   // Wave P17-B: incluimos `workspaceId` para emitir webhook v2.
   const project = await prisma.project.findUnique({ where: { id: projectId } })
@@ -371,6 +386,7 @@ export async function createTask(formData: FormData) {
       ...(storyPoints !== null ? { storyPoints } : {}),
       ...(epicId ? { epicId } : {}),
       ...(userStoryToPersist ? { userStory: userStoryToPersist } : {}),
+      ...(itilAttributesToPersist ? { itilAttributes: itilAttributesToPersist } : {}),
     },
     select: { id: true, title: true, mnemonic: true, status: true },
   })
@@ -497,6 +513,41 @@ export async function updateTask(formData: FormData) {
   if (epicIdRaw !== null) {
     const newEpicId = (epicIdRaw as string) || null
     checkChange('epicId', newEpicId, oldTask.epicId)
+  }
+
+  // Fase 1 (2026-05-13) — ITIL Attributes en update. Sólo se aplica si
+  // el form lo envía (typeof string en formData) y la tarea es / pasa a
+  // type=ITIL_TICKET. Si se envía `null`/vacío, limpiamos el campo.
+  const itilRaw = formData.get('itilAttributes')
+  if (itilRaw !== null) {
+    const raw = typeof itilRaw === 'string' ? itilRaw.trim() : ''
+    if (raw === '' || raw === 'null') {
+      // Limpiar — usuario quitó el ITIL data o cambió de tipo
+      if (oldTask.itilAttributes !== null) {
+        data.itilAttributes = null
+        historyEntries.push({
+          field: 'itilAttributes',
+          oldValue: 'set',
+          newValue: 'null',
+          userId: userId || null,
+        })
+      }
+    } else {
+      try {
+        const parsed = normalizeItilAttributes(JSON.parse(raw))
+        if (parsed) {
+          data.itilAttributes = parsed
+          historyEntries.push({
+            field: 'itilAttributes',
+            oldValue: oldTask.itilAttributes ? 'set' : 'null',
+            newValue: 'set',
+            userId: userId || null,
+          })
+        }
+      } catch {
+        // JSON mal-formado → ignoramos silenciosamente
+      }
+    }
   }
 
   await prisma.$transaction([
