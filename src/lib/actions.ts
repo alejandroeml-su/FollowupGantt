@@ -12,6 +12,13 @@ import { resolveHandlesToUsers } from '@/lib/mentions/resolve'
 import { normalizeUserStory } from '@/lib/user-story/types'
 import { countPendingCriteria } from '@/lib/user-story/types'
 import { normalizeItilAttributes } from '@/lib/itil/types'
+import { normalizeScrumAttributes } from '@/lib/scrum/types'
+import { normalizePmiAttributes } from '@/lib/pmi/types'
+import {
+  validateTaskDefinition,
+  isDefinitionComplete,
+} from '@/lib/task-validation/rules'
+import { canTransition } from '@/lib/task-validation/state-machines'
 import { recordAuditEventSafe } from '@/lib/audit/events'
 import { nextProgressForStatus } from '@/lib/tasks/status-progress'
 import { seedOnboardingKit, shouldSeedKit } from '@/lib/onboarding/seed-kit'
@@ -361,6 +368,46 @@ export async function createTask(formData: FormData) {
     }
   }
 
+  // Fase 1.5 — Scrum / PMI Attributes (mismo patrón).
+  let scrumAttributesToPersist: ReturnType<typeof normalizeScrumAttributes> = null
+  if (type === 'AGILE_STORY') {
+    const rawScrum = formData.get('scrumAttributes')
+    if (typeof rawScrum === 'string' && rawScrum.trim()) {
+      try {
+        scrumAttributesToPersist = normalizeScrumAttributes(JSON.parse(rawScrum))
+      } catch {
+        scrumAttributesToPersist = null
+      }
+    }
+  }
+  let pmiAttributesToPersist: ReturnType<typeof normalizePmiAttributes> = null
+  if (type === 'PMI_TASK') {
+    const rawPmi = formData.get('pmiAttributes')
+    if (typeof rawPmi === 'string' && rawPmi.trim()) {
+      try {
+        pmiAttributesToPersist = normalizePmiAttributes(JSON.parse(rawPmi))
+      } catch {
+        pmiAttributesToPersist = null
+      }
+    }
+  }
+
+  // Fase 4 — Calcular `definitionComplete` antes de insertar para que
+  // el flag refleje el estado real desde el primer momento.
+  const validations = validateTaskDefinition({
+    type,
+    status,
+    title,
+    description,
+    priority,
+    assigneeId: assigneeId ?? null,
+    itilAttributes: itilAttributesToPersist,
+    scrumAttributes: scrumAttributesToPersist,
+    pmiAttributes: pmiAttributesToPersist,
+    userStory: userStoryToPersist,
+  })
+  const definitionComplete = isDefinitionComplete(validations)
+
   // Generar mnemónico automático: PRIM-1, INFRA-1...
   // Wave P17-B: incluimos `workspaceId` para emitir webhook v2.
   const project = await prisma.project.findUnique({ where: { id: projectId } })
@@ -387,6 +434,9 @@ export async function createTask(formData: FormData) {
       ...(epicId ? { epicId } : {}),
       ...(userStoryToPersist ? { userStory: userStoryToPersist } : {}),
       ...(itilAttributesToPersist ? { itilAttributes: itilAttributesToPersist } : {}),
+      ...(scrumAttributesToPersist ? { scrumAttributes: scrumAttributesToPersist } : {}),
+      ...(pmiAttributesToPersist ? { pmiAttributes: pmiAttributesToPersist } : {}),
+      definitionComplete,
     },
     select: { id: true, title: true, mnemonic: true, status: true },
   })
@@ -496,7 +546,17 @@ export async function updateTask(formData: FormData) {
   }
 
   if (title) checkChange('title', title, oldTask.title)
-  if (status) checkChange('status', status as TaskStatus, oldTask.status)
+  if (status) {
+    // Fase 4 — State machine: rechazar transiciones inválidas según
+    // tipo (ITIL/PMI/Scrum). El tipo efectivo es el nuevo si cambió,
+    // si no el viejo.
+    const effectiveType = (type || oldTask.type) as string
+    const transition = canTransition(effectiveType, oldTask.status, status)
+    if (!transition.ok) {
+      throw new Error(`[${transition.code}] ${transition.message}`)
+    }
+    checkChange('status', status as TaskStatus, oldTask.status)
+  }
   if (priority) checkChange('priority', priority as Priority, oldTask.priority)
   if (type) checkChange('type', type as TaskType, oldTask.type)
   if (description !== undefined) checkChange('description', description, oldTask.description)
@@ -522,7 +582,6 @@ export async function updateTask(formData: FormData) {
   if (itilRaw !== null) {
     const raw = typeof itilRaw === 'string' ? itilRaw.trim() : ''
     if (raw === '' || raw === 'null') {
-      // Limpiar — usuario quitó el ITIL data o cambió de tipo
       if (oldTask.itilAttributes !== null) {
         data.itilAttributes = null
         historyEntries.push({
@@ -548,6 +607,119 @@ export async function updateTask(formData: FormData) {
         // JSON mal-formado → ignoramos silenciosamente
       }
     }
+  }
+
+  // Fase 1.5 — Scrum + PMI Attributes (mismo patrón).
+  const scrumRaw = formData.get('scrumAttributes')
+  if (scrumRaw !== null) {
+    const raw = typeof scrumRaw === 'string' ? scrumRaw.trim() : ''
+    if (raw === '' || raw === 'null') {
+      if (oldTask.scrumAttributes !== null) {
+        data.scrumAttributes = null
+        historyEntries.push({
+          field: 'scrumAttributes',
+          oldValue: 'set',
+          newValue: 'null',
+          userId: userId || null,
+        })
+      }
+    } else {
+      try {
+        const parsed = normalizeScrumAttributes(JSON.parse(raw))
+        if (parsed) {
+          data.scrumAttributes = parsed
+          historyEntries.push({
+            field: 'scrumAttributes',
+            oldValue: oldTask.scrumAttributes ? 'set' : 'null',
+            newValue: 'set',
+            userId: userId || null,
+          })
+        }
+      } catch {
+        /* ignore */
+      }
+    }
+  }
+
+  const pmiRaw = formData.get('pmiAttributes')
+  if (pmiRaw !== null) {
+    const raw = typeof pmiRaw === 'string' ? pmiRaw.trim() : ''
+    if (raw === '' || raw === 'null') {
+      if (oldTask.pmiAttributes !== null) {
+        data.pmiAttributes = null
+        historyEntries.push({
+          field: 'pmiAttributes',
+          oldValue: 'set',
+          newValue: 'null',
+          userId: userId || null,
+        })
+      }
+    } else {
+      try {
+        const parsed = normalizePmiAttributes(JSON.parse(raw))
+        if (parsed) {
+          data.pmiAttributes = parsed
+          historyEntries.push({
+            field: 'pmiAttributes',
+            oldValue: oldTask.pmiAttributes ? 'set' : 'null',
+            newValue: 'set',
+            userId: userId || null,
+          })
+        }
+      } catch {
+        /* ignore */
+      }
+    }
+  }
+
+  // Fase 4 — Recalcular `definitionComplete` con el estado proyectado
+  // (oldTask ∪ data). Si cambia, lo persistimos también.
+  const projectedType =
+    (data.type as string | undefined) ?? (oldTask.type as string)
+  const projectedStatus =
+    (data.status as string | undefined) ?? (oldTask.status as string)
+  const projectedItil =
+    'itilAttributes' in data
+      ? (data.itilAttributes as ReturnType<typeof normalizeItilAttributes>)
+      : normalizeItilAttributes(oldTask.itilAttributes)
+  const projectedScrum =
+    'scrumAttributes' in data
+      ? (data.scrumAttributes as ReturnType<typeof normalizeScrumAttributes>)
+      : normalizeScrumAttributes(oldTask.scrumAttributes)
+  const projectedPmi =
+    'pmiAttributes' in data
+      ? (data.pmiAttributes as ReturnType<typeof normalizePmiAttributes>)
+      : normalizePmiAttributes(oldTask.pmiAttributes)
+
+  const validations = validateTaskDefinition({
+    type: projectedType,
+    status: projectedStatus,
+    title: (data.title as string | undefined) ?? oldTask.title,
+    description:
+      (data.description as string | undefined) ?? oldTask.description,
+    priority: (data.priority as string | undefined) ?? oldTask.priority,
+    assigneeId:
+      (data.assigneeId as string | null | undefined) ?? oldTask.assigneeId,
+    isMilestone:
+      (data.isMilestone as boolean | undefined) ?? oldTask.isMilestone,
+    plannedValue:
+      (data.plannedValue as number | undefined) ?? oldTask.plannedValue,
+    startDate: (data.startDate as Date | null | undefined) ?? oldTask.startDate,
+    endDate: (data.endDate as Date | null | undefined) ?? oldTask.endDate,
+    itilAttributes: projectedItil,
+    scrumAttributes: projectedScrum,
+    pmiAttributes: projectedPmi,
+    userStory: normalizeUserStory(oldTask.userStory),
+  })
+  const newDefinitionComplete = isDefinitionComplete(validations)
+  if (newDefinitionComplete !== oldTask.definitionComplete) {
+    data.definitionComplete = newDefinitionComplete
+    historyEntries.push({
+      field: 'definitionComplete',
+      oldValue: String(oldTask.definitionComplete),
+      newValue: String(newDefinitionComplete),
+      userId: userId || null,
+    })
   }
 
   await prisma.$transaction([

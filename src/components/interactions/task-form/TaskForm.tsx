@@ -72,6 +72,15 @@ import {
   normalizeItilAttributes,
   type ItilAttributes,
 } from '@/lib/itil/types'
+import { TaskScrumSection } from './TaskScrumSection'
+import { normalizeScrumAttributes, type ScrumAttributes } from '@/lib/scrum/types'
+import { TaskPmiSection } from './TaskPmiSection'
+import { normalizePmiAttributes, type PmiAttributes } from '@/lib/pmi/types'
+import {
+  validateTaskDefinition,
+  isDefinitionComplete,
+  type RuleViolation,
+} from '@/lib/task-validation/rules'
 
 // ────────────────────────────────────────────────────────────────────────
 // Tipos públicos
@@ -250,6 +259,28 @@ export function TaskForm({
     },
   )
 
+  // Fase 1.5 (2026-05-13) — Scrum + PMI Attributes (mismo patrón).
+  const [scrumAttributes, setScrumAttributes] = useState<ScrumAttributes | null>(
+    () => {
+      if (isEdit && task) {
+        return normalizeScrumAttributes(
+          (task as unknown as { scrumAttributes?: unknown }).scrumAttributes,
+        )
+      }
+      return null
+    },
+  )
+  const [pmiAttributes, setPmiAttributes] = useState<PmiAttributes | null>(
+    () => {
+      if (isEdit && task) {
+        return normalizePmiAttributes(
+          (task as unknown as { pmiAttributes?: unknown }).pmiAttributes,
+        )
+      }
+      return null
+    },
+  )
+
   // ─── Sugerencias de tags por proyecto ──────────────────────────────
   useEffect(() => {
     const projectId = meta.projectId
@@ -354,6 +385,13 @@ export function TaskForm({
         // ITIL_TICKET y el usuario llenó los campos mínimos.
         if (form.type === 'ITIL_TICKET' && itilAttributes) {
           fd.set('itilAttributes', JSON.stringify(itilAttributes))
+        }
+        // Fase 1.5 — Scrum / PMI attributes.
+        if (form.type === 'AGILE_STORY' && scrumAttributes) {
+          fd.set('scrumAttributes', JSON.stringify(scrumAttributes))
+        }
+        if (form.type === 'PMI_TASK' && pmiAttributes) {
+          fd.set('pmiAttributes', JSON.stringify(pmiAttributes))
         }
 
         await createTask(fd)
@@ -461,8 +499,87 @@ export function TaskForm({
   // como sección embebida dentro del cuerpo de Detalle).
   const isModalLayout = layout === 'modal'
 
+  // Fase 4 — Validación en vivo. Se recalcula en cada cambio del form.
+  const violations: RuleViolation[] = useMemo(
+    () =>
+      validateTaskDefinition({
+        type: form.type,
+        status: meta.status,
+        title: form.title,
+        description: form.description,
+        priority: form.priority,
+        assigneeId: meta.assigneeId,
+        startDate: meta.startDate,
+        endDate: meta.endDate,
+        isMilestone: meta.isMilestone,
+        plannedValue: meta.plannedValue ? Number(meta.plannedValue) : null,
+        itilAttributes,
+        scrumAttributes,
+        pmiAttributes,
+        userStory: isCreate
+          ? pendingUserStory
+          : (task as unknown as { userStory?: UserStory | null })?.userStory ?? null,
+      }),
+    [form, meta, itilAttributes, scrumAttributes, pmiAttributes, pendingUserStory, isCreate, task],
+  )
+  const errors = violations.filter((v) => v.severity === 'error')
+  const warnings = violations.filter((v) => v.severity === 'warning')
+  const isComplete = isDefinitionComplete(violations)
+
   const detailBody = (
     <div className={isModalLayout ? 'space-y-4' : 'space-y-6'}>
+      {/* Fase 4 — Badge "Definición completa" + violations. Muestra al
+          inicio del form para visibilidad inmediata. Si la definición
+          está completa, badge verde; si hay errores, badge rojo + lista
+          colapsable. Warnings se muestran como info amber. */}
+      <div
+        className={`rounded-md border p-3 ${
+          isComplete
+            ? 'border-emerald-500/40 bg-emerald-500/5'
+            : 'border-rose-500/40 bg-rose-500/5'
+        }`}
+        data-testid="task-form-validation"
+      >
+        <div className="flex items-center justify-between gap-2">
+          <span
+            className={`text-xs font-bold uppercase tracking-wider ${
+              isComplete ? 'text-emerald-300' : 'text-rose-300'
+            }`}
+          >
+            {isComplete ? '✓ Definición completa' : `✗ Definición incompleta (${errors.length})`}
+          </span>
+          {warnings.length > 0 && (
+            <span className="text-[10px] text-amber-300">
+              {warnings.length} advertencia{warnings.length === 1 ? '' : 's'}
+            </span>
+          )}
+        </div>
+        {errors.length > 0 && (
+          <ul className="mt-2 space-y-0.5 text-xs text-rose-200">
+            {errors.slice(0, 6).map((e, i) => (
+              <li key={i}>
+                <span className="font-mono text-[10px] text-rose-400">[{e.code}]</span>{' '}
+                {e.message}
+              </li>
+            ))}
+            {errors.length > 6 && (
+              <li className="text-[10px] text-rose-400/70 italic">
+                + {errors.length - 6} más…
+              </li>
+            )}
+          </ul>
+        )}
+        {warnings.length > 0 && errors.length === 0 && (
+          <ul className="mt-2 space-y-0.5 text-xs text-amber-200">
+            {warnings.slice(0, 4).map((w, i) => (
+              <li key={i}>
+                <span className="font-mono text-[10px] text-amber-400">[{w.code}]</span>{' '}
+                {w.message}
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
       {/* En modo edit: chip mnemónico arriba del título. */}
       {isEdit && task && (
         <div className="flex items-center gap-2">
@@ -678,8 +795,6 @@ export function TaskForm({
           onAutosave={
             isEdit && task
               ? (next) => {
-                  // Autosave del campo `itilAttributes` via updateTask.
-                  // Patrón mismo que `saveField` pero con JSON serializado.
                   const fd = new FormData()
                   fd.set('id', task.id)
                   fd.set('itilAttributes', JSON.stringify(next))
@@ -694,6 +809,72 @@ export function TaskForm({
                         err instanceof Error
                           ? err.message
                           : 'Error al guardar ITIL',
+                      )
+                    }
+                  })
+                }
+              : undefined
+          }
+        />
+      )}
+
+      {/* Fase 1.5 — Sección Scrum: solo visible para AGILE_STORY. */}
+      {form.type === 'AGILE_STORY' && (
+        <TaskScrumSection
+          mode={isCreate ? 'create' : 'edit'}
+          value={scrumAttributes}
+          onChange={setScrumAttributes}
+          disabled={isEdit && !isEditing}
+          onAutosave={
+            isEdit && task
+              ? (next) => {
+                  const fd = new FormData()
+                  fd.set('id', task.id)
+                  fd.set('scrumAttributes', JSON.stringify(next))
+                  fd.set('userId', users[0]?.id || '')
+                  fd.set('userRoles', JSON.stringify(DEBUG_USER_ROLES))
+                  startTransition(async () => {
+                    try {
+                      await updateTask(fd)
+                      toast.success('Scrum guardado')
+                    } catch (err) {
+                      toast.error(
+                        err instanceof Error
+                          ? err.message
+                          : 'Error al guardar Scrum',
+                      )
+                    }
+                  })
+                }
+              : undefined
+          }
+        />
+      )}
+
+      {/* Fase 1.5 — Sección PMI: solo visible para PMI_TASK. */}
+      {form.type === 'PMI_TASK' && (
+        <TaskPmiSection
+          mode={isCreate ? 'create' : 'edit'}
+          value={pmiAttributes}
+          onChange={setPmiAttributes}
+          disabled={isEdit && !isEditing}
+          onAutosave={
+            isEdit && task
+              ? (next) => {
+                  const fd = new FormData()
+                  fd.set('id', task.id)
+                  fd.set('pmiAttributes', JSON.stringify(next))
+                  fd.set('userId', users[0]?.id || '')
+                  fd.set('userRoles', JSON.stringify(DEBUG_USER_ROLES))
+                  startTransition(async () => {
+                    try {
+                      await updateTask(fd)
+                      toast.success('PMI guardado')
+                    } catch (err) {
+                      toast.error(
+                        err instanceof Error
+                          ? err.message
+                          : 'Error al guardar PMI',
                       )
                     }
                   })
