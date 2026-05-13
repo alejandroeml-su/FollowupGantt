@@ -446,7 +446,7 @@ export function TaskForm({
             {task.mnemonic || task.id.substring(0, 8).toUpperCase()}
           </span>
           {task.parentId && (
-            <span className="inline-flex items-center gap-1 rounded bg-secondary border border-border px-2 py-0.5 text-xs font-medium text-muted-foreground">
+            <span className="inline-flex items-center gap-1 rounded bg-secondary border border-border px-2 py-0.5 text-xs font-medium text-foreground/85 dark:text-slate-200">
               <Link2 className="h-3 w-3" />
               Subtarea de #{task.parentId.substring(0, 6)}
             </span>
