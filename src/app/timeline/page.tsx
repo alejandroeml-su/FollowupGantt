@@ -5,7 +5,10 @@ import { GlobalBreadcrumbs } from '@/components/interactions/GlobalBreadcrumbs'
 import { ViewSwitcher } from '@/components/interactions/ViewSwitcher'
 import type { TimelineTask } from '@/lib/timeline/types'
 import { getCurrentUser } from '@/lib/auth/get-current-user'
+import { getCurrentUserPresence } from '@/lib/auth/get-current-user-presence'
 import { resolveProjectVisibility } from '@/lib/auth/visibility'
+import { serializeTask, type SerializedTask } from '@/lib/types'
+import { buildTaskTreeInclude, DEFAULT_TREE_DEPTH } from '@/lib/tasks/load-tree'
 
 export const dynamic = 'force-dynamic'
 
@@ -28,11 +31,16 @@ export default async function TimelinePage() {
   // cross-gerencia.
   const sessionUser = await getCurrentUser()
   const visibility = await resolveProjectVisibility(sessionUser)
+  // 2026-05-14 · TaskDrawer presence/lock identity para abrir tareas inline.
+  const currentUser = await getCurrentUserPresence()
 
   // Cargamos catálogos en paralelo para alimentar `<TaskFiltersBar>` y el
   // selector de agrupamiento del Timeline. Mismo patrón que /list, /kanban
   // y /gantt: una sola RSC pasa todo el contexto al client component.
-  const [tasks, projects, users, gerencias, areas, epics] = await Promise.all([
+  // 2026-05-14 · También cargamos el árbol completo (`buildTaskTreeInclude`)
+  // para que al hacer click en una barra se pueda abrir el TaskDrawer con
+  // datos hidratados sin un fetch extra.
+  const [tasks, fullTasks, projects, users, gerencias, areas, epics] = await Promise.all([
     prisma.task.findMany({
       where: {
         AND: [
@@ -70,6 +78,16 @@ export default async function TimelinePage() {
       },
       orderBy: [{ startDate: 'asc' }],
     }),
+    prisma.task.findMany({
+      where: {
+        AND: [
+          { archivedAt: null, startDate: { not: null }, endDate: { not: null } },
+          visibility.taskWhere,
+        ],
+      },
+      include: buildTaskTreeInclude({ depth: DEFAULT_TREE_DEPTH }),
+      orderBy: [{ startDate: 'asc' }],
+    }),
     prisma.project.findMany({
       where: visibility.projectWhere,
       select: { id: true, name: true, areaId: true },
@@ -94,6 +112,10 @@ export default async function TimelinePage() {
       orderBy: [{ projectId: 'asc' }, { position: 'asc' }],
     }),
   ])
+
+  const fullSerialized: SerializedTask[] = fullTasks.map((t) =>
+    serializeTask(t as unknown as Record<string, unknown>),
+  )
 
   const serialized: TimelineTask[] = tasks.map((t) => ({
     id: t.id,
@@ -139,11 +161,13 @@ export default async function TimelinePage() {
       <div className="flex-1 overflow-hidden">
         <TimelineBoardClient
           tasks={serialized}
+          fullTasks={fullSerialized}
           projects={projects}
           users={users}
           gerencias={gerencias}
           areas={areas}
           epics={epics}
+          currentUser={currentUser}
         />
       </div>
     </div>

@@ -833,6 +833,74 @@ export async function deleteTask(formData: FormData) {
   })
 }
 
+/**
+ * 2026-05-14 · Mantenimiento de tareas archivadas — Edwin: "se debe crear
+ * un mantenimiento en el área de tareas en una pestaña … que muestre todas
+ * las tareas archivadas". Estas acciones complementan al hard-delete: el
+ * usuario puede mover una tarea al "archivado" (soft-delete) y restaurarla
+ * más tarde sin perder histórico, comentarios ni adjuntos.
+ *
+ * El campo `Task.archivedAt` ya filtra todas las vistas (visibility.taskWhere
+ * usa `archivedAt: null` implícitamente al filtrarlo en cada query). Setear
+ * `archivedAt = new Date()` la oculta del listado activo; ponerla en `null`
+ * la restaura.
+ */
+export async function archiveTask(formData: FormData) {
+  return withMetrics('action.archiveTask', async () => {
+    const id = formData.get('id') as string
+    if (!id) throw new Error('[INVALID_INPUT] id requerido')
+
+    const before = await prisma.task.findUnique({
+      where: { id },
+      select: { id: true, projectId: true, title: true, mnemonic: true, archivedAt: true },
+    })
+    if (!before) throw new Error('[NOT_FOUND] Tarea no encontrada')
+    if (before.archivedAt) return // idempotente
+
+    await prisma.task.update({
+      where: { id },
+      data: { archivedAt: new Date() },
+    })
+    await recordAuditEventSafe({
+      action: 'task.archived',
+      entityType: 'task',
+      entityId: id,
+      actorId: (formData.get('userId') as string) || null,
+      before: before ?? undefined,
+    })
+    invalidateCpmCache(before.projectId)
+    revalidateTaskViews()
+  })
+}
+
+export async function unarchiveTask(formData: FormData) {
+  return withMetrics('action.unarchiveTask', async () => {
+    const id = formData.get('id') as string
+    if (!id) throw new Error('[INVALID_INPUT] id requerido')
+
+    const before = await prisma.task.findUnique({
+      where: { id },
+      select: { id: true, projectId: true, title: true, mnemonic: true, archivedAt: true },
+    })
+    if (!before) throw new Error('[NOT_FOUND] Tarea no encontrada')
+    if (!before.archivedAt) return // idempotente
+
+    await prisma.task.update({
+      where: { id },
+      data: { archivedAt: null },
+    })
+    await recordAuditEventSafe({
+      action: 'task.unarchived',
+      entityType: 'task',
+      entityId: id,
+      actorId: (formData.get('userId') as string) || null,
+      before: before ?? undefined,
+    })
+    invalidateCpmCache(before.projectId)
+    revalidateTaskViews()
+  })
+}
+
 export async function addDependency(formData: FormData) {
   const predecessorId = formData.get('predecessorId') as string
   const successorId = formData.get('successorId') as string

@@ -636,6 +636,10 @@ function GanttBoardClientImpl({
     edge: GanttDependencyEdge
     position: { x: number; y: number }
   } | null>(null)
+  // 2026-05-14 · Edge "seleccionada" — pintada con halo + acceso por
+  // teclado: Suprimir/Delete borra la dependencia activa. Se limpia al
+  // clickear fuera o al borrar/cerrar el menú.
+  const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null)
 
   // Mapa rápido id → tarea para construir el payload del editor (mnemonic+title).
   const taskById = useMemo(() => {
@@ -698,6 +702,7 @@ function GanttBoardClientImpl({
         predecessorId: edge.predecessorId,
         successorId: edge.successorId,
       })
+      if (selectedEdgeId === edge.id) setSelectedEdgeId(null)
       toast.success('Dependencia eliminada')
       announce('Dependencia eliminada')
     } catch (err) {
@@ -705,6 +710,35 @@ function GanttBoardClientImpl({
       toast.error(detail)
     }
   }
+
+  // 2026-05-14 · Suprimir/Backspace borra la dependencia seleccionada
+  // (siempre que el foco no esté en un input/textarea/contenteditable).
+  useEffect(() => {
+    if (!selectedEdgeId) return
+    const handler = (e: KeyboardEvent) => {
+      if (e.key !== 'Delete' && e.key !== 'Backspace') return
+      const t = e.target as HTMLElement | null
+      if (t) {
+        const tag = t.tagName
+        if (
+          tag === 'INPUT' ||
+          tag === 'TEXTAREA' ||
+          tag === 'SELECT' ||
+          t.isContentEditable
+        )
+          return
+      }
+      const edge = edges.find((x) => x.id === selectedEdgeId)
+      if (!edge) return
+      e.preventDefault()
+      deleteEdge(edge)
+    }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+    // deleteEdge es estable dentro del componente; no se incluye para
+    // evitar re-subscripciones innecesarias.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedEdgeId, edges])
 
   // HU-3.1/3.2 · proyecto activo derivado del filtro. La línea base se
   // captura/lista por-proyecto, así que requerimos selección explícita.
@@ -1081,7 +1115,16 @@ function GanttBoardClientImpl({
                   dependencies={edges}
                   width={totalWidth}
                   height={canvasHeight}
+                  selectedEdgeId={selectedEdgeId}
+                  onDependencyClick={(edge, ev) => {
+                    setSelectedEdgeId(edge.id)
+                    setDepMenu({
+                      edge,
+                      position: { x: ev.clientX, y: ev.clientY },
+                    })
+                  }}
                   onDependencyContextMenu={(edge, ev) => {
+                    setSelectedEdgeId(edge.id)
                     setDepMenu({
                       edge,
                       position: { x: ev.clientX, y: ev.clientY },
@@ -1179,7 +1222,10 @@ function GanttBoardClientImpl({
         <DependencyArrowMenu
           edge={depMenu.edge}
           position={depMenu.position}
-          onClose={() => setDepMenu(null)}
+          onClose={() => {
+            setDepMenu(null)
+            setSelectedEdgeId(null)
+          }}
           onEdit={() => {
             const pos = depMenu.position
             const edge = depMenu.edge
