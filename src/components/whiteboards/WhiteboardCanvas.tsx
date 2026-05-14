@@ -69,6 +69,15 @@ type Props = {
   /** HU-02 — Drop de texto (incluye URLs). El editor decide si crear
    *  un link-card o un TEXT plain. */
   onTextDropped?: (text: string, worldPoint: { x: number; y: number }) => void
+  /** HU-07 (2026-05-14) — Override del viewport desde fuera. Si se
+   *  provee, el canvas usa este viewport en vez de su state interno.
+   *  Útil cuando el usuario está "siguiendo a un moderador" — el editor
+   *  mantiene el viewport del host y lo pasa por aquí. */
+  externalViewport?: ViewportState | null
+  /** HU-07 — Notifica al editor cada cambio de viewport interno (pan,
+   *  zoom). Permite al editor reenviar la posición via broadcast si el
+   *  usuario es host. */
+  onViewportChange?: (viewport: ViewportState) => void
 }
 
 /**
@@ -101,8 +110,25 @@ export function WhiteboardCanvas({
   onDrawingCommit,
   onFilesDropped,
   onTextDropped,
+  externalViewport,
+  onViewportChange,
 }: Props) {
-  const [viewport, setViewport] = useState<ViewportState>(DEFAULT_VIEWPORT)
+  const [internalViewport, setInternalViewport] = useState<ViewportState>(DEFAULT_VIEWPORT)
+  // HU-07 — Si hay `externalViewport`, lo usamos (modo "siguiendo a un
+  // moderador"). El usuario aún puede mover su rueda y eso emite
+  // `onViewportChange` pero el editor decide si aplicar o no (típico:
+  // mientras sigue, ignora sus inputs hasta que rompe el follow).
+  const viewport = externalViewport ?? internalViewport
+  const setViewport = useCallback(
+    (next: ViewportState | ((prev: ViewportState) => ViewportState)) => {
+      setInternalViewport((prev) => {
+        const value = typeof next === 'function' ? next(prev) : next
+        onViewportChange?.(value)
+        return value
+      })
+    },
+    [onViewportChange],
+  )
   const containerRef = useRef<HTMLDivElement | null>(null)
   const dragRef = useRef<{
     kind: 'pan' | 'element' | 'draw'
