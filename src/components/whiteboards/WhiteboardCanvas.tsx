@@ -14,9 +14,14 @@ import type { CurrentUserIdentity } from '@/lib/realtime-cursors/use-live-cursor
 type Props = {
   elements: WhiteboardElement[]
   selectedId: string | null
+  /** HU-12 (2026-05-14) — Conjunto de ids seleccionados (multi-select).
+   *  Si no se pasa, el canvas opera en modo single-select clásico. */
+  selectedIds?: Set<string>
   /** Elemento actualmente en modo edición inline (textarea visible). */
   editingId?: string | null
-  onSelect: (id: string | null) => void
+  /** HU-12 — segundo argumento `additive` (Shift/Ctrl/Cmd) → toggle del id
+   *  en el set de seleccionados en vez de reemplazar. */
+  onSelect: (id: string | null, additive?: boolean) => void
   onMove: (id: string, next: { x: number; y: number }) => void
   /** Click sobre el lienzo vacío en coords mundo. Útil para insertar con tool activo. */
   onCanvasClick?: (worldPoint: { x: number; y: number }) => void
@@ -62,6 +67,7 @@ type Props = {
 export function WhiteboardCanvas({
   elements,
   selectedId,
+  selectedIds,
   editingId,
   onSelect,
   onMove,
@@ -92,6 +98,11 @@ export function WhiteboardCanvas({
   const [drawingPreview, setDrawingPreview] = useState<
     { x: number; y: number }[] | null
   >(null)
+  // HU-12 — Snapshot de la posición inicial de cada elemento durante un
+  // drag de multi-selección. Se llena lazy en el primer mousemove para
+  // que el cálculo del delta funcione con todos los elementos al mismo
+  // delta (no acumulando errores de redondeo del snap).
+  const dragOriginsRef = useRef<Map<string, { x: number; y: number }>>(new Map())
 
   /** Convierte un MouseEvent del DOM a coords del mundo. */
   const eventToWorld = useCallback(
@@ -147,6 +158,13 @@ export function WhiteboardCanvas({
         const elementId = elementHandle.dataset.elementId!
         const el = elements.find((x) => x.id === elementId)
         if (!el) return
+        // HU-12 — Elementos bloqueados no se pueden mover. Sí permitimos
+        // seleccionarlos (con click) para mostrar la opción "Desbloquear".
+        const additive = e.shiftKey || e.ctrlKey || e.metaKey
+        if (el.locked) {
+          onSelect(elementId, additive)
+          return
+        }
         dragRef.current = {
           kind: 'element',
           elementId,
@@ -155,8 +173,10 @@ export function WhiteboardCanvas({
           startElementWorld: { x: el.x, y: el.y },
           moved: false,
         }
-        onSelect(elementId)
+        onSelect(elementId, additive)
       } else {
+        // Click en fondo SIN shift → deselecciona todo (en handleMouseUp).
+        // Con shift, dejamos `pan` para no romper la selección actual.
         dragRef.current = {
           kind: 'pan',
           startScreen: screen,
@@ -203,14 +223,39 @@ export function WhiteboardCanvas({
         }
       } else if (drag.kind === 'element' && drag.elementId && drag.startElementWorld) {
         const world = screenToWorld(screen, viewport)
-        const next = snapPoint(
-          {
-            x: drag.startElementWorld.x + (world.x - drag.startWorld.x),
-            y: drag.startElementWorld.y + (world.y - drag.startWorld.y),
-          },
-          snapEnabled,
-        )
-        onMove(drag.elementId, next)
+        // HU-12 — si el elemento arrastrado está en multi-selección O
+        // tiene un grupo en común con el set, movemos todos en bloque
+        // por el mismo delta. El editor (`onMove`) ya hace persistencia
+        // y autosave por id; aquí solo notificamos cada cambio.
+        const draggedEl = elements.find((e) => e.id === drag.elementId)
+        const groupMates = draggedEl?.groupId
+          ? elements.filter((e) => e.groupId === draggedEl.groupId).map((e) => e.id)
+          : []
+        const moveSet = new Set<string>([
+          drag.elementId,
+          ...groupMates,
+          ...(selectedIds && selectedIds.has(drag.elementId)
+            ? Array.from(selectedIds)
+            : []),
+        ])
+        // Delta en coords mundo desde el start del drag.
+        const deltaX = world.x - drag.startWorld.x
+        const deltaY = world.y - drag.startWorld.y
+        for (const id of moveSet) {
+          const target = elements.find((e) => e.id === id)
+          if (!target || target.locked) continue
+          // Cada elemento se mueve desde SU posición original. Para
+          // saberla, guardamos un snapshot en el primer move (lazy).
+          const origin = dragOriginsRef.current.get(id) ?? { x: target.x, y: target.y }
+          if (!dragOriginsRef.current.has(id)) {
+            dragOriginsRef.current.set(id, origin)
+          }
+          const next = snapPoint(
+            { x: origin.x + deltaX, y: origin.y + deltaY },
+            snapEnabled,
+          )
+          onMove(id, next)
+        }
       }
     },
     [onMove, snapEnabled, viewport],
@@ -220,6 +265,7 @@ export function WhiteboardCanvas({
     (e: ReactMouseEvent<HTMLDivElement>) => {
       const drag = dragRef.current
       dragRef.current = null
+      dragOriginsRef.current.clear()
       if (!drag) return
       // HU-03 — commit del trazo dibujado. Si el usuario hizo click sin
       // mover (drawPoints.length === 1), descartamos: probablemente fue
@@ -233,11 +279,13 @@ export function WhiteboardCanvas({
         return
       }
       // Click en fondo sin drag → deselecciona o emite onCanvasClick (insertar).
+      // HU-12 — con Shift presionado NO deseleccionamos (permite hacer
+      // shift+click en fondo sin perder el set actual).
       if (drag.kind === 'pan' && !drag.moved) {
         const world = eventToWorld(e)
         if (onCanvasClick) {
           onCanvasClick(world)
-        } else {
+        } else if (!(e.shiftKey || e.ctrlKey || e.metaKey)) {
           onSelect(null)
         }
       }
@@ -335,7 +383,10 @@ export function WhiteboardCanvas({
             <WhiteboardElementView
               key={el.id}
               element={el}
-              isSelected={el.id === selectedId}
+              isSelected={
+                el.id === selectedId ||
+                (selectedIds ? selectedIds.has(el.id) : false)
+              }
               isEditing={el.id === editingId}
               onCommitEdit={onCommitEdit}
             />
@@ -451,7 +502,9 @@ function WhiteboardElementView({
   }
 
   const ringClass = isSelected
-    ? 'outline outline-2 outline-offset-2 outline-primary'
+    ? element.locked
+      ? 'outline outline-2 outline-offset-2 outline-amber-400'
+      : 'outline outline-2 outline-offset-2 outline-primary'
     : ''
 
   switch (element.type) {

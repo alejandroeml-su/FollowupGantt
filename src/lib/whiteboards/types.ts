@@ -120,6 +120,10 @@ export type WhiteboardElement = {
   rotation: number
   data: WhiteboardElementData
   zIndex: number
+  /** HU-12 — Identificador del grupo al que pertenece (UUID). `null` = sin grupo. */
+  groupId?: string | null
+  /** HU-12 — `true` deshabilita movimiento/edición. Default false. */
+  locked?: boolean
 }
 
 /** Snapshot ligero de la pizarra para listas. */
