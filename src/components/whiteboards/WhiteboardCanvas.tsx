@@ -1,7 +1,12 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import type { CSSProperties, MouseEvent as ReactMouseEvent, WheelEvent as ReactWheelEvent } from 'react'
+import type {
+  CSSProperties,
+  MouseEvent as ReactMouseEvent,
+  PointerEvent as ReactPointerEvent,
+  WheelEvent as ReactWheelEvent,
+} from 'react'
 import {
   DEFAULT_VIEWPORT,
   type ViewportState,
@@ -137,12 +142,13 @@ export function WhiteboardCanvas({
     startWorld: { x: number; y: number }
     startElementWorld?: { x: number; y: number }
     moved: boolean
-    /** HU-03 — cuando kind='draw', va acumulando puntos en coords mundo. */
-    drawPoints?: { x: number; y: number }[]
+    /** HU-03/11 — cuando kind='draw', va acumulando puntos en coords
+     *  mundo. `p` (presión 0..1) opcional para pen events. */
+    drawPoints?: { x: number; y: number; p?: number }[]
   } | null>(null)
   // HU-03 — estado del trazo en curso para repintar el preview en cada move.
   const [drawingPreview, setDrawingPreview] = useState<
-    { x: number; y: number }[] | null
+    { x: number; y: number; p?: number }[] | null
   >(null)
   // HU-12 — Snapshot de la posición inicial de cada elemento durante un
   // drag de multi-selección. Se llena lazy en el primer mousemove para
@@ -153,6 +159,12 @@ export function WhiteboardCanvas({
   // Si en mouseup el delta vs Date.now() supera 400ms, asumimos
   // "hold-on-release" y pedimos al editor que intente reconocer la forma.
   const lastDrawMoveTsRef = useRef<number>(0)
+  // HU-11 (2026-05-14) — Palm rejection: si llega un pointer de tipo
+  // 'pen', marcamos un timestamp; durante los siguientes 1500ms ignoramos
+  // pointers de tipo 'touch' (típico: usuario apoya la palma mientras
+  // dibuja con Apple Pencil / S Pen). En iPad/iPadOS la OS ya hace este
+  // filtrado pero en otros dispositivos el browser puede no hacerlo.
+  const lastPenActivityRef = useRef<number>(0)
 
   /** Convierte un MouseEvent del DOM a coords del mundo. */
   const eventToWorld = useCallback(
@@ -180,7 +192,20 @@ export function WhiteboardCanvas({
   )
 
   const handleMouseDown = useCallback(
-    (e: ReactMouseEvent<HTMLDivElement>) => {
+    (e: ReactPointerEvent<HTMLDivElement>) => {
+      // HU-11 (2026-05-14) — Pointer Events para soportar presión + tilt
+      // y permitir palm rejection. Si llega un 'pen', marcamos timestamp.
+      // Si llega 'touch' dentro de 1500ms tras un evento 'pen', ignoramos
+      // (el usuario apoyó la palma mientras dibuja con stylus).
+      if (e.pointerType === 'pen') {
+        lastPenActivityRef.current = Date.now()
+      } else if (
+        e.pointerType === 'touch' &&
+        Date.now() - lastPenActivityRef.current < 1500
+      ) {
+        return
+      }
+
       const target = e.target as HTMLElement
       const elementHandle = target.closest('[data-element-id]') as HTMLElement | null
 
@@ -193,12 +218,16 @@ export function WhiteboardCanvas({
       // un trazo nuevo. Tiene prioridad sobre la selección de elemento
       // (queremos dibujar encima sin seleccionar el sticky por error).
       if (drawingMode?.active && !panMode) {
+        // HU-11 — guardamos la presión inicial. Para mouse el browser
+        // reporta 0.5 (constante) → trazo de grosor uniforme. Para pen
+        // varía 0..1 → grosor proporcional en el renderer.
+        const initialPoint = { ...world, p: e.pressure || 0.5 }
         dragRef.current = {
           kind: 'draw',
           startScreen: screen,
           startWorld: world,
           moved: false,
-          drawPoints: [world],
+          drawPoints: [initialPoint],
         }
         // HU-04 — marcamos timestamp inicial. Si el usuario presiona sin
         // moverse y suelta, la diferencia será >400ms y se intentará
@@ -244,7 +273,7 @@ export function WhiteboardCanvas({
   )
 
   const handleMouseMove = useCallback(
-    (e: ReactMouseEvent<HTMLDivElement>) => {
+    (e: ReactPointerEvent<HTMLDivElement>) => {
       const drag = dragRef.current
       if (!drag) return
       const rect = containerRef.current?.getBoundingClientRect()
@@ -270,7 +299,10 @@ export function WhiteboardCanvas({
         const last = drag.drawPoints[drag.drawPoints.length - 1]
         const dWorld = Math.hypot(world.x - last.x, world.y - last.y)
         if (dWorld * viewport.zoom > 1.5) {
-          drag.drawPoints.push(world)
+          // HU-11 — capturamos presión del pointer. Mouse reporta 0.5
+          // constante; pen reporta 0..1 según fuerza. Browser fallback
+          // a 0.5 si no se reporta.
+          drag.drawPoints.push({ ...world, p: e.pressure || 0.5 })
           // HU-04 — marcamos timestamp del último movimiento real para
           // detectar hold-on-release en mouseup.
           lastDrawMoveTsRef.current = Date.now()
@@ -320,7 +352,7 @@ export function WhiteboardCanvas({
   )
 
   const handleMouseUp = useCallback(
-    (e: ReactMouseEvent<HTMLDivElement>) => {
+    (e: ReactPointerEvent<HTMLDivElement>) => {
       const drag = dragRef.current
       dragRef.current = null
       dragOriginsRef.current.clear()
@@ -421,14 +453,18 @@ export function WhiteboardCanvas({
       data-testid="whiteboard-canvas"
       role="application"
       aria-label="Lienzo de la pizarra"
-      style={gridStyle}
+      // HU-11 (2026-05-14) — `touchAction: 'none'` evita el scroll del
+      // browser cuando el usuario dibuja con dedo/stylus. Crítico para
+      // que los pointer events de tipo 'touch'/'pen' lleguen a nuestros
+      // handlers en lugar de ser tragados por el scroll nativo.
+      style={{ ...gridStyle, touchAction: 'none' }}
       onWheel={handleWheel}
-      onMouseDown={handleMouseDown}
-      onMouseMove={handleMouseMove}
-      onMouseUp={handleMouseUp}
+      onPointerDown={handleMouseDown}
+      onPointerMove={handleMouseMove}
+      onPointerUp={handleMouseUp}
       onContextMenu={handleContextMenu}
       onDoubleClick={handleDoubleClick}
-      onMouseLeave={() => {
+      onPointerLeave={() => {
         dragRef.current = null
       }}
       onDragOver={(e) => {
@@ -876,20 +912,24 @@ function WhiteboardElementView({
       // HU-03 (2026-05-14) — Trazo renderizado como SVG path dentro de un
       // contenedor del tamaño del bbox. Los puntos vienen relativos al
       // origen del elemento.
+      //
+      // HU-11 (2026-05-14) — Si los puntos tienen variación de `p`
+      // (presión > 0.1 de rango) renderizamos el trazo como múltiples
+      // segmentos cortos, cada uno con strokeWidth proporcional al
+      // promedio de la presión de los 2 puntos. Si todos los puntos
+      // tienen presión similar (típico mouse), renderizamos un único
+      // path para mantener performance.
       const data = element.data as {
         brush: 'pencil' | 'marker' | 'watercolor' | 'highlighter'
         stroke: string
         strokeWidth: number
         points: { x: number; y: number; p?: number }[]
       }
-      // Path traducido a coords del SVG local (restamos element.x/y).
       const local = data.points.map((p) => ({
         x: p.x - element.x,
         y: p.y - element.y,
+        p: p.p ?? 0.5,
       }))
-      const d = local
-        .map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x.toFixed(1)} ${p.y.toFixed(1)}`)
-        .join(' ')
       const brushOpacity = {
         pencil: 0.95,
         marker: 0.85,
@@ -900,6 +940,69 @@ function WhiteboardElementView({
         data.brush === 'watercolor' || data.brush === 'highlighter'
           ? 'multiply'
           : undefined
+
+      // Detección de variación de presión: si el rango max-min < 0.1
+      // asumimos input uniforme (mouse) y renderizamos como single path.
+      let minP = 1
+      let maxP = 0
+      for (const p of local) {
+        if (p.p < minP) minP = p.p
+        if (p.p > maxP) maxP = p.p
+      }
+      const hasPressureVariation = maxP - minP > 0.1
+
+      if (!hasPressureVariation || local.length < 3) {
+        // Single path — caso mouse o muy pocos puntos.
+        const d = local
+          .map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x.toFixed(1)} ${p.y.toFixed(1)}`)
+          .join(' ')
+        return (
+          <svg
+            data-element-id={element.id}
+            data-testid={`freehand-${element.id}`}
+            style={{
+              ...baseStyle,
+              overflow: 'visible',
+              mixBlendMode: brushBlend,
+              cursor: 'grab',
+            }}
+            className={ringClass}
+          >
+            <path
+              d={d}
+              fill="none"
+              stroke={data.stroke}
+              strokeWidth={data.strokeWidth}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              opacity={brushOpacity}
+            />
+          </svg>
+        )
+      }
+
+      // Variable-width — segmentamos pares de puntos. Cada segmento es
+      // un <line> con strokeWidth = baseWidth * avg(p1.p, p2.p) * 2.
+      // Multiplicamos por 2 para que p=1 → 2× width nominal, p=0 → 0.
+      const segments: Array<{
+        x1: number
+        y1: number
+        x2: number
+        y2: number
+        w: number
+      }> = []
+      for (let i = 1; i < local.length; i++) {
+        const a = local[i - 1]
+        const b = local[i]
+        const avgP = (a.p + b.p) / 2
+        segments.push({
+          x1: a.x,
+          y1: a.y,
+          x2: b.x,
+          y2: b.y,
+          w: data.strokeWidth * avgP * 2,
+        })
+      }
       return (
         <svg
           data-element-id={element.id}
@@ -912,15 +1015,19 @@ function WhiteboardElementView({
           }}
           className={ringClass}
         >
-          <path
-            d={d}
-            fill="none"
-            stroke={data.stroke}
-            strokeWidth={data.strokeWidth}
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            opacity={brushOpacity}
-          />
+          {segments.map((s, i) => (
+            <line
+              key={i}
+              x1={s.x1}
+              y1={s.y1}
+              x2={s.x2}
+              y2={s.y2}
+              stroke={data.stroke}
+              strokeWidth={s.w}
+              strokeLinecap="round"
+              opacity={brushOpacity}
+            />
+          ))}
         </svg>
       )
     }
