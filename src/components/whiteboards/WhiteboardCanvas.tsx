@@ -289,11 +289,16 @@ export function WhiteboardCanvas({
   )
 
   // Build grid background — pattern con CSS background-image (gradients).
+  // 2026-05-14 · Edwin pidió lienzo blanco (estándar tipo Miro/Figma —
+  // el chrome de la app puede estar en dark mode, pero el lienzo siempre
+  // blanco para que los exports/impresiones sean consistentes y los
+  // colores de stickies/dibujos se vean como están diseñados).
   const gridStyle: CSSProperties = useMemo(() => {
     const size = 40 * viewport.zoom
     return {
+      backgroundColor: '#ffffff',
       backgroundImage:
-        'radial-gradient(circle, rgba(148,163,184,0.18) 1px, transparent 1px)',
+        'radial-gradient(circle, rgba(15,23,42,0.12) 1px, transparent 1px)',
       backgroundSize: `${size}px ${size}px`,
       backgroundPosition: `${viewport.panX}px ${viewport.panY}px`,
     }
@@ -315,7 +320,7 @@ export function WhiteboardCanvas({
       onMouseLeave={() => {
         dragRef.current = null
       }}
-      className={`relative h-full w-full overflow-hidden bg-slate-950 ${
+      className={`relative h-full w-full overflow-hidden ${
         drawingMode?.active
           ? 'cursor-crosshair'
           : panMode
