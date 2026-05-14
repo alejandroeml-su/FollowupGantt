@@ -303,71 +303,101 @@ export async function inviteMember(input: {
   role?: 'ADMIN' | 'MEMBER'
   baseUrl?: string
 }): Promise<{ token: string; inviteUrl: string; expiresAt: Date }> {
-  const parsed = inviteMemberSchema.safeParse(input)
-  if (!parsed.success) {
-    actionError(
-      'INVALID_INPUT',
-      parsed.error.issues.map((i) => i.message).join('; '),
-    )
-  }
-  const { workspaceId, email, role } = parsed.data
-
-  const { user } = await requireWorkspaceManager(workspaceId)
-
-  // Wave R4-E · Plan enforcement — bloquea si el workspace está al tope
-  // de su tier (FREE=3, PRO=25, ENT=∞). Lanza `[CAPACITY_EXCEEDED]`.
-  await requireMemberCapacity(workspaceId)
-
-  // Si el email corresponde a un usuario que YA es miembro, lanzamos
-  // ALREADY_MEMBER (UX feedback rápido, evita ruido de invitaciones).
-  const existingUser = await prisma.user.findUnique({
-    where: { email },
-    select: { id: true },
-  })
-  if (existingUser) {
-    const existingMembership = await prisma.workspaceMember.findUnique({
-      where: {
-        workspaceId_userId: {
-          workspaceId,
-          userId: existingUser.id,
-        },
-      },
-      select: { workspaceId: true },
-    })
-    if (existingMembership) {
-      actionError('ALREADY_MEMBER', `${email} ya es miembro del workspace`)
+  // 2026-05-14 · Edwin reportó 500 genérico al invitar miembro. Wrap
+  // global con logging detallado a Vercel logs. Re-lanza errores tipados
+  // así el cliente puede traducirlos a mensajes útiles.
+  try {
+    const parsed = inviteMemberSchema.safeParse(input)
+    if (!parsed.success) {
+      actionError(
+        'INVALID_INPUT',
+        parsed.error.issues.map((i) => i.message).join('; '),
+      )
     }
-  }
+    const { workspaceId, email, role } = parsed.data
 
-  const token = generateInvitationToken()
-  const expiresAt = new Date(
-    Date.now() + INVITATION_TTL_DAYS * 24 * 60 * 60 * 1000,
-  )
+    const { user } = await requireWorkspaceManager(workspaceId)
 
-  // Best-effort: limpiamos invitaciones pendientes previas del mismo
-  // email para evitar acumulación. No es transaccional con el insert
-  // porque el token nuevo siempre invalida los anteriores.
-  await prisma.workspaceInvitation.deleteMany({
-    where: { workspaceId, email },
-  })
+    // Wave R4-E · Plan enforcement — bloquea si el workspace está al tope
+    // de su tier (FREE=3, PRO=25, ENT=∞). Lanza `[CAPACITY_EXCEEDED]`.
+    await requireMemberCapacity(workspaceId)
 
-  await prisma.workspaceInvitation.create({
-    data: {
-      workspaceId,
-      email,
-      role: role ?? 'MEMBER',
+    // Si el email corresponde a un usuario que YA es miembro, lanzamos
+    // ALREADY_MEMBER (UX feedback rápido, evita ruido de invitaciones).
+    const existingUser = await prisma.user.findUnique({
+      where: { email },
+      select: { id: true },
+    })
+    if (existingUser) {
+      const existingMembership = await prisma.workspaceMember.findUnique({
+        where: {
+          workspaceId_userId: {
+            workspaceId,
+            userId: existingUser.id,
+          },
+        },
+        select: { workspaceId: true },
+      })
+      if (existingMembership) {
+        actionError('ALREADY_MEMBER', `${email} ya es miembro del workspace`)
+      }
+    }
+
+    const token = generateInvitationToken()
+    const expiresAt = new Date(
+      Date.now() + INVITATION_TTL_DAYS * 24 * 60 * 60 * 1000,
+    )
+
+    // Best-effort: limpiamos invitaciones pendientes previas del mismo
+    // email para evitar acumulación. No es transaccional con el insert
+    // porque el token nuevo siempre invalida los anteriores.
+    await prisma.workspaceInvitation.deleteMany({
+      where: { workspaceId, email },
+    })
+
+    await prisma.workspaceInvitation.create({
+      data: {
+        workspaceId,
+        email,
+        role: role ?? 'MEMBER',
+        token,
+        expiresAt,
+        invitedById: user.id,
+      },
+    })
+
+    revalidatePath('/settings/workspace/members')
+
+    return {
       token,
+      inviteUrl: buildInviteUrl(token, input.baseUrl),
       expiresAt,
-      invitedById: user.id,
-    },
-  })
-
-  revalidatePath('/settings/workspace/members')
-
-  return {
-    token,
-    inviteUrl: buildInviteUrl(token, input.baseUrl),
-    expiresAt,
+    }
+  } catch (err) {
+    console.error('[inviteMember] ERROR', {
+      name: err instanceof Error ? err.name : 'Unknown',
+      message: err instanceof Error ? err.message : String(err),
+      stack: err instanceof Error ? err.stack : undefined,
+      workspaceId: input.workspaceId,
+      email: input.email?.slice(0, 50),
+      role: input.role,
+    })
+    // Errores tipados se re-lanzan tal cual (cliente los traduce con su
+    // regex `[CODE]`). Errores inesperados se normalizan para que el
+    // cliente al menos vea algo útil en lugar del 500 genérico.
+    if (
+      err instanceof Error &&
+      /^\[(INVALID_INPUT|ALREADY_MEMBER|CAPACITY_EXCEEDED|FORBIDDEN|UNAUTHORIZED|NOT_FOUND)\]/.test(
+        err.message,
+      )
+    ) {
+      throw err
+    }
+    throw new Error(
+      `[INTERNAL_ERROR] No se pudo crear la invitación: ${
+        err instanceof Error ? err.message : 'Error desconocido'
+      }`,
+    )
   }
 }
 
