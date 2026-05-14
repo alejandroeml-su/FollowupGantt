@@ -1,6 +1,17 @@
 'use client'
 
-import { StickyNote, Square, Circle, Type, ArrowRight, Triangle, Image as ImageIcon } from 'lucide-react'
+import { useState, useEffect, useRef } from 'react'
+import {
+  StickyNote,
+  Square,
+  Circle,
+  Type,
+  ArrowRight,
+  Triangle,
+  Image as ImageIcon,
+  Download,
+  ChevronDown,
+} from 'lucide-react'
 import type { WhiteboardElementTypeLiteral, ShapeVariant } from '@/lib/whiteboards/types'
 
 export type ToolId =
@@ -10,6 +21,8 @@ export type ToolId =
   | { kind: 'CONNECTOR' }
   | { kind: 'IMAGE' }
 
+export type ExportKind = 'png' | 'png-hires' | 'pdf' | 'pdf-selection'
+
 type Props = {
   /** Tool actualmente seleccionado (null = modo selección/cursor). */
   activeTool: ToolId | null
@@ -17,6 +30,11 @@ type Props = {
   snapEnabled: boolean
   onToggleSnap: (next: boolean) => void
   onExportPng: () => void
+  /** HU-13 (2026-05-14) — opciones extendidas de export (PDF + hi-res +
+   *  selección). Si no se pasan, solo se ofrece el botón legacy PNG. */
+  onExport?: (kind: ExportKind) => void
+  /** Si hay un elemento seleccionado se habilita "PDF de la selección". */
+  hasSelection?: boolean
 }
 
 /**
@@ -30,7 +48,22 @@ export function WhiteboardToolbar({
   snapEnabled,
   onToggleSnap,
   onExportPng,
+  onExport,
+  hasSelection = false,
 }: Props) {
+  const [exportMenuOpen, setExportMenuOpen] = useState(false)
+  const menuRef = useRef<HTMLDivElement | null>(null)
+
+  useEffect(() => {
+    if (!exportMenuOpen) return
+    function onDocClick(ev: MouseEvent) {
+      if (menuRef.current && !menuRef.current.contains(ev.target as Node)) {
+        setExportMenuOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', onDocClick)
+    return () => document.removeEventListener('mousedown', onDocClick)
+  }, [exportMenuOpen])
   const tools: { id: ToolId; label: string; Icon: typeof StickyNote }[] = [
     { id: { kind: 'STICKY' }, label: 'Sticky', Icon: StickyNote },
     { id: { kind: 'SHAPE', variant: 'rectangle' }, label: 'Rectángulo', Icon: Square },
@@ -98,14 +131,103 @@ export function WhiteboardToolbar({
         Snap 10px
       </label>
       <span className="mx-1 h-5 w-px bg-border" aria-hidden="true" />
+      {onExport ? (
+        <div ref={menuRef} className="relative">
+          <button
+            type="button"
+            onClick={() => setExportMenuOpen((v) => !v)}
+            aria-haspopup="menu"
+            aria-expanded={exportMenuOpen}
+            className="inline-flex items-center gap-1 px-3 py-1.5 rounded-md text-xs font-medium text-muted-foreground hover:bg-secondary"
+          >
+            <Download className="h-3.5 w-3.5" />
+            Exportar
+            <ChevronDown className="h-3 w-3" />
+          </button>
+          {exportMenuOpen && (
+            <ul
+              role="menu"
+              className="absolute right-0 mt-1 z-10 min-w-[220px] bg-card border border-border rounded-md shadow-lg py-1"
+            >
+              <ExportMenuItem
+                label="PNG"
+                hint="Imagen estándar"
+                onClick={() => {
+                  setExportMenuOpen(false)
+                  onExport('png')
+                }}
+              />
+              <ExportMenuItem
+                label="PNG (alta resolución)"
+                hint="3× — apto para impresión"
+                onClick={() => {
+                  setExportMenuOpen(false)
+                  onExport('png-hires')
+                }}
+              />
+              <ExportMenuItem
+                label="PDF"
+                hint="Documento de una página"
+                onClick={() => {
+                  setExportMenuOpen(false)
+                  onExport('pdf')
+                }}
+              />
+              <ExportMenuItem
+                label="PDF (solo selección)"
+                hint={
+                  hasSelection
+                    ? 'Exporta el elemento activo'
+                    : 'Selecciona un elemento primero'
+                }
+                disabled={!hasSelection}
+                onClick={() => {
+                  setExportMenuOpen(false)
+                  onExport('pdf-selection')
+                }}
+              />
+            </ul>
+          )}
+        </div>
+      ) : (
+        <button
+          type="button"
+          onClick={onExportPng}
+          className="px-3 py-1.5 rounded-md text-xs font-medium text-muted-foreground hover:bg-secondary"
+        >
+          Exportar PNG
+        </button>
+      )}
+    </div>
+  )
+}
+
+function ExportMenuItem({
+  label,
+  hint,
+  onClick,
+  disabled = false,
+}: {
+  label: string
+  hint?: string
+  onClick: () => void
+  disabled?: boolean
+}) {
+  return (
+    <li role="none">
       <button
         type="button"
-        onClick={onExportPng}
-        className="px-3 py-1.5 rounded-md text-xs font-medium text-muted-foreground hover:bg-secondary"
+        role="menuitem"
+        onClick={onClick}
+        disabled={disabled}
+        className="w-full text-left px-3 py-2 hover:bg-secondary disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-transparent"
       >
-        Exportar PNG
+        <div className="text-xs font-medium text-foreground">{label}</div>
+        {hint && (
+          <div className="text-[10px] text-muted-foreground mt-0.5">{hint}</div>
+        )}
       </button>
-    </div>
+    </li>
   )
 }
 
