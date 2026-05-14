@@ -1,14 +1,53 @@
 'use client';
 
-import { useState } from 'react';
-import { Sparkles } from 'lucide-react';
-import { KnowledgeChat } from '@/components/brain/KnowledgeChat';
-import { ProjectManagerAI } from '@/components/brain/ProjectManagerAI';
-import { ProjectInsightsAI } from '@/components/brain/ProjectInsightsAI';
-import { StrategistAI } from '@/components/brain/StrategistAI';
-import { WriterAI } from '@/components/brain/WriterAI';
+/**
+ * Brain AI · página raíz con tabs.
+ *
+ * Fix 2026-05-13 (Edwin · React #482 persistente):
+ *   - Cada tab se carga con `next/dynamic({ ssr: false })` y se envuelve
+ *     en `<Suspense>`. El AI SDK (`useChat` de `@ai-sdk/react`) llama
+ *     internamente al hook `use()` de React 19 sobre promesas; sin un
+ *     Suspense ancestor el promise "suspende" en un contexto que React
+ *     trata como error #482 ("use() with non-Promise").
+ *   - `ssr: false` evita hydration mismatch en componentes que dependen
+ *     de browser APIs (fetch streams del SSE, localStorage).
+ *   - El `error.tsx` del segmento /brain queda como red de seguridad
+ *     extra para cualquier excepción no relacionada a Suspense.
+ */
+
+import { Suspense, useState } from 'react';
+import dynamic from 'next/dynamic';
+import { Sparkles, Loader2 } from 'lucide-react';
 
 type Tab = 'knowledge' | 'pm' | 'insights' | 'strategist' | 'writer';
+
+const Loading = () => (
+  <div className="flex flex-1 items-center justify-center text-muted-foreground">
+    <Loader2 className="h-6 w-6 animate-spin text-indigo-400" />
+    <span className="ml-2 text-sm">Cargando…</span>
+  </div>
+);
+
+const KnowledgeChat = dynamic(
+  () => import('@/components/brain/KnowledgeChat').then((m) => m.KnowledgeChat),
+  { ssr: false, loading: Loading },
+);
+const ProjectManagerAI = dynamic(
+  () => import('@/components/brain/ProjectManagerAI').then((m) => m.ProjectManagerAI),
+  { ssr: false, loading: Loading },
+);
+const ProjectInsightsAI = dynamic(
+  () => import('@/components/brain/ProjectInsightsAI').then((m) => m.ProjectInsightsAI),
+  { ssr: false, loading: Loading },
+);
+const StrategistAI = dynamic(
+  () => import('@/components/brain/StrategistAI').then((m) => m.StrategistAI),
+  { ssr: false, loading: Loading },
+);
+const WriterAI = dynamic(
+  () => import('@/components/brain/WriterAI').then((m) => m.WriterAI),
+  { ssr: false, loading: Loading },
+);
 
 export default function BrainAIPage() {
   const [activeTab, setActiveTab] = useState<Tab>('knowledge');
@@ -47,11 +86,17 @@ export default function BrainAIPage() {
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-indigo-500/10 rounded-full blur-[100px] pointer-events-none" />
 
         <div className="mx-auto max-w-5xl relative z-10 h-full flex flex-col">
-          {activeTab === 'knowledge' && <KnowledgeChat />}
-          {activeTab === 'pm' && <ProjectManagerAI />}
-          {activeTab === 'insights' && <ProjectInsightsAI />}
-          {activeTab === 'strategist' && <StrategistAI />}
-          {activeTab === 'writer' && <WriterAI />}
+          {/* Cada tab queda envuelta en su propio Suspense para aislar el
+              fallback del resto. Si `useChat` u otra dependencia llama
+              `use(promise)`, el promise se desenvuelve aquí en vez de
+              propagar el error #482 al error boundary del segmento. */}
+          <Suspense fallback={<Loading />}>
+            {activeTab === 'knowledge' && <KnowledgeChat />}
+            {activeTab === 'pm' && <ProjectManagerAI />}
+            {activeTab === 'insights' && <ProjectInsightsAI />}
+            {activeTab === 'strategist' && <StrategistAI />}
+            {activeTab === 'writer' && <WriterAI />}
+          </Suspense>
         </div>
       </div>
     </div>
