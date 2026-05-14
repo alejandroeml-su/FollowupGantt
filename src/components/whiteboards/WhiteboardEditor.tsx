@@ -21,6 +21,12 @@ import {
 import { toast } from '@/components/interactions/Toaster'
 import { defaultDataFor, defaultGeometry } from '@/lib/whiteboards/factories'
 import { exportElementsToPng, downloadDataUrl } from '@/lib/whiteboards/export-png'
+import {
+  exportElementsToPdf,
+  exportElementsToHighResPng,
+  downloadPdf,
+} from '@/lib/whiteboards/export-pdf'
+import type { ExportKind } from './WhiteboardToolbar'
 import type { WhiteboardElement } from '@/lib/whiteboards/types'
 import { WhiteboardCanvas } from './WhiteboardCanvas'
 import { WhiteboardToolbar, type ToolId, toolToElementType } from './WhiteboardToolbar'
@@ -378,6 +384,50 @@ export function WhiteboardEditor({
     }
   }, [elements, whiteboard.title])
 
+  // HU-13 (2026-05-14) — Export extendido (PDF + hi-res + selección).
+  const handleExport = useCallback(
+    (kind: ExportKind) => {
+      const safe =
+        whiteboard.title.replace(/[^a-z0-9-_]+/gi, '_').slice(0, 60) || 'pizarra'
+      try {
+        if (kind === 'png') {
+          const url = exportElementsToPng(elements)
+          downloadDataUrl(url, `${safe}.png`)
+          toast.success('PNG exportado')
+          return
+        }
+        if (kind === 'png-hires') {
+          const url = exportElementsToHighResPng(elements)
+          downloadDataUrl(url, `${safe}-hires.png`)
+          toast.success('PNG en alta resolución exportado')
+          return
+        }
+        if (kind === 'pdf') {
+          const pdf = exportElementsToPdf(elements, { title: whiteboard.title })
+          downloadPdf(pdf, `${safe}.pdf`)
+          toast.success('PDF exportado')
+          return
+        }
+        if (kind === 'pdf-selection') {
+          if (!selectedId) {
+            toast.error('Selecciona un elemento primero')
+            return
+          }
+          const pdf = exportElementsToPdf(elements, {
+            title: `${whiteboard.title} (selección)`,
+            selectedIds: [selectedId],
+          })
+          downloadPdf(pdf, `${safe}-seleccion.pdf`)
+          toast.success('PDF (selección) exportado')
+          return
+        }
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : 'Error al exportar')
+      }
+    },
+    [elements, whiteboard.title, selectedId],
+  )
+
   return (
     <div className="flex h-screen flex-col bg-background">
       <header className="flex items-center justify-between gap-4 border-b border-border px-4 py-3">
@@ -428,6 +478,8 @@ export function WhiteboardEditor({
               snapEnabled={snapEnabled}
               onToggleSnap={setSnapEnabled}
               onExportPng={handleExportPng}
+              onExport={handleExport}
+              hasSelection={selectedId !== null}
             />
             {presence.users.length > 0 ? (
               <div

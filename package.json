@@ -42,6 +42,7 @@
     "fast-xml-parser": "^5.7.2",
     "framer-motion": "^12.38.0",
     "fuse.js": "^7.3.0",
+    "jspdf": "^4.2.1",
     "jszip": "^3.10.1",
     "lucide-react": "^1.8.0",
     "next": "16.2.4",
