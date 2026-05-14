@@ -29,6 +29,7 @@ import {
   defaultGeometry,
   makeFreehandData,
 } from '@/lib/whiteboards/factories'
+import { recognizeShape, type RecognizedShape } from '@/lib/whiteboards/shape-recognition'
 import { exportElementsToPng, downloadDataUrl } from '@/lib/whiteboards/export-png'
 import {
   exportElementsToPdf,
@@ -254,10 +255,25 @@ export function WhiteboardEditor({
   // en coordenadas mundo. Calculamos el bbox y persistimos el elemento.
   // No reseteamos `activeTool` al terminar (a diferencia de los otros
   // tools) para permitir trazos consecutivos sin re-seleccionar el pincel.
+  //
+  // HU-04 (2026-05-14) — Si `holdReleased=true` (usuario detuvo el cursor
+  // antes de soltar) intentamos reconocer la forma. Si el reconocedor
+  // devuelve un variant válido, persistimos un SHAPE en vez del FREEHAND.
   const handleDrawingCommit = useCallback(
-    async (points: { x: number; y: number }[]) => {
+    async (points: { x: number; y: number }[], holdReleased: boolean) => {
       if (!activeTool || activeTool.kind !== 'FREEHAND') return
       if (points.length < 2) return
+
+      // HU-04 — Intento de reconocimiento de forma cuando el usuario
+      // sostuvo al final del trazo.
+      if (holdReleased) {
+        const recognized = recognizeShape(points)
+        if (recognized) {
+          await handleRecognizedShape(recognized, points)
+          return
+        }
+      }
+
       const preset = BRUSH_PRESETS[activeTool.brush]
       const bounds = computeFreehandBounds(points)
       const data = makeFreehandData(activeTool.brush, preset.color, preset.width, points)
@@ -309,6 +325,152 @@ export function WhiteboardEditor({
       toast.error(err instanceof Error ? err.message : 'Error al eliminar')
     }
   }, [elements, selectedId, selectedIds, whiteboard.id])
+
+  // HU-04 (2026-05-14) — Crear un elemento a partir de una forma
+  // reconocida. Para SHAPE (circle/rectangle/triangle) preservamos el
+  // trazo original en `data.recognizedFromPoints` para soportar
+  // "Deshacer conversión". Para arrow, generamos un CONNECTOR libre.
+  const handleRecognizedShape = useCallback(
+    async (recognized: RecognizedShape, originalPoints: { x: number; y: number }[]) => {
+      try {
+        if (recognized.variant === 'arrow') {
+          // Aproximamos la flecha con un CONNECTOR de 2 puntos relativos.
+          const minX = Math.min(recognized.from.x, recognized.to.x)
+          const minY = Math.min(recognized.from.y, recognized.to.y)
+          const w = Math.max(1, Math.abs(recognized.to.x - recognized.from.x))
+          const h = Math.max(1, Math.abs(recognized.to.y - recognized.from.y))
+          const created = await createElement({
+            whiteboardId: whiteboard.id,
+            type: 'CONNECTOR',
+            x: minX,
+            y: minY,
+            width: w,
+            height: h,
+            rotation: 0,
+            data: {
+              kind: 'connector',
+              fromId: null,
+              toId: null,
+              points: [
+                { x: recognized.from.x - minX, y: recognized.from.y - minY },
+                { x: recognized.to.x - minX, y: recognized.to.y - minY },
+              ],
+              stroke: '#0f172a',
+            },
+          })
+          const newEl: WhiteboardElement = {
+            id: created.id,
+            whiteboardId: created.whiteboardId,
+            type: created.type,
+            x: created.x,
+            y: created.y,
+            width: created.width,
+            height: created.height,
+            rotation: created.rotation,
+            zIndex: created.zIndex,
+            data: created.data as WhiteboardElement['data'],
+          }
+          setElements((prev) => [...prev, newEl])
+          toast.success('Trazo convertido a flecha')
+          return
+        }
+        // SHAPE: circle / rectangle / triangle. Persistimos el trazo
+        // original en `data.recognizedFromPoints` para permitir "deshacer".
+        const created = await createElement({
+          whiteboardId: whiteboard.id,
+          type: 'SHAPE',
+          x: recognized.bbox.x,
+          y: recognized.bbox.y,
+          width: Math.max(20, recognized.bbox.width),
+          height: Math.max(20, recognized.bbox.height),
+          rotation: 0,
+          data: {
+            kind: 'shape' as const,
+            variant: recognized.variant,
+            fill: 'transparent',
+            stroke: '#0f172a',
+            recognizedFromPoints: originalPoints,
+          },
+        })
+        const newEl: WhiteboardElement = {
+          id: created.id,
+          whiteboardId: created.whiteboardId,
+          type: created.type,
+          x: created.x,
+          y: created.y,
+          width: created.width,
+          height: created.height,
+          rotation: created.rotation,
+          zIndex: created.zIndex,
+          data: created.data as WhiteboardElement['data'],
+        }
+        setElements((prev) => [...prev, newEl])
+        setSelectedId(newEl.id)
+        toast.success(
+          `Trazo convertido a ${
+            recognized.variant === 'circle'
+              ? 'círculo'
+              : recognized.variant === 'rectangle'
+                ? 'rectángulo'
+                : 'triángulo'
+          }`,
+        )
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : 'Error al convertir trazo')
+      }
+    },
+    [whiteboard.id],
+  )
+
+  // HU-04 — Deshacer la conversión: si el elemento SHAPE tiene
+  // `data.recognizedFromPoints`, lo restauramos como FREEHAND.
+  const handleUndoShapeRecognition = useCallback(
+    async (elementId: string) => {
+      const el = elements.find((e) => e.id === elementId)
+      if (!el || el.type !== 'SHAPE') return
+      const data = el.data as { recognizedFromPoints?: { x: number; y: number }[] }
+      if (!data.recognizedFromPoints || data.recognizedFromPoints.length < 2) {
+        toast.error('Este elemento no fue convertido desde un trazo')
+        return
+      }
+      const points = data.recognizedFromPoints
+      const bounds = computeFreehandBounds(points)
+      try {
+        // Borrar el SHAPE actual y crear el FREEHAND.
+        await deleteElements(whiteboard.id, [elementId])
+        const created = await createElement({
+          whiteboardId: whiteboard.id,
+          type: 'FREEHAND',
+          x: bounds.x,
+          y: bounds.y,
+          width: bounds.width,
+          height: bounds.height,
+          rotation: 0,
+          data: makeFreehandData('pencil', '#0f172a', 2, points),
+        })
+        setElements((prev) => [
+          ...prev.filter((e) => e.id !== elementId),
+          {
+            id: created.id,
+            whiteboardId: created.whiteboardId,
+            type: created.type,
+            x: created.x,
+            y: created.y,
+            width: created.width,
+            height: created.height,
+            rotation: created.rotation,
+            zIndex: created.zIndex,
+            data: created.data as WhiteboardElement['data'],
+          },
+        ])
+        setSelectedId(created.id)
+        toast.success('Conversión deshecha — trazo original restaurado')
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : 'Error al deshacer')
+      }
+    },
+    [elements, whiteboard.id],
+  )
 
   // HU-12 (2026-05-14) — Group, Ungroup, Lock/Unlock.
   const handleGroupSelected = useCallback(async () => {
@@ -681,8 +843,8 @@ export function WhiteboardEditor({
                   ? { active: true, brush: activeTool.brush }
                   : undefined
               }
-              onDrawingCommit={(points) => {
-                void handleDrawingCommit(points)
+              onDrawingCommit={(points, holdReleased) => {
+                void handleDrawingCommit(points, holdReleased)
               }}
             />
 
@@ -726,6 +888,14 @@ export function WhiteboardEditor({
                 onEdit={() => setEditingId(selectedId)}
                 onDelete={() => void handleDeleteSelected()}
                 onToggleLock={() => void handleToggleLockSelected()}
+                onUndoRecognition={
+                  selectedId &&
+                  (elements.find((e) => e.id === selectedId)?.data as {
+                    recognizedFromPoints?: unknown[]
+                  })?.recognizedFromPoints
+                    ? () => void handleUndoShapeRecognition(selectedId)
+                    : undefined
+                }
               />
             )}
 
@@ -803,6 +973,7 @@ function SelectedElementToolbar({
   onEdit,
   onDelete,
   onToggleLock,
+  onUndoRecognition,
 }: {
   element: WhiteboardElement | undefined
   onChangeColor: (hex: string) => void
@@ -812,6 +983,9 @@ function SelectedElementToolbar({
   onEdit: () => void
   onDelete: () => void
   onToggleLock?: () => void
+  /** HU-04 (2026-05-14) — Si está definido, muestra botón "↺ Deshacer
+   *  conversión" para revertir un SHAPE a su trazo libre original. */
+  onUndoRecognition?: () => void
 }) {
   if (!element) return null
   const showColor = element.type === 'STICKY' || element.type === 'SHAPE'
@@ -886,6 +1060,16 @@ function SelectedElementToolbar({
           className="rounded-md p-1.5 text-muted-foreground hover:bg-secondary hover:text-foreground"
         >
           {element.locked ? '🔓' : '🔒'}
+        </button>
+      )}
+      {onUndoRecognition && (
+        <button
+          type="button"
+          onClick={onUndoRecognition}
+          title="Deshacer conversión a forma (volver al trazo original)"
+          className="rounded-md px-2 py-1 text-xs font-medium text-muted-foreground hover:bg-secondary hover:text-foreground"
+        >
+          ↺ Trazo
         </button>
       )}
       <button

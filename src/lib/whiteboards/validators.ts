@@ -33,6 +33,12 @@ const shapeDataSchema = z.object({
   fill: z.string().max(32),
   stroke: z.string().max(32),
   text: z.string().max(2000).optional(),
+  // HU-04 (2026-05-14) — trazo original (puntos absolutos) cuando el
+  // SHAPE proviene de reconocimiento de forma. Tope alto pero acotado.
+  recognizedFromPoints: z
+    .array(z.object({ x: z.number().finite(), y: z.number().finite() }))
+    .max(4096)
+    .optional(),
 })
 
 const connectorDataSchema = z.object({
