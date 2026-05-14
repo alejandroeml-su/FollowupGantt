@@ -60,8 +60,18 @@ const textDataSchema = z.object({
 
 const imageDataSchema = z.object({
   kind: z.literal('image'),
-  url: z.string().url().max(2048),
+  // HU-02 (2026-05-14) — permitimos `url` larga porque ahora acepta
+  // data: URLs (base64) hasta ~7MB tras tamaño post-encoding. La validez
+  // semántica de "URL https vs data:" la respeta `safeUrl` que sólo
+  // chequea schemes whitelisted en el renderer.
+  url: z.string().min(1).max(10_000_000),
   alt: z.string().max(200).default(''),
+  mimeType: z
+    .string()
+    .max(120)
+    .regex(/^[\w.+-]+\/[\w.+-]+$/, 'mimeType inválido')
+    .optional(),
+  filename: z.string().max(255).optional(),
 })
 
 // HU-03 (2026-05-14) — Trazo libre. `points` con tope alto pero limitado

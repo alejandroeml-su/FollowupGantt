@@ -59,6 +59,16 @@ type Props = {
     points: { x: number; y: number }[],
     holdReleased: boolean,
   ) => void
+  /**
+   * HU-02 (2026-05-14) — Drop de archivos sobre el lienzo. Recibe la
+   * lista de File del DataTransfer + el punto en coordenadas mundo
+   * donde se soltó (centro del primer archivo). El editor maneja el
+   * upload/decode + creación de elementos IMAGE.
+   */
+  onFilesDropped?: (files: File[], worldPoint: { x: number; y: number }) => void
+  /** HU-02 — Drop de texto (incluye URLs). El editor decide si crear
+   *  un link-card o un TEXT plain. */
+  onTextDropped?: (text: string, worldPoint: { x: number; y: number }) => void
 }
 
 /**
@@ -89,6 +99,8 @@ export function WhiteboardCanvas({
   currentUser,
   drawingMode,
   onDrawingCommit,
+  onFilesDropped,
+  onTextDropped,
 }: Props) {
   const [viewport, setViewport] = useState<ViewportState>(DEFAULT_VIEWPORT)
   const containerRef = useRef<HTMLDivElement | null>(null)
@@ -392,6 +404,30 @@ export function WhiteboardCanvas({
       onDoubleClick={handleDoubleClick}
       onMouseLeave={() => {
         dragRef.current = null
+      }}
+      onDragOver={(e) => {
+        // HU-02 — Habilitar drop. Necesario llamar preventDefault
+        // tanto en dragover como en dragenter para que onDrop dispare.
+        if (e.dataTransfer.types.includes('Files') || e.dataTransfer.types.includes('text/uri-list') || e.dataTransfer.types.includes('text/plain')) {
+          e.preventDefault()
+          e.dataTransfer.dropEffect = 'copy'
+        }
+      }}
+      onDrop={(e) => {
+        e.preventDefault()
+        const world = eventToWorld(e)
+        const files = e.dataTransfer.files
+        if (files && files.length > 0 && onFilesDropped) {
+          onFilesDropped(Array.from(files), world)
+          return
+        }
+        // Fallback: enlace o texto plain
+        const uri = e.dataTransfer.getData('text/uri-list')
+        const txt = e.dataTransfer.getData('text/plain')
+        const dropped = uri || txt
+        if (dropped && onTextDropped) {
+          onTextDropped(dropped, world)
+        }
       }}
       className={`relative h-full w-full overflow-hidden ${
         drawingMode?.active
@@ -734,7 +770,70 @@ function WhiteboardElementView({
       )
     }
     case 'IMAGE': {
-      const data = element.data as { url: string; alt: string }
+      const data = element.data as {
+        url: string
+        alt: string
+        mimeType?: string
+        filename?: string
+      }
+      // HU-02 (2026-05-14) — Render condicional por mimeType.
+      const isPdf = data.mimeType === 'application/pdf'
+      const isVideo = data.mimeType?.startsWith('video/') === true
+      const isAudio = data.mimeType?.startsWith('audio/') === true
+      if (isPdf) {
+        return (
+          <div
+            data-element-id={element.id}
+            data-testid={`pdf-${element.id}`}
+            style={baseStyle}
+            className={`overflow-hidden rounded-md border border-slate-300 bg-white shadow-sm cursor-grab ${ringClass}`}
+            title={data.filename ?? data.alt}
+          >
+            <embed
+              src={data.url}
+              type="application/pdf"
+              className="pointer-events-none h-full w-full"
+              aria-label={data.alt || data.filename || 'PDF'}
+            />
+          </div>
+        )
+      }
+      if (isVideo) {
+        return (
+          <div
+            data-element-id={element.id}
+            data-testid={`video-${element.id}`}
+            style={baseStyle}
+            className={`overflow-hidden rounded-md bg-black cursor-grab ${ringClass}`}
+            title={data.filename ?? data.alt}
+          >
+            <video
+              src={data.url}
+              controls
+              className="h-full w-full object-contain"
+              aria-label={data.alt || data.filename || 'Video'}
+            />
+          </div>
+        )
+      }
+      if (isAudio) {
+        return (
+          <div
+            data-element-id={element.id}
+            data-testid={`audio-${element.id}`}
+            style={baseStyle}
+            className={`flex items-center rounded-md bg-slate-100 border border-slate-300 p-2 cursor-grab ${ringClass}`}
+            title={data.filename ?? data.alt}
+          >
+            <audio
+              src={data.url}
+              controls
+              className="w-full"
+              aria-label={data.alt || data.filename || 'Audio'}
+            />
+          </div>
+        )
+      }
       return (
         // eslint-disable-next-line @next/next/no-img-element
         <img
@@ -742,7 +841,7 @@ function WhiteboardElementView({
           data-testid={`image-${element.id}`}
           style={baseStyle}
           src={data.url}
-          alt={data.alt || ''}
+          alt={data.alt || data.filename || ''}
           className={`object-cover rounded-md cursor-grab ${ringClass}`}
         />
       )
