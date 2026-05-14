@@ -14,8 +14,11 @@ import {
 } from 'lucide-react'
 import {
   createElement,
+  createWhiteboardPage,
   deleteElements,
+  deleteWhiteboardPage,
   groupElements,
+  renameWhiteboardPage,
   setElementData,
   setElementsLocked,
   ungroupGroup,
@@ -63,6 +66,8 @@ type Props = {
     updatedAt?: string | null
   }
   initialElements: WhiteboardElement[]
+  /** HU-16 (2026-05-14) — Páginas/sub-lienzos cargados por el server. */
+  initialPages?: { id: string; whiteboardId: string; name: string; order: number }[]
   /**
    * Wave P6 — Identidad del usuario activo (combina B1 presence + B3 lock).
    * Llega drilled desde el RSC `app/whiteboards/[id]/page.tsx`. Si null,
@@ -76,9 +81,30 @@ const AUTOSAVE_DEBOUNCE_MS = 500
 export function WhiteboardEditor({
   whiteboard,
   initialElements,
+  initialPages = [],
   currentUser,
 }: Props) {
   const [elements, setElements] = useState<WhiteboardElement[]>(initialElements)
+  // HU-16 (2026-05-14) — State de páginas. La página activa filtra los
+  // elementos que se renderizan en el canvas.
+  const [pages, setPages] = useState(initialPages)
+  const [activePageId, setActivePageId] = useState<string | null>(
+    initialPages[0]?.id ?? null,
+  )
+  // Elementos visibles = pertenecen a la página activa.
+  // Compat: elementos legacy con pageId null cuentan como pertenecientes
+  // a la primera página (la creó el backfill de migración).
+  const visibleElements = useMemo(() => {
+    if (!activePageId) return elements
+    return elements.filter((el) => {
+      const elPage = el.pageId
+      // Si elPage no está set y la página activa es la primera, considerar
+      // legacy y mostrarlos. El editor los promoverá al pageId activo
+      // cuando se editen.
+      if (!elPage && activePageId === initialPages[0]?.id) return true
+      return elPage === activePageId
+    })
+  }, [elements, activePageId, initialPages])
   // Wave P6 · Equipo B1 — Presence wiring. Si no hay sesión, pasamos
   // identity null y `usePresence` queda en no-op (lista vacía).
   const presence = usePresence(
@@ -232,6 +258,59 @@ export function WhiteboardEditor({
     }, AUTOSAVE_DEBOUNCE_MS)
   }, [flushPatches])
 
+  // HU-16 (2026-05-14) — Handlers de pages.
+  const handleCreatePage = useCallback(async () => {
+    try {
+      const name = `Página ${pages.length + 1}`
+      const created = await createWhiteboardPage(whiteboard.id, name)
+      setPages((prev) => [...prev, created])
+      setActivePageId(created.id)
+      setSelectedId(null)
+      setSelectedIds(new Set())
+      toast.success(`"${created.name}" creada`)
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Error al crear página')
+    }
+  }, [pages.length, whiteboard.id])
+
+  const handleRenamePage = useCallback(
+    async (pageId: string, name: string) => {
+      try {
+        await renameWhiteboardPage(pageId, name)
+        setPages((prev) => prev.map((p) => (p.id === pageId ? { ...p, name } : p)))
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : 'Error al renombrar')
+      }
+    },
+    [],
+  )
+
+  const handleDeletePage = useCallback(
+    async (pageId: string) => {
+      if (pages.length <= 1) {
+        toast.error('No puedes borrar la última página')
+        return
+      }
+      const idx = pages.findIndex((p) => p.id === pageId)
+      try {
+        await deleteWhiteboardPage(pageId)
+        const nextPages = pages.filter((p) => p.id !== pageId)
+        setPages(nextPages)
+        // Si la activa fue borrada, ir a la anterior.
+        if (activePageId === pageId) {
+          const fallback = nextPages[Math.max(0, idx - 1)]
+          setActivePageId(fallback?.id ?? null)
+        }
+        // Limpiar elementos de la página borrada del state local.
+        setElements((prev) => prev.filter((el) => el.pageId !== pageId))
+        toast.success('Página eliminada')
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : 'Error al eliminar')
+      }
+    },
+    [pages, activePageId],
+  )
+
   const handleMove = useCallback(
     (id: string, next: { x: number; y: number }) => {
       setElements((prev) => prev.map((el) => (el.id === id ? { ...el, x: next.x, y: next.y } : el)))
@@ -299,6 +378,7 @@ export function WhiteboardEditor({
       try {
         const created = await createElement({
           whiteboardId: whiteboard.id,
+          pageId: activePageId ?? undefined,
           type,
           x: worldPoint.x - geom.width / 2,
           y: worldPoint.y - geom.height / 2,
@@ -360,6 +440,7 @@ export function WhiteboardEditor({
       try {
         const created = await createElement({
           whiteboardId: whiteboard.id,
+          pageId: activePageId ?? undefined,
           type: 'FREEHAND',
           x: bounds.x,
           y: bounds.y,
@@ -444,6 +525,7 @@ export function WhiteboardEditor({
               : { w: 280, h: 200 }
           const created = await createElement({
             whiteboardId: whiteboard.id,
+            pageId: activePageId ?? undefined,
             type: 'IMAGE',
             x: worldPoint.x - dims.w / 2 + offset,
             y: worldPoint.y - dims.h / 2 + offset,
@@ -497,6 +579,7 @@ export function WhiteboardEditor({
       try {
         const created = await createElement({
           whiteboardId: whiteboard.id,
+          pageId: activePageId ?? undefined,
           type: 'TEXT',
           x: worldPoint.x - dims.w / 2,
           y: worldPoint.y - dims.h / 2,
@@ -571,6 +654,7 @@ export function WhiteboardEditor({
       try {
         const created = await createElement({
           whiteboardId: whiteboard.id,
+          pageId: activePageId ?? undefined,
           type: 'CONNECTOR',
           x: Math.min(cxA, cxB),
           y: Math.min(cyA, cyB),
@@ -627,6 +711,7 @@ export function WhiteboardEditor({
           const h = Math.max(1, Math.abs(recognized.to.y - recognized.from.y))
           const created = await createElement({
             whiteboardId: whiteboard.id,
+            pageId: activePageId ?? undefined,
             type: 'CONNECTOR',
             x: minX,
             y: minY,
@@ -664,6 +749,7 @@ export function WhiteboardEditor({
         // original en `data.recognizedFromPoints` para permitir "deshacer".
         const created = await createElement({
           whiteboardId: whiteboard.id,
+          pageId: activePageId ?? undefined,
           type: 'SHAPE',
           x: recognized.bbox.x,
           y: recognized.bbox.y,
@@ -726,6 +812,7 @@ export function WhiteboardEditor({
         await deleteElements(whiteboard.id, [elementId])
         const created = await createElement({
           whiteboardId: whiteboard.id,
+          pageId: activePageId ?? undefined,
           type: 'FREEHAND',
           x: bounds.x,
           y: bounds.y,
@@ -854,6 +941,7 @@ export function WhiteboardEditor({
     try {
       const created = await createElement({
         whiteboardId: whiteboard.id,
+        pageId: activePageId ?? undefined,
         type: target.type,
         x: target.x + 20,
         y: target.y + 20,
@@ -1130,7 +1218,7 @@ export function WhiteboardEditor({
               </div>
             )}
             <WhiteboardCanvas
-              elements={elements}
+              elements={visibleElements}
               selectedId={selectedId}
               editingId={editingId}
               selectedIds={selectedIds}
@@ -1317,6 +1405,25 @@ export function WhiteboardEditor({
               />
             )}
           </div>
+
+          {/* HU-16 (2026-05-14) — Tabs de páginas/sub-lienzos. Estilo
+              Google Sheets / PowerPoint: bar en el bottom con cada page
+              + botón "+" para agregar. Click en tab → cambia activePageId
+              y filtra los elementos visibles en el canvas. Doble-click
+              renombra inline. Right-click ofrece "Eliminar". */}
+          <PageTabsBar
+            pages={pages}
+            activePageId={activePageId}
+            onSelectPage={(id) => {
+              setActivePageId(id)
+              setSelectedId(null)
+              setSelectedIds(new Set())
+              setEditingId(null)
+            }}
+            onCreatePage={() => void handleCreatePage()}
+            onRenamePage={(id, name) => void handleRenamePage(id, name)}
+            onDeletePage={(id) => void handleDeletePage(id)}
+          />
         </div>
       </SoftLockProvider>
 
@@ -1678,5 +1785,121 @@ function SaveIndicator({
       <Save className="h-3.5 w-3.5" />
       Guardado
     </span>
+  )
+}
+
+/**
+ * HU-16 (2026-05-14) — Bar de tabs para sub-lienzos (pages) del whiteboard.
+ *
+ * UX inspirada en Google Sheets / PowerPoint slide tray:
+ *   - Click → cambia página activa.
+ *   - Doble-click → activa inline rename (input).
+ *   - Botón "+" al final → crea nueva página.
+ *   - Right-click sobre una tab → menú con "Eliminar" (deshabilitado si
+ *     queda solo 1).
+ *
+ * No usa Radix/HeadlessUI para mantener el bundle ligero.
+ */
+function PageTabsBar({
+  pages,
+  activePageId,
+  onSelectPage,
+  onCreatePage,
+  onRenamePage,
+  onDeletePage,
+}: {
+  pages: { id: string; name: string; order: number }[]
+  activePageId: string | null
+  onSelectPage: (id: string) => void
+  onCreatePage: () => void
+  onRenamePage: (id: string, name: string) => void
+  onDeletePage: (id: string) => void
+}) {
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [draftName, setDraftName] = useState('')
+  const inputRef = useRef<HTMLInputElement | null>(null)
+
+  useEffect(() => {
+    if (editingId && inputRef.current) {
+      inputRef.current.focus()
+      inputRef.current.select()
+    }
+  }, [editingId])
+
+  const commitEdit = () => {
+    if (editingId && draftName.trim()) {
+      onRenamePage(editingId, draftName.trim())
+    }
+    setEditingId(null)
+  }
+
+  return (
+    <div
+      role="tablist"
+      aria-label="Páginas de la pizarra"
+      className="flex shrink-0 items-center gap-0.5 border-t border-border bg-card/95 px-2 py-1.5 overflow-x-auto"
+    >
+      {pages.map((page) => {
+        const isActive = page.id === activePageId
+        const isEditing = editingId === page.id
+        return (
+          <div
+            key={page.id}
+            role="tab"
+            aria-selected={isActive}
+            onClick={() => !isEditing && onSelectPage(page.id)}
+            onDoubleClick={() => {
+              setEditingId(page.id)
+              setDraftName(page.name)
+            }}
+            onContextMenu={(e) => {
+              e.preventDefault()
+              if (pages.length <= 1) {
+                toast.error('No puedes borrar la última página')
+                return
+              }
+              if (confirm(`¿Eliminar "${page.name}" y todo su contenido?`)) {
+                onDeletePage(page.id)
+              }
+            }}
+            className={`shrink-0 cursor-pointer rounded-t-md border-x border-t px-3 py-1 text-xs transition-colors ${
+              isActive
+                ? 'bg-background border-border text-foreground font-semibold'
+                : 'bg-secondary/50 border-transparent text-muted-foreground hover:bg-secondary'
+            }`}
+          >
+            {isEditing ? (
+              <input
+                ref={inputRef}
+                type="text"
+                value={draftName}
+                onChange={(e) => setDraftName(e.target.value)}
+                onBlur={commitEdit}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') commitEdit()
+                  if (e.key === 'Escape') setEditingId(null)
+                }}
+                className="bg-transparent outline-none border-b border-primary text-foreground"
+                style={{ width: `${Math.max(8, draftName.length + 1)}ch` }}
+              />
+            ) : (
+              <span>{page.name}</span>
+            )}
+          </div>
+        )
+      })}
+      <button
+        type="button"
+        onClick={onCreatePage}
+        title="Nueva página"
+        aria-label="Crear nueva página"
+        className="shrink-0 rounded-md px-2 py-1 text-xs text-muted-foreground hover:bg-secondary hover:text-foreground"
+      >
+        +
+      </button>
+      <span className="ml-auto px-2 text-[10px] text-muted-foreground">
+        {pages.length} página{pages.length === 1 ? '' : 's'} · doble-click para renombrar · click-derecho elimina
+      </span>
+    </div>
   )
 }

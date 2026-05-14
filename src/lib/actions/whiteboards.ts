@@ -83,6 +83,10 @@ export type UpdateWhiteboardInput = z.input<typeof updateWhiteboardSchema>
 
 const createElementSchema = z.object({
   whiteboardId: z.string().min(1),
+  /** HU-16 (2026-05-14) — Página a la que pertenece el elemento.
+   *  Si no se pasa, server hace fallback a la primera página de la
+   *  pizarra (la creó la migración por backfill o getWhiteboardById). */
+  pageId: z.string().min(1).optional(),
   type: elementTypeSchema,
   x: z.number().finite().default(0),
   y: z.number().finite().default(0),
@@ -170,19 +174,35 @@ export async function getWhiteboardList(): Promise<WhiteboardListItem[]> {
 export async function getWhiteboardById(id: string): Promise<{
   whiteboard: Whiteboard
   elements: PrismaWhiteboardElement[]
+  pages: { id: string; whiteboardId: string; name: string; order: number }[]
 }> {
   const meta = await loadWhiteboardForAccess(id)
   await ensureAccess(meta)
 
-  const [wb, elements] = await Promise.all([
+  const [wb, elements, pages] = await Promise.all([
     prisma.whiteboard.findUnique({ where: { id } }),
     prisma.whiteboardElement.findMany({
       where: { whiteboardId: id },
       orderBy: { zIndex: 'asc' },
     }),
+    prisma.whiteboardPage.findMany({
+      where: { whiteboardId: id },
+      orderBy: { order: 'asc' },
+      select: { id: true, whiteboardId: true, name: true, order: true },
+    }),
   ])
   if (!wb) actionError('NOT_FOUND', `Pizarra ${id} no existe`)
-  return { whiteboard: wb, elements }
+  // HU-16 — Si por alguna razón no hay páginas (whiteboard creado tras
+  // migración pero antes de que createWhiteboard sembrara la default),
+  // creamos "Página 1" on-the-fly y la devolvemos.
+  if (pages.length === 0) {
+    const created = await prisma.whiteboardPage.create({
+      data: { whiteboardId: id, name: 'Página 1', order: 0 },
+      select: { id: true, whiteboardId: true, name: true, order: true },
+    })
+    return { whiteboard: wb, elements, pages: [created] }
+  }
+  return { whiteboard: wb, elements, pages }
 }
 
 // ─────────────────────────── Mutaciones · Whiteboard ──────────────────
@@ -315,9 +335,31 @@ export async function createElement(
   })
   const nextZ = (top?.zIndex ?? 0) + 1
 
+  // HU-16 — Resolver pageId. Si el cliente no lo pasa, fallback a la
+  // primera página del whiteboard. Si no existe ninguna, creamos
+  // "Página 1" para no dejar elementos huérfanos.
+  let resolvedPageId = data.pageId ?? null
+  if (!resolvedPageId) {
+    const firstPage = await prisma.whiteboardPage.findFirst({
+      where: { whiteboardId: data.whiteboardId },
+      orderBy: { order: 'asc' },
+      select: { id: true },
+    })
+    if (firstPage) {
+      resolvedPageId = firstPage.id
+    } else {
+      const newPage = await prisma.whiteboardPage.create({
+        data: { whiteboardId: data.whiteboardId, name: 'Página 1', order: 0 },
+        select: { id: true },
+      })
+      resolvedPageId = newPage.id
+    }
+  }
+
   const created = await prisma.whiteboardElement.create({
     data: {
       whiteboardId: data.whiteboardId,
+      pageId: resolvedPageId,
       type: data.type,
       x: data.x,
       y: data.y,
@@ -557,6 +599,114 @@ export async function setElementsLocked(
     where: { whiteboardId, id: { in: elementIds } },
     data: { locked },
   })
+
+  invalidate()
+  revalidatePath(`/whiteboards/${whiteboardId}`)
+}
+
+
+// ─────────────────────────────────────────────────────────────────────
+// HU-16 (2026-05-14) — Multi-canvas (pages) por pizarra.
+// ─────────────────────────────────────────────────────────────────────
+
+export async function createWhiteboardPage(
+  whiteboardId: string,
+  name: string,
+): Promise<{ id: string; whiteboardId: string; name: string; order: number }> {
+  if (!whiteboardId) actionError("INVALID_INPUT", "whiteboardId requerido")
+  const trimmed = (name ?? "").trim()
+  if (!trimmed) actionError("INVALID_INPUT", "Nombre requerido")
+  if (trimmed.length > 60) actionError("INVALID_INPUT", "Nombre demasiado largo (máx 60)")
+
+  const meta = await loadWhiteboardForAccess(whiteboardId)
+  await ensureAccess(meta)
+
+  // Calcular el siguiente order (max+1).
+  const last = await prisma.whiteboardPage.findFirst({
+    where: { whiteboardId },
+    orderBy: { order: "desc" },
+    select: { order: true },
+  })
+  const order = last ? last.order + 1 : 0
+
+  const created = await prisma.whiteboardPage.create({
+    data: { whiteboardId, name: trimmed, order },
+    select: { id: true, whiteboardId: true, name: true, order: true },
+  })
+
+  invalidate()
+  revalidatePath(`/whiteboards/${whiteboardId}`)
+  return created
+}
+
+export async function renameWhiteboardPage(
+  pageId: string,
+  name: string,
+): Promise<void> {
+  if (!pageId) actionError("INVALID_INPUT", "pageId requerido")
+  const trimmed = (name ?? "").trim()
+  if (!trimmed) actionError("INVALID_INPUT", "Nombre requerido")
+  if (trimmed.length > 60) actionError("INVALID_INPUT", "Nombre demasiado largo (máx 60)")
+
+  const page = await prisma.whiteboardPage.findUnique({
+    where: { id: pageId },
+    select: { whiteboardId: true },
+  })
+  if (!page) actionError("NOT_FOUND", `Página ${pageId} no existe`)
+
+  const meta = await loadWhiteboardForAccess(page.whiteboardId)
+  await ensureAccess(meta)
+
+  await prisma.whiteboardPage.update({
+    where: { id: pageId },
+    data: { name: trimmed },
+  })
+
+  invalidate()
+  revalidatePath(`/whiteboards/${page.whiteboardId}`)
+}
+
+export async function deleteWhiteboardPage(pageId: string): Promise<void> {
+  if (!pageId) actionError("INVALID_INPUT", "pageId requerido")
+
+  const page = await prisma.whiteboardPage.findUnique({
+    where: { id: pageId },
+    select: { whiteboardId: true },
+  })
+  if (!page) actionError("NOT_FOUND", `Página ${pageId} no existe`)
+
+  const meta = await loadWhiteboardForAccess(page.whiteboardId)
+  await ensureAccess(meta)
+
+  // Guard: no permitir borrar la última página del whiteboard.
+  const count = await prisma.whiteboardPage.count({
+    where: { whiteboardId: page.whiteboardId },
+  })
+  if (count <= 1) actionError("INVALID_INPUT", "No puedes borrar la última página")
+
+  // CASCADE en BD se encarga de eliminar los WhiteboardElement de esta page.
+  await prisma.whiteboardPage.delete({ where: { id: pageId } })
+
+  invalidate()
+  revalidatePath(`/whiteboards/${page.whiteboardId}`)
+}
+
+export async function reorderWhiteboardPages(
+  whiteboardId: string,
+  pageIds: string[],
+): Promise<void> {
+  if (!whiteboardId) actionError("INVALID_INPUT", "whiteboardId requerido")
+  if (!Array.isArray(pageIds) || pageIds.length === 0) return
+
+  const meta = await loadWhiteboardForAccess(whiteboardId)
+  await ensureAccess(meta)
+
+  // Update batch: cada page recibe `order = index`.
+  await prisma.$transaction(
+    pageIds.map((id, idx) =>
+      prisma.whiteboardPage.update({ where: { id }, data: { order: idx } }),
+    ),
+  )
 
   invalidate()
   revalidatePath(`/whiteboards/${whiteboardId}`)
