@@ -2117,6 +2117,8 @@ model Whiteboard {
   stateYjs Bytes?
 
   elements WhiteboardElement[]
+  /// HU-16 (2026-05-14) — Sub-lienzos de la pizarra.
+  pages    WhiteboardPage[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -2125,10 +2127,33 @@ model Whiteboard {
   @@index([createdById])
 }
 
+model WhiteboardPage {
+  /// HU-16 (2026-05-14) — Sub-lienzo de una pizarra. Un Whiteboard puede
+  /// tener N pages; cada element pertenece a EXACTAMENTE una page.
+  /// Por compatibilidad con whiteboards legacy, la migración crea
+  /// "Página 1" automática y asigna todos los elementos huérfanos a ella.
+  id           String     @id @default(uuid())
+  whiteboardId String
+  whiteboard   Whiteboard @relation(fields: [whiteboardId], references: [id], onDelete: Cascade)
+  name         String     @default("Página 1")
+  order        Int        @default(0)
+  createdAt    DateTime   @default(now())
+
+  elements WhiteboardElement[]
+
+  @@index([whiteboardId, order])
+}
+
 model WhiteboardElement {
   id           String                @id @default(uuid())
   whiteboardId String
   whiteboard   Whiteboard            @relation(fields: [whiteboardId], references: [id], onDelete: Cascade)
+  /// HU-16 (2026-05-14) — Página a la que pertenece el elemento.
+  /// Nullable transitorio para back-compat con elementos legacy creados
+  /// antes de la migración; la migración los asigna a "Página 1" via
+  /// backfill. Server actions nuevos siempre setean pageId.
+  pageId       String?
+  page         WhiteboardPage?       @relation(fields: [pageId], references: [id], onDelete: Cascade)
   type         WhiteboardElementType
 
   // Coordenadas y dimensiones en el plano infinito (Float para soportar

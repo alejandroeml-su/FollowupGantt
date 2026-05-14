@@ -138,6 +138,17 @@ export type WhiteboardElement = {
   groupId?: string | null
   /** HU-12 — `true` deshabilita movimiento/edición. Default false. */
   locked?: boolean
+  /** HU-16 (2026-05-14) — Página a la que pertenece. Opcional para compat
+   *  con elementos legacy serializados sin pageId. */
+  pageId?: string | null
+}
+
+/** HU-16 — Página/sub-lienzo de una pizarra. */
+export type WhiteboardPage = {
+  id: string
+  whiteboardId: string
+  name: string
+  order: number
 }
 
 /** Snapshot ligero de la pizarra para listas. */

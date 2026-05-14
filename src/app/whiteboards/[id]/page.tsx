@@ -48,6 +48,9 @@ export default async function WhiteboardEditorPage({ params }: PageProps) {
     rotation: el.rotation,
     zIndex: el.zIndex,
     data: el.data as WhiteboardElement['data'],
+    groupId: (el as unknown as { groupId?: string | null }).groupId ?? null,
+    locked: (el as unknown as { locked?: boolean }).locked ?? false,
+    pageId: (el as unknown as { pageId?: string | null }).pageId ?? null,
   }))
 
   // Wave P6 · Equipo B1 — Carga la identidad del usuario en server para
@@ -63,6 +66,7 @@ export default async function WhiteboardEditorPage({ params }: PageProps) {
         projectName,
       }}
       initialElements={initialElements}
+      initialPages={payload.pages}
       currentUser={currentUser}
     />
   )
