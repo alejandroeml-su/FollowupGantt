@@ -14,6 +14,7 @@ export const WHITEBOARD_ELEMENT_TYPES = [
   'CONNECTOR',
   'TEXT',
   'IMAGE',
+  'FREEHAND',
 ] as const satisfies readonly WhiteboardElementType[]
 
 export type WhiteboardElementTypeLiteral = (typeof WHITEBOARD_ELEMENT_TYPES)[number]
@@ -71,12 +72,41 @@ export type ImageData = {
   alt: string
 }
 
+// ─────────────────────────── Dibujo libre (HU-03) ────────────────────
+
+/** Variantes de pincel disponibles. Cada una mapea a un patrón de
+ *  trazo en el renderer (líneas básicas, mezclado, círculos suaves). */
+export const FREEHAND_BRUSHES = [
+  'pencil', // lápiz: trazo nítido, opacidad alta
+  'marker', // marcador: trazo grueso, opacidad media
+  'watercolor', // acuarela: trazo suave con alpha bajo
+  'highlighter', // resaltador: muy alfa, color saturado
+] as const
+export type FreehandBrush = (typeof FREEHAND_BRUSHES)[number]
+
+/** Punto del trazo. `p` (presión 0..1) opcional para HU-11 futuro. */
+export type FreehandPoint = { x: number; y: number; p?: number }
+
+export type FreehandData = {
+  kind: 'freehand'
+  brush: FreehandBrush
+  stroke: string // color base CSS
+  strokeWidth: number // grosor en px @zoom=1
+  /**
+   * Puntos relativos al origen del elemento `(x, y)`. El editor calcula
+   * `(width, height)` a partir del bbox del path. Usar coordenadas
+   * relativas hace los trazos invariantes a movimientos del elemento.
+   */
+  points: FreehandPoint[]
+}
+
 export type WhiteboardElementData =
   | StickyData
   | ShapeData
   | ConnectorData
   | TextData
   | ImageData
+  | FreehandData
 
 /** Elemento serializado del cliente — coincide con el Prisma model. */
 export type WhiteboardElement = {

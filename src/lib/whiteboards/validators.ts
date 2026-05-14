@@ -5,9 +5,10 @@
  */
 
 import { z } from 'zod'
-import { SHAPE_VARIANTS, WHITEBOARD_ELEMENT_TYPES } from './types'
+import { FREEHAND_BRUSHES, SHAPE_VARIANTS, WHITEBOARD_ELEMENT_TYPES } from './types'
 import type {
   ConnectorData,
+  FreehandData,
   ImageData,
   ShapeData,
   StickyData,
@@ -55,6 +56,25 @@ const imageDataSchema = z.object({
   kind: z.literal('image'),
   url: z.string().url().max(2048),
   alt: z.string().max(200).default(''),
+})
+
+// HU-03 (2026-05-14) — Trazo libre. `points` con tope alto pero limitado
+// (4096 puntos) para evitar payloads abusivos. Cada punto opcionalmente
+// trae `p` (presión 0..1). El bbox real se reconstruye en el cliente.
+const freehandDataSchema = z.object({
+  kind: z.literal('freehand'),
+  brush: z.enum(FREEHAND_BRUSHES),
+  stroke: z.string().max(32),
+  strokeWidth: z.number().finite().min(0.5).max(64),
+  points: z
+    .array(
+      z.object({
+        x: z.number().finite(),
+        y: z.number().finite(),
+        p: z.number().min(0).max(1).optional(),
+      }),
+    )
+    .max(4096),
 })
 
 /**
@@ -110,6 +130,15 @@ export function validateElementData(
         )
       }
       return parsed.data satisfies ImageData
+    }
+    case 'FREEHAND': {
+      const parsed = freehandDataSchema.safeParse(raw)
+      if (!parsed.success) {
+        throw new Error(
+          `[INVALID_INPUT] freehand data inválida: ${parsed.error.issues.map((i) => i.message).join('; ')}`,
+        )
+      }
+      return parsed.data satisfies FreehandData
     }
     default: {
       // Exhaustive switch — TypeScript debería marcarlo si añades un tipo

@@ -156,8 +156,56 @@ function drawElement(ctx: CanvasRenderingContext2D, el: WhiteboardElement): void
       ctx.fillText('imagen', 8, 16)
       break
     }
+    case 'FREEHAND': {
+      // HU-03 (2026-05-14) — Trazo libre con textura según brush.
+      const data = el.data as {
+        brush: 'pencil' | 'marker' | 'watercolor' | 'highlighter'
+        stroke: string
+        strokeWidth: number
+        points: { x: number; y: number; p?: number }[]
+      }
+      if (data.points.length === 0) break
+      const { alpha, composite, widthMul } = brushStyle(data.brush)
+      ctx.globalAlpha = alpha
+      ctx.globalCompositeOperation = composite
+      ctx.strokeStyle = data.stroke
+      ctx.lineCap = 'round'
+      ctx.lineJoin = 'round'
+      ctx.lineWidth = data.strokeWidth * widthMul
+      ctx.beginPath()
+      const [head, ...rest] = data.points
+      ctx.moveTo(head.x, head.y)
+      for (const p of rest) ctx.lineTo(p.x, p.y)
+      ctx.stroke()
+      // Reset (CanvasRenderingContext2D no resetea entre save/restore las
+      // propiedades de composición en algunos engines; reset explícito
+      // por defensa).
+      ctx.globalAlpha = 1
+      ctx.globalCompositeOperation = 'source-over'
+      break
+    }
   }
   ctx.restore()
+}
+
+// HU-03 — Mapping de brush a propiedades de Canvas2D.
+function brushStyle(brush: 'pencil' | 'marker' | 'watercolor' | 'highlighter'): {
+  alpha: number
+  composite: GlobalCompositeOperation
+  widthMul: number
+} {
+  switch (brush) {
+    case 'pencil':
+      return { alpha: 0.95, composite: 'source-over', widthMul: 1 }
+    case 'marker':
+      return { alpha: 0.85, composite: 'source-over', widthMul: 1 }
+    case 'watercolor':
+      // Multiply le da un efecto de manchado al superponerse.
+      return { alpha: 0.45, composite: 'multiply', widthMul: 1.2 }
+    case 'highlighter':
+      // Multiply + width grande imitando un fluorescente sobre texto.
+      return { alpha: 0.35, composite: 'multiply', widthMul: 1.4 }
+  }
 }
 
 /**

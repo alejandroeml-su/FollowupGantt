@@ -33,6 +33,19 @@ type Props = {
   whiteboardId?: string
   /** Wave P6 — usuario actual para emitir su cursor en el canal. */
   currentUser?: CurrentUserIdentity | null
+  /**
+   * HU-03 (2026-05-14) — Modo dibujo libre activo. Si se provee, los
+   * gestos de mouse en el lienzo capturan un trazo en lugar de pan/select.
+   * `brush` define el preset visual (color + grosor) que se muestra como
+   * preview.
+   */
+  drawingMode?: { active: boolean; brush: 'pencil' | 'marker' | 'watercolor' | 'highlighter' }
+  /**
+   * Callback que recibe los puntos del trazo en coordenadas mundo al
+   * soltar el mouse. El editor crea el `WhiteboardElement` FREEHAND con
+   * estos puntos y persiste.
+   */
+  onDrawingCommit?: (points: { x: number; y: number }[]) => void
 }
 
 /**
@@ -60,17 +73,25 @@ export function WhiteboardCanvas({
   panMode = false,
   whiteboardId,
   currentUser,
+  drawingMode,
+  onDrawingCommit,
 }: Props) {
   const [viewport, setViewport] = useState<ViewportState>(DEFAULT_VIEWPORT)
   const containerRef = useRef<HTMLDivElement | null>(null)
   const dragRef = useRef<{
-    kind: 'pan' | 'element'
+    kind: 'pan' | 'element' | 'draw'
     elementId?: string
     startScreen: { x: number; y: number }
     startWorld: { x: number; y: number }
     startElementWorld?: { x: number; y: number }
     moved: boolean
+    /** HU-03 — cuando kind='draw', va acumulando puntos en coords mundo. */
+    drawPoints?: { x: number; y: number }[]
   } | null>(null)
+  // HU-03 — estado del trazo en curso para repintar el preview en cada move.
+  const [drawingPreview, setDrawingPreview] = useState<
+    { x: number; y: number }[] | null
+  >(null)
 
   /** Convierte un MouseEvent del DOM a coords del mundo. */
   const eventToWorld = useCallback(
@@ -107,6 +128,21 @@ export function WhiteboardCanvas({
       const screen = { x: e.clientX - rect.left, y: e.clientY - rect.top }
       const world = screenToWorld(screen, viewport)
 
+      // HU-03 — modo dibujo: cualquier mousedown sobre el lienzo inicia
+      // un trazo nuevo. Tiene prioridad sobre la selección de elemento
+      // (queremos dibujar encima sin seleccionar el sticky por error).
+      if (drawingMode?.active && !panMode) {
+        dragRef.current = {
+          kind: 'draw',
+          startScreen: screen,
+          startWorld: world,
+          moved: false,
+          drawPoints: [world],
+        }
+        setDrawingPreview([world])
+        return
+      }
+
       if (elementHandle && !panMode) {
         const elementId = elementHandle.dataset.elementId!
         const el = elements.find((x) => x.id === elementId)
@@ -129,7 +165,7 @@ export function WhiteboardCanvas({
         }
       }
     },
-    [elements, onSelect, panMode, viewport],
+    [elements, onSelect, panMode, viewport, drawingMode],
   )
 
   const handleMouseMove = useCallback(
@@ -151,6 +187,20 @@ export function WhiteboardCanvas({
         }))
         // El "start" se reposiciona para que el delta sea relativo al frame anterior.
         drag.startScreen = screen
+      } else if (drag.kind === 'draw' && drag.drawPoints) {
+        // HU-03 — acumular punto si el delta supera 1px en pantalla (al
+        // zoom actual). Evita acumular cientos de puntos casi idénticos
+        // y mantiene el path liviano sin perder fidelidad.
+        const world = screenToWorld(screen, viewport)
+        const last = drag.drawPoints[drag.drawPoints.length - 1]
+        const dWorld = Math.hypot(world.x - last.x, world.y - last.y)
+        if (dWorld * viewport.zoom > 1.5) {
+          drag.drawPoints.push(world)
+          // Forzamos un re-render solo cada N puntos para no saturar React.
+          if (drag.drawPoints.length % 2 === 0) {
+            setDrawingPreview([...drag.drawPoints])
+          }
+        }
       } else if (drag.kind === 'element' && drag.elementId && drag.startElementWorld) {
         const world = screenToWorld(screen, viewport)
         const next = snapPoint(
@@ -171,6 +221,17 @@ export function WhiteboardCanvas({
       const drag = dragRef.current
       dragRef.current = null
       if (!drag) return
+      // HU-03 — commit del trazo dibujado. Si el usuario hizo click sin
+      // mover (drawPoints.length === 1), descartamos: probablemente fue
+      // un click accidental (no queremos crear elementos con 1 punto).
+      if (drag.kind === 'draw' && drag.drawPoints) {
+        const points = drag.drawPoints
+        setDrawingPreview(null)
+        if (points.length >= 2 && onDrawingCommit) {
+          onDrawingCommit(points)
+        }
+        return
+      }
       // Click en fondo sin drag → deselecciona o emite onCanvasClick (insertar).
       if (drag.kind === 'pan' && !drag.moved) {
         const world = eventToWorld(e)
@@ -181,7 +242,7 @@ export function WhiteboardCanvas({
         }
       }
     },
-    [eventToWorld, onCanvasClick, onSelect],
+    [eventToWorld, onCanvasClick, onDrawingCommit, onSelect],
   )
 
   const handleContextMenu = useCallback(
@@ -255,7 +316,11 @@ export function WhiteboardCanvas({
         dragRef.current = null
       }}
       className={`relative h-full w-full overflow-hidden bg-slate-950 ${
-        panMode ? 'cursor-grab' : 'cursor-default'
+        drawingMode?.active
+          ? 'cursor-crosshair'
+          : panMode
+            ? 'cursor-grab'
+            : 'cursor-default'
       }`}
     >
       <div className="absolute inset-0" style={transformStyle}>
@@ -271,6 +336,20 @@ export function WhiteboardCanvas({
             />
           ))}
       </div>
+      {/* HU-03 — Preview del trazo en curso. SVG overlay con
+          transformación inversa para que los puntos en coords mundo se
+          rendericen alineados con el contenido. */}
+      {drawingPreview && drawingPreview.length > 1 && drawingMode && (
+        <svg
+          className="pointer-events-none absolute inset-0"
+          style={transformStyle}
+          width="100%"
+          height="100%"
+          overflow="visible"
+        >
+          <DrawingPreviewPath points={drawingPreview} brush={drawingMode.brush} />
+        </svg>
+      )}
       <ZoomIndicator viewport={viewport} onReset={() => setViewport(DEFAULT_VIEWPORT)} />
       {whiteboardId && (
         <LiveCursorsLayer
@@ -279,6 +358,41 @@ export function WhiteboardCanvas({
         />
       )}
     </div>
+  )
+}
+
+function DrawingPreviewPath({
+  points,
+  brush,
+}: {
+  points: { x: number; y: number }[]
+  brush: 'pencil' | 'marker' | 'watercolor' | 'highlighter'
+}) {
+  const d = points
+    .map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x.toFixed(1)} ${p.y.toFixed(1)}`)
+    .join(' ')
+  const style = (() => {
+    switch (brush) {
+      case 'pencil':
+        return { stroke: '#0f172a', width: 2, opacity: 0.95 }
+      case 'marker':
+        return { stroke: '#1e3a8a', width: 6, opacity: 0.85 }
+      case 'watercolor':
+        return { stroke: '#7c3aed', width: 14, opacity: 0.45 }
+      case 'highlighter':
+        return { stroke: '#facc15', width: 18, opacity: 0.35 }
+    }
+  })()
+  return (
+    <path
+      d={d}
+      fill="none"
+      stroke={style.stroke}
+      strokeWidth={style.width}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      opacity={style.opacity}
+    />
   )
 }
 
@@ -469,6 +583,58 @@ function WhiteboardElementView({
           alt={data.alt || ''}
           className={`object-cover rounded-md cursor-grab ${ringClass}`}
         />
+      )
+    }
+    case 'FREEHAND': {
+      // HU-03 (2026-05-14) — Trazo renderizado como SVG path dentro de un
+      // contenedor del tamaño del bbox. Los puntos vienen relativos al
+      // origen del elemento.
+      const data = element.data as {
+        brush: 'pencil' | 'marker' | 'watercolor' | 'highlighter'
+        stroke: string
+        strokeWidth: number
+        points: { x: number; y: number; p?: number }[]
+      }
+      // Path traducido a coords del SVG local (restamos element.x/y).
+      const local = data.points.map((p) => ({
+        x: p.x - element.x,
+        y: p.y - element.y,
+      }))
+      const d = local
+        .map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x.toFixed(1)} ${p.y.toFixed(1)}`)
+        .join(' ')
+      const brushOpacity = {
+        pencil: 0.95,
+        marker: 0.85,
+        watercolor: 0.45,
+        highlighter: 0.35,
+      }[data.brush]
+      const brushBlend: React.CSSProperties['mixBlendMode'] | undefined =
+        data.brush === 'watercolor' || data.brush === 'highlighter'
+          ? 'multiply'
+          : undefined
+      return (
+        <svg
+          data-element-id={element.id}
+          data-testid={`freehand-${element.id}`}
+          style={{
+            ...baseStyle,
+            overflow: 'visible',
+            mixBlendMode: brushBlend,
+            cursor: 'grab',
+          }}
+          className={ringClass}
+        >
+          <path
+            d={d}
+            fill="none"
+            stroke={data.stroke}
+            strokeWidth={data.strokeWidth}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            opacity={brushOpacity}
+          />
+        </svg>
       )
     }
   }

@@ -123,6 +123,10 @@ enum WhiteboardElementType {
   CONNECTOR
   TEXT
   IMAGE
+  /// HU-03 (2026-05-14) — Trazo libre con textura (pincel/marcador/acuarela).
+  /// `data.points: {x,y,p?}[]` relativos a `(x,y)`, `data.brush` define la
+  /// variante de textura, `data.stroke`/`strokeWidth` color y grosor base.
+  FREEHAND
 }
 
 // Tipo de métrica de un Key Result. Define cómo se calcula `currentValue`
