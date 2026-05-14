@@ -25,6 +25,8 @@ export const KNOWN_AUDIT_ACTIONS = [
   'task.created',
   'task.updated',
   'task.deleted',
+  'task.archived',
+  'task.unarchived',
   'task.status_changed',
   // Wave P9 · Agile Maturity — asignación de Task a Epic
   'task.epic_assigned',
@@ -222,6 +224,8 @@ export const ACTION_LABELS: Record<AuditAction, string> = {
   'task.created': 'Tarea creada',
   'task.updated': 'Tarea actualizada',
   'task.deleted': 'Tarea eliminada',
+  'task.archived': 'Tarea archivada',
+  'task.unarchived': 'Tarea restaurada',
   'task.status_changed': 'Estado de tarea cambiado',
   'task.epic_assigned': 'Tarea asignada a Epic',
   'task.epic_unassigned': 'Tarea desasignada de Epic',

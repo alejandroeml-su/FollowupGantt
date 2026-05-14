@@ -36,7 +36,7 @@ import {
 import { clsx } from 'clsx'
 import type { SerializedTask } from '@/lib/types'
 import { reorderTask } from '@/lib/actions/reorder'
-import { deleteTask } from '@/lib/actions'
+import { deleteTask, unarchiveTask } from '@/lib/actions'
 import { useUIStore } from '@/lib/stores/ui'
 import { BulkActionsToolbar } from './BulkActionsToolbar'
 import { computeProgressWithSource } from '@/lib/progress/rollup'
@@ -50,7 +50,12 @@ import { TaskWithContextMenu } from './TaskContextMenuItems'
 import { TaskDrawer } from './TaskDrawer'
 import { TaskDrawerContent } from './TaskDrawerContent'
 import { TaskFiltersBar } from './TaskFiltersBar'
-import { EMPTY_TASK_FILTERS, filterTasksWithSubtasks, type TaskFilters } from '@/lib/taskFilters'
+import {
+  EMPTY_TASK_FILTERS,
+  filterTasksWithSubtasks,
+  matchesFilters,
+  type TaskFilters,
+} from '@/lib/taskFilters'
 import { SavedViewsDropdown, type SavedViewSummary } from '@/components/views/SavedViewsDropdown'
 import { MultiGroupBySelector } from '@/components/views/MultiGroupBySelector'
 import { groupTasks, groupTasksMulti, type GroupKey, type TaskGroupTree } from '@/lib/views/group-tasks'
@@ -60,6 +65,10 @@ import { useTaskRealtimeRefresh } from '@/lib/realtime/use-task-realtime'
 
 type Props = {
   tasks: (SerializedTask & { subtasks?: SerializedTask[] })[]
+  /** 2026-05-14 · Mantenimiento de archivadas — pestaña adicional para
+   *  ver tareas con `archivedAt != null` y restaurarlas o purgarlas sin
+   *  salir de /list. */
+  archivedTasks?: SerializedTask[]
   projects: { id: string; name: string; areaId?: string | null }[]
   users: { id: string; name: string }[]
   gerencias?: { id: string; name: string }[]
@@ -97,6 +106,7 @@ const PRIORITY_COLOR: Record<string, string> = {
 
 export function ListBoardClient({
   tasks,
+  archivedTasks = [],
   projects,
   users,
   gerencias = [],
@@ -105,6 +115,10 @@ export function ListBoardClient({
   savedViews = [],
   currentUser = null,
 }: Props) {
+  // 2026-05-14 · Tabs Activas/Archivadas. Estado local: cuando el usuario
+  // entra a "Archivadas" la lista activa se reemplaza por una vista plana
+  // de soft-deleted (con acciones Restaurar/Eliminar definitivamente).
+  const [view, setView] = useState<'active' | 'archived'>('active')
   // Refresca la vista cuando cualquier tarea cambia en la BD (postgres CDC
   // vía Supabase Realtime). Hace que los rollups y el progress se
   // actualicen sin refresh manual cuando otro tab/usuario muta una tarea.
@@ -282,6 +296,62 @@ export function ListBoardClient({
 
   return (
     <>
+      {/* 2026-05-14 · Tabs Activas/Archivadas (Edwin) — mantenimiento de
+          archivadas sin salir de /list. La vista archivada es plana
+          (sin árbol/agrupación) porque el universo de tareas archivadas
+          es heterogéneo y rara vez beneficia de agrupar. */}
+      <div
+        role="tablist"
+        aria-label="Estado de tareas"
+        className="flex items-center gap-1 border-b border-border bg-card px-3 pt-2 md:px-6"
+      >
+        <button
+          type="button"
+          role="tab"
+          aria-selected={view === 'active'}
+          onClick={() => setView('active')}
+          className={clsx(
+            'rounded-t-md px-3 py-1.5 text-xs font-semibold transition-colors',
+            view === 'active'
+              ? 'bg-secondary text-foreground'
+              : 'text-muted-foreground hover:bg-secondary/40',
+          )}
+        >
+          Activas
+          <span className="ml-2 rounded bg-input/60 px-1.5 py-0.5 text-[10px] font-bold">
+            {tasks.length}
+          </span>
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={view === 'archived'}
+          onClick={() => setView('archived')}
+          className={clsx(
+            'rounded-t-md px-3 py-1.5 text-xs font-semibold transition-colors',
+            view === 'archived'
+              ? 'bg-secondary text-foreground'
+              : 'text-muted-foreground hover:bg-secondary/40',
+          )}
+        >
+          Archivadas
+          <span className="ml-2 rounded bg-input/60 px-1.5 py-0.5 text-[10px] font-bold">
+            {archivedTasks.length}
+          </span>
+        </button>
+      </div>
+
+      {view === 'archived' ? (
+        <ArchivedTasksList
+          tasks={archivedTasks}
+          projects={projects}
+          users={users}
+          gerencias={gerencias}
+          areas={areas}
+          epics={epics}
+        />
+      ) : (
+      <>
       <TaskFiltersBar
         value={filters}
         onChange={setFilters}
@@ -491,6 +561,143 @@ export function ListBoardClient({
           />
         ) : null}
       </TaskDrawer>
+      </>
+      )}
+    </>
+  )
+}
+
+// ───────────────────────── Archivadas ───────────────────────────────────
+
+/**
+ * 2026-05-14 · Vista plana de tareas archivadas con acciones Restaurar /
+ * Eliminar definitivamente. Reutiliza `TaskFiltersBar` para mantener la
+ * mismo UX de filtrado por proyecto/gerencia/etc.
+ */
+function ArchivedTasksList({
+  tasks,
+  projects,
+  users,
+  gerencias,
+  areas,
+  epics,
+}: {
+  tasks: SerializedTask[]
+  projects: { id: string; name: string; areaId?: string | null }[]
+  users: { id: string; name: string }[]
+  gerencias: { id: string; name: string }[]
+  areas: { id: string; name: string; gerenciaId?: string | null }[]
+  epics: { id: string; name: string; color: string; projectId: string }[]
+}) {
+  const [filters, setFilters] = useState<TaskFilters>(EMPTY_TASK_FILTERS)
+  const [busyId, setBusyId] = useState<string | null>(null)
+
+  // Reutilizamos el mismo helper de filtrado: aceptan SerializedTask y los
+  // campos relevantes (gerenciaId/areaId/projectId/...) están todos presentes.
+  const visible = useMemo(
+    () => tasks.filter((t) => matchesFilters(t, filters)),
+    [tasks, filters],
+  )
+
+  async function handleRestore(id: string) {
+    setBusyId(id)
+    try {
+      const fd = new FormData()
+      fd.set('id', id)
+      await unarchiveTask(fd)
+    } finally {
+      setBusyId(null)
+    }
+  }
+  async function handleDelete(id: string) {
+    if (!confirm('¿Eliminar la tarea definitivamente? Esta acción es irreversible.')) return
+    setBusyId(id)
+    try {
+      const fd = new FormData()
+      fd.set('id', id)
+      await deleteTask(fd)
+    } finally {
+      setBusyId(null)
+    }
+  }
+
+  return (
+    <>
+      <TaskFiltersBar
+        value={filters}
+        onChange={setFilters}
+        gerencias={gerencias}
+        areas={areas}
+        projects={projects}
+        users={users}
+        epics={epics}
+      />
+
+      <div className="flex items-center bg-secondary/20 px-3 py-1.5 text-[11px] md:px-4">
+        <span className="rounded border border-amber-500/20 bg-amber-500/10 px-2 py-0.5 font-semibold text-amber-400">
+          {visible.length} de {tasks.length} archivadas
+        </span>
+        <span className="ml-auto hidden text-[10px] text-muted-foreground md:inline">
+          Mantenimiento · restaura o elimina definitivamente
+        </span>
+      </div>
+
+      {visible.length === 0 ? (
+        <div className="px-4 py-10 text-center text-sm text-muted-foreground">
+          {tasks.length === 0
+            ? 'No hay tareas archivadas para los proyectos visibles.'
+            : 'Ninguna tarea archivada coincide con los filtros.'}
+        </div>
+      ) : (
+        <ul className="divide-y divide-border/40">
+          {visible.map((t) => {
+            const isBusy = busyId === t.id
+            return (
+              <li
+                key={t.id}
+                className="grid grid-cols-12 items-center gap-3 px-3 py-2 text-sm hover:bg-secondary/20 md:px-4"
+              >
+                <div className="col-span-12 flex min-w-0 items-center gap-2 md:col-span-6">
+                  <span className="rounded bg-input/60 px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">
+                    {t.mnemonic ?? `#${t.id.slice(0, 6)}`}
+                  </span>
+                  <span className="truncate font-medium text-foreground/90">
+                    {t.title}
+                  </span>
+                </div>
+                <div className="col-span-6 hidden truncate text-xs text-muted-foreground md:col-span-3 md:block">
+                  {t.project?.name ?? '—'}
+                </div>
+                <div className="col-span-6 hidden text-xs text-muted-foreground md:col-span-1 md:block">
+                  {t.archivedAt
+                    ? new Date(t.archivedAt).toLocaleDateString('es-MX')
+                    : ''}
+                </div>
+                <div className="col-span-12 flex items-center justify-end gap-1.5 md:col-span-2">
+                  <button
+                    type="button"
+                    disabled={isBusy}
+                    onClick={() => handleRestore(t.id)}
+                    className="rounded border border-emerald-500/40 bg-emerald-500/10 px-2 py-1 text-[11px] font-semibold text-emerald-300 transition-colors hover:bg-emerald-500/20 disabled:opacity-50"
+                    aria-label={`Restaurar ${t.title}`}
+                  >
+                    Restaurar
+                  </button>
+                  <button
+                    type="button"
+                    disabled={isBusy}
+                    onClick={() => handleDelete(t.id)}
+                    className="rounded border border-rose-500/40 bg-rose-500/10 px-2 py-1 text-[11px] font-semibold text-rose-300 transition-colors hover:bg-rose-500/20 disabled:opacity-50"
+                    aria-label={`Eliminar definitivamente ${t.title}`}
+                  >
+                    Eliminar
+                  </button>
+                </div>
+              </li>
+            )
+          })}
+        </ul>
+      )}
     </>
   )
 }

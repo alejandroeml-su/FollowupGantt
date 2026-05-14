@@ -45,6 +45,21 @@ interface Props {
     dep: GanttDependencyEdge,
     event: { clientX: number; clientY: number },
   ) => void
+  /**
+   * 2026-05-14 · Click izquierdo sobre la flecha — selecciona la
+   * dependencia para que el caller la marque visualmente y exponga
+   * acciones (borrar con Suprimir o desde mini-menú). Devuelve la misma
+   * posición del puntero para anclar UI.
+   */
+  onDependencyClick?: (
+    dep: GanttDependencyEdge,
+    event: { clientX: number; clientY: number },
+  ) => void
+  /**
+   * 2026-05-14 · Id de la dependencia seleccionada — pinta con halo +
+   * stroke acentuado para que sea evidente cuál está activa.
+   */
+  selectedEdgeId?: string | null
 }
 
 /**
@@ -66,6 +81,8 @@ export function GanttDependencyLayer({
   width,
   height,
   onDependencyContextMenu,
+  onDependencyClick,
+  selectedEdgeId = null,
 }: Props) {
   const positionMap = useMemo(() => {
     const m = new Map<string, GanttTaskPosition>()
@@ -116,10 +133,10 @@ export function GanttDependencyLayer({
     return result
   }, [dependencies, positionMap])
 
-  // Si hay handler de menú, las flechas reciben pointer events (clic derecho).
+  // Si hay handler de menú o de click, las flechas reciben pointer events.
   // En modo "view-only" la capa entera mantiene `pointer-events-none` para no
   // robar foco al canvas (drag, etc).
-  const interactive = !!onDependencyContextMenu
+  const interactive = !!onDependencyContextMenu || !!onDependencyClick
 
   return (
     <svg
@@ -160,45 +177,88 @@ export function GanttDependencyLayer({
         >
           <path d="M 0 0 L 10 5 L 0 10 z" className="fill-red-500" />
         </marker>
+        <marker
+          id="gantt-arrow-selected"
+          viewBox="0 0 10 10"
+          refX="9"
+          refY="5"
+          markerWidth="8"
+          markerHeight="8"
+          orient="auto-start-reverse"
+        >
+          <path d="M 0 0 L 10 5 L 0 10 z" className="fill-indigo-500" />
+        </marker>
       </defs>
-      {paths.map((p) => (
+      {paths.map((p) => {
+        const isSelected = selectedEdgeId === p.dep.id
+        return (
         <g key={p.key}>
-          {/* Path ancho transparente (hit-area) para que el clic derecho sea
-              fácil de aterrizar — la flecha visible es de 1.5–2 px. */}
+          {/* Path ancho transparente (hit-area) para que el clic (izq/der)
+              sea fácil de aterrizar — la flecha visible es de 1.5–2 px. */}
           {interactive && (
             <path
               d={p.d}
               fill="none"
               strokeWidth={12}
               stroke="transparent"
-              className="pointer-events-stroke cursor-context-menu"
+              className="pointer-events-stroke cursor-pointer"
               data-dep-id={p.dep.id}
+              role={onDependencyClick ? 'button' : undefined}
+              aria-label={
+                onDependencyClick
+                  ? `Dependencia ${p.dep.type}${p.dep.lagDays ? ` lag ${p.dep.lagDays}d` : ''}`
+                  : undefined
+              }
+              onClick={(e) => {
+                if (!onDependencyClick) return
+                e.stopPropagation()
+                onDependencyClick(p.dep, {
+                  clientX: e.clientX,
+                  clientY: e.clientY,
+                })
+              }}
               onContextMenu={(e) => {
+                if (!onDependencyContextMenu) return
                 e.preventDefault()
-                onDependencyContextMenu?.(p.dep, {
+                onDependencyContextMenu(p.dep, {
                   clientX: e.clientX,
                   clientY: e.clientY,
                 })
               }}
             />
           )}
+          {/* Halo de selección: stroke ancho semi-transparente debajo del
+              path principal para que la flecha activa "salga" del lienzo. */}
+          {isSelected && (
+            <path
+              d={p.d}
+              fill="none"
+              strokeWidth={8}
+              className="stroke-indigo-400/40 pointer-events-none"
+            />
+          )}
           <path
             d={p.d}
             fill="none"
-            strokeWidth={p.isCritical ? 2 : 1.5}
+            strokeWidth={isSelected ? 2.5 : p.isCritical ? 2 : 1.5}
             className={
-              p.isCritical
-                ? 'stroke-red-500 pointer-events-none'
-                : 'stroke-muted-foreground/70 pointer-events-none'
+              isSelected
+                ? 'stroke-indigo-500 pointer-events-none'
+                : p.isCritical
+                  ? 'stroke-red-500 pointer-events-none'
+                  : 'stroke-muted-foreground/70 pointer-events-none'
             }
             markerEnd={
-              p.isCritical
-                ? 'url(#gantt-arrow-critical)'
-                : 'url(#gantt-arrow-default)'
+              isSelected
+                ? 'url(#gantt-arrow-selected)'
+                : p.isCritical
+                  ? 'url(#gantt-arrow-critical)'
+                  : 'url(#gantt-arrow-default)'
             }
           />
         </g>
-      ))}
+        )
+      })}
     </svg>
   )
 }

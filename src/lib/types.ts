@@ -98,6 +98,8 @@ export interface SerializedTask {
   slaResponseLimit?: string | null;
   slaResolutionLimit?: string | null;
   isEscalated?: boolean;
+  /** 2026-05-14 — Soft-delete timestamp. `null` para tareas activas. */
+  archivedAt?: string | null;
 }
 
 export type SerializedDependency = {
@@ -188,6 +190,7 @@ type RawTask = {
   slaResponseLimit?: DateLike;
   slaResolutionLimit?: DateLike;
   isEscalated?: boolean;
+  archivedAt?: DateLike;
 }
 
 function toISO(d: DateLike): string | null {
@@ -276,5 +279,6 @@ export function serializeTask(task: Record<string, unknown>): SerializedTask {
     slaResponseLimit: t.slaResponseLimit ? toISO(t.slaResponseLimit) : null,
     slaResolutionLimit: t.slaResolutionLimit ? toISO(t.slaResolutionLimit) : null,
     isEscalated: t.isEscalated ?? false,
+    archivedAt: t.archivedAt ? toISO(t.archivedAt) : null,
   };
 }

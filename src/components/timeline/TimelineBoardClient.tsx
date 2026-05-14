@@ -42,9 +42,17 @@ import {
   type TaskFilters,
 } from '@/lib/taskFilters'
 import type { SerializedTask } from '@/lib/types'
+import { TaskDrawer } from '@/components/interactions/TaskDrawer'
+import { TaskDrawerContent } from '@/components/interactions/TaskDrawerContent'
+import type { CurrentUserPresence } from '@/lib/auth/get-current-user-presence'
 
 type Props = {
   tasks: TimelineTask[]
+  /** 2026-05-14 — Versión hidratada de las mismas tareas en shape
+   *  `SerializedTask` para alimentar el TaskDrawer al hacer click en una
+   *  barra. Sin ella la vista sigue funcionando pero el click no abre
+   *  detalle. */
+  fullTasks?: SerializedTask[]
   initialZoom?: TimelineZoom
   initialGroupBy?: TimelineGroupBy
   /** Catálogos para `<TaskFiltersBar>`. Opcionales — sin ellos los selects
@@ -54,6 +62,8 @@ type Props = {
   gerencias?: { id: string; name: string }[]
   areas?: { id: string; name: string; gerenciaId?: string | null }[]
   epics?: { id: string; name: string; color: string; projectId: string }[]
+  /** Identidad del usuario activo para presence + edit locks del drawer. */
+  currentUser?: CurrentUserPresence | null
 }
 
 const STATUS_TONE: Record<string, string> = {
@@ -151,6 +161,7 @@ function groupTasks(
 
 export function TimelineBoardClient({
   tasks,
+  fullTasks = [],
   initialZoom = 'MONTHS',
   initialGroupBy = 'PROJECT',
   projects = [],
@@ -158,14 +169,22 @@ export function TimelineBoardClient({
   gerencias = [],
   areas = [],
   epics = [],
+  currentUser = null,
 }: Props) {
   const [zoom, setZoom] = useState<TimelineZoom>(initialZoom)
   const [groupBy, setGroupBy] = useState<TimelineGroupBy>(initialGroupBy)
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set())
   const [filters, setFilters] = useState<TaskFilters>(EMPTY_TASK_FILTERS)
   const openDrawer = useUIStore((s) => s.openDrawer)
+  const drawerTaskId = useUIStore((s) => s.drawerTaskId)
   const router = useRouter()
   void router
+
+  const drawerTask = useMemo(
+    () => fullTasks.find((t) => t.id === drawerTaskId) ?? null,
+    [fullTasks, drawerTaskId],
+  )
+  const orderedIds = useMemo(() => fullTasks.map((t) => t.id), [fullTasks])
 
   const win = useMemo(() => buildTimelineWindow(zoom), [zoom])
 
@@ -215,6 +234,7 @@ export function TimelineBoardClient({
   }, [groups, win])
 
   return (
+    <>
     <div className="flex h-full flex-col">
       {/* Filtros estándar (Wave P13) — mismo componente que List/Kanban/Gantt. */}
       <TaskFiltersBar
@@ -432,6 +452,47 @@ export function TimelineBoardClient({
         </span>
       </div>
     </div>
+
+    {/* 2026-05-14 · TaskDrawer montado para que el click en una barra
+        abra el detalle de la tarea sin salir de Timeline. Misma plumbing
+        que /list y /gantt. */}
+    <TaskDrawer
+      breadcrumbs={
+        drawerTask ? (
+          <>
+            {drawerTask.project?.name}
+            {' › '}
+            <span className="text-foreground/90">
+              #{drawerTask.id.substring(0, 6)}
+            </span>
+          </>
+        ) : null
+      }
+      onNext={() => {
+        if (!drawerTaskId) return
+        const i = orderedIds.indexOf(drawerTaskId)
+        const next = orderedIds[i + 1]
+        if (next) openDrawer(next)
+      }}
+      onPrev={() => {
+        if (!drawerTaskId) return
+        const i = orderedIds.indexOf(drawerTaskId)
+        const prev = orderedIds[i - 1]
+        if (prev) openDrawer(prev)
+      }}
+      currentUser={currentUser}
+    >
+      {drawerTask ? (
+        <TaskDrawerContent
+          task={drawerTask}
+          projects={projects}
+          users={users}
+          allTasks={fullTasks}
+          currentUser={currentUser}
+        />
+      ) : null}
+    </TaskDrawer>
+    </>
   )
 }
 

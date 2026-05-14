@@ -30,6 +30,19 @@ export default async function ListViewPage() {
     orderBy: [{ position: 'asc' }, { createdAt: 'desc' }],
   })
 
+  // 2026-05-14 · Mantenimiento de archivadas (Edwin) — segunda query
+  // dedicada para no inflar la query principal. Las archivadas pueden ser
+  // descendientes profundos, así que no filtramos por parentId: queremos
+  // ver cualquier tarea soft-deleted, plana. `buildTaskTreeInclude({depth:0})`
+  // mantiene las relaciones base (assignee, project, history, etc.) sin
+  // recurrir a subtasks. Si hay tareas activas con subtasks archivadas,
+  // el filtro `archivedAt: { not: null }` se las trae igualmente.
+  const dbArchivedTasks = await prisma.task.findMany({
+    where: { AND: [{ archivedAt: { not: null } }, visibility.taskWhere] },
+    include: buildTaskTreeInclude({ depth: 0 }),
+    orderBy: [{ archivedAt: 'desc' }],
+  })
+
   const [projects, users, allTasksRaw, gerencias, areas, epics] = await Promise.all([
     prisma.project.findMany({
       where: visibility.projectWhere,
@@ -58,6 +71,9 @@ export default async function ListViewPage() {
   const tasks: SerializedTask[] = dbTasks.map((t) =>
     serializeTask(t as unknown as Record<string, unknown>),
   )
+  const archivedTasks: SerializedTask[] = dbArchivedTasks.map((t) =>
+    serializeTask(t as unknown as Record<string, unknown>),
+  )
 
   return (
     <div className="flex h-full flex-col bg-background transition-colors duration-300">
@@ -78,6 +94,7 @@ export default async function ListViewPage() {
         <div className="min-w-[900px] rounded-lg border border-border bg-card shadow-sm">
           <ListBoardClient
             tasks={tasks}
+            archivedTasks={archivedTasks}
             projects={projects}
             users={users}
             gerencias={gerencias}
