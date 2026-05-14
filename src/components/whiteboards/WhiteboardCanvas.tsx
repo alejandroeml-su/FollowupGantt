@@ -83,7 +83,16 @@ type Props = {
    *  zoom). Permite al editor reenviar la posición via broadcast si el
    *  usuario es host. */
   onViewportChange?: (viewport: ViewportState) => void
+  /** HU-15 (2026-05-14) — Resize de un elemento. Recibe el nuevo bbox.
+   *  El editor aplica al state + autosave existente. */
+  onResize?: (
+    id: string,
+    next: { x: number; y: number; width: number; height: number },
+  ) => void
 }
+
+// HU-15 — Lados del bbox para resize. nw=northwest (esquina arriba-izq).
+export type ResizeSide = 'nw' | 'n' | 'ne' | 'e' | 'se' | 's' | 'sw' | 'w'
 
 /**
  * Canvas DOM-based — usamos divs absolutamente posicionados con un wrapper
@@ -117,6 +126,7 @@ export function WhiteboardCanvas({
   onTextDropped,
   externalViewport,
   onViewportChange,
+  onResize,
 }: Props) {
   const [internalViewport, setInternalViewport] = useState<ViewportState>(DEFAULT_VIEWPORT)
   // HU-07 — Si hay `externalViewport`, lo usamos (modo "siguiendo a un
@@ -159,6 +169,16 @@ export function WhiteboardCanvas({
   // Si en mouseup el delta vs Date.now() supera 400ms, asumimos
   // "hold-on-release" y pedimos al editor que intente reconocer la forma.
   const lastDrawMoveTsRef = useRef<number>(0)
+  // HU-15 (2026-05-14) — Resize state. Cuando el usuario hace mousedown
+  // en un handle, almacenamos el lado (nw/n/ne/e/se/s/sw/w), el bbox
+  // inicial del elemento y la posición inicial del mouse. El move
+  // recalcula el nuevo bbox según el lado arrastrado.
+  const resizeRef = useRef<{
+    elementId: string
+    side: ResizeSide
+    startWorld: { x: number; y: number }
+    startBox: { x: number; y: number; width: number; height: number }
+  } | null>(null)
   // HU-11 (2026-05-14) — Palm rejection: si llega un pointer de tipo
   // 'pen', marcamos un timestamp; durante los siguientes 1500ms ignoramos
   // pointers de tipo 'touch' (típico: usuario apoya la palma mientras
@@ -213,6 +233,26 @@ export function WhiteboardCanvas({
       if (!rect) return
       const screen = { x: e.clientX - rect.left, y: e.clientY - rect.top }
       const world = screenToWorld(screen, viewport)
+
+      // HU-15 (2026-05-14) — Resize handle. Si el click cayó sobre un
+      // `data-resize-handle`, entramos modo resize antes que cualquier
+      // otro flujo.
+      const handleEl = target.closest('[data-resize-handle]') as HTMLElement | null
+      if (handleEl && !panMode) {
+        const elementId = handleEl.dataset.resizeElement!
+        const side = handleEl.dataset.resizeHandle as ResizeSide
+        const el = elements.find((x) => x.id === elementId)
+        if (el && !el.locked) {
+          resizeRef.current = {
+            elementId,
+            side,
+            startWorld: world,
+            startBox: { x: el.x, y: el.y, width: el.width, height: el.height },
+          }
+          e.stopPropagation()
+          return
+        }
+      }
 
       // HU-03 — modo dibujo: cualquier mousedown sobre el lienzo inicia
       // un trazo nuevo. Tiene prioridad sobre la selección de elemento
@@ -274,6 +314,33 @@ export function WhiteboardCanvas({
 
   const handleMouseMove = useCallback(
     (e: ReactPointerEvent<HTMLDivElement>) => {
+      // HU-15 (2026-05-14) — Resize en progreso.
+      const resize = resizeRef.current
+      if (resize) {
+        const rect = containerRef.current?.getBoundingClientRect()
+        if (!rect) return
+        const screen = { x: e.clientX - rect.left, y: e.clientY - rect.top }
+        const world = screenToWorld(screen, viewport)
+        const dx = world.x - resize.startWorld.x
+        const dy = world.y - resize.startWorld.y
+        const box = { ...resize.startBox }
+        // Aplica delta según el lado arrastrado. Esquinas mueven 2 ejes.
+        if (resize.side.includes('e')) box.width = Math.max(20, resize.startBox.width + dx)
+        if (resize.side.includes('s')) box.height = Math.max(20, resize.startBox.height + dy)
+        if (resize.side.includes('w')) {
+          const newW = Math.max(20, resize.startBox.width - dx)
+          box.x = resize.startBox.x + (resize.startBox.width - newW)
+          box.width = newW
+        }
+        if (resize.side.includes('n')) {
+          const newH = Math.max(20, resize.startBox.height - dy)
+          box.y = resize.startBox.y + (resize.startBox.height - newH)
+          box.height = newH
+        }
+        onResize?.(resize.elementId, box)
+        return
+      }
+
       const drag = dragRef.current
       if (!drag) return
       const rect = containerRef.current?.getBoundingClientRect()
@@ -353,6 +420,11 @@ export function WhiteboardCanvas({
 
   const handleMouseUp = useCallback(
     (e: ReactPointerEvent<HTMLDivElement>) => {
+      // HU-15 — Cerrar resize.
+      if (resizeRef.current) {
+        resizeRef.current = null
+        return
+      }
       const drag = dragRef.current
       dragRef.current = null
       dragOriginsRef.current.clear()
@@ -515,6 +587,15 @@ export function WhiteboardCanvas({
               onCommitEdit={onCommitEdit}
             />
           ))}
+        {/* HU-15 (2026-05-14) — Resize handles. Solo si hay un único
+            element seleccionado, no está en modo edit, no está locked,
+            y onResize está provisto. Multi-selection no muestra handles
+            (deuda: bbox combinado del set + scale proporcional). */}
+        {selectedId && onResize && !editingId && (() => {
+          const sel = elements.find((e) => e.id === selectedId)
+          if (!sel || sel.locked) return null
+          return <ResizeHandles element={sel} />
+        })()}
       </div>
       {/* HU-03 — Preview del trazo en curso. SVG overlay con
           transformación inversa para que los puntos en coords mundo se
@@ -1117,3 +1198,67 @@ function InlineEditor({
 }
 
 export { worldToScreen }
+
+/**
+ * HU-15 (2026-05-14) — Componente de handles de resize.
+ *
+ * Renderiza 8 cuadrados absolute-positioned alrededor del bbox del
+ * elemento seleccionado. Cada handle tiene `data-resize-handle` con el
+ * código del lado (nw, n, ne, e, se, s, sw, w) y `data-resize-element`
+ * con el id. El canvas detecta el mousedown sobre estos atributos en
+ * `handleMouseDown` y entra en modo resize.
+ */
+function ResizeHandles({ element }: { element: WhiteboardElement }) {
+  const SIZE = 10
+  const half = SIZE / 2
+  const HANDLE_STYLE = (cursor: string): CSSProperties => ({
+    position: 'absolute',
+    width: SIZE,
+    height: SIZE,
+    background: '#fff',
+    border: '1.5px solid #4f46e5',
+    borderRadius: 2,
+    cursor,
+    zIndex: 50,
+  })
+  const handles: Array<{
+    side: ResizeSide
+    style: CSSProperties
+    cursor: string
+  }> = [
+    { side: 'nw', cursor: 'nwse-resize', style: { left: -half, top: -half } },
+    { side: 'n', cursor: 'ns-resize', style: { left: element.width / 2 - half, top: -half } },
+    { side: 'ne', cursor: 'nesw-resize', style: { left: element.width - half, top: -half } },
+    { side: 'e', cursor: 'ew-resize', style: { left: element.width - half, top: element.height / 2 - half } },
+    { side: 'se', cursor: 'nwse-resize', style: { left: element.width - half, top: element.height - half } },
+    { side: 's', cursor: 'ns-resize', style: { left: element.width / 2 - half, top: element.height - half } },
+    { side: 'sw', cursor: 'nesw-resize', style: { left: -half, top: element.height - half } },
+    { side: 'w', cursor: 'ew-resize', style: { left: -half, top: element.height / 2 - half } },
+  ]
+  return (
+    <div
+      style={{
+        position: 'absolute',
+        left: element.x,
+        top: element.y,
+        width: element.width,
+        height: element.height,
+        pointerEvents: 'none',
+      }}
+      aria-hidden="true"
+    >
+      {handles.map((h) => (
+        <div
+          key={h.side}
+          data-resize-handle={h.side}
+          data-resize-element={element.id}
+          style={{
+            ...HANDLE_STYLE(h.cursor),
+            ...h.style,
+            pointerEvents: 'auto',
+          }}
+        />
+      ))}
+    </div>
+  )
+}
