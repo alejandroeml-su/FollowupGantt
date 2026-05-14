@@ -32,7 +32,9 @@ export function exportElementsToPng(
   options: ExportPngOptions = {},
 ): string {
   const scale = options.scale ?? 1
-  const background = options.background ?? '#0f172a'
+  // 2026-05-14 · Edwin pidió lienzo blanco — los exports también heredan
+  // este default para que el output luzca como el lienzo en pantalla.
+  const background = options.background ?? '#ffffff'
 
   const bounds = unionBounds(
     elements.map((e) => ({ x: e.x, y: e.y, width: e.width, height: e.height })),
