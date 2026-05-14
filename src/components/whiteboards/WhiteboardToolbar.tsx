@@ -11,8 +11,15 @@ import {
   Image as ImageIcon,
   Download,
   ChevronDown,
+  Pencil,
 } from 'lucide-react'
-import type { WhiteboardElementTypeLiteral, ShapeVariant } from '@/lib/whiteboards/types'
+import type {
+  WhiteboardElementTypeLiteral,
+  ShapeVariant,
+  FreehandBrush,
+} from '@/lib/whiteboards/types'
+import { FREEHAND_BRUSHES } from '@/lib/whiteboards/types'
+import { BRUSH_PRESETS } from '@/lib/whiteboards/factories'
 
 export type ToolId =
   | { kind: 'STICKY' }
@@ -20,6 +27,7 @@ export type ToolId =
   | { kind: 'TEXT' }
   | { kind: 'CONNECTOR' }
   | { kind: 'IMAGE' }
+  | { kind: 'FREEHAND'; brush: FreehandBrush }
 
 export type ExportKind = 'png' | 'png-hires' | 'pdf' | 'pdf-selection'
 
@@ -80,8 +88,28 @@ export function WhiteboardToolbar({
     if (activeTool.kind === 'SHAPE' && t.kind === 'SHAPE') {
       return activeTool.variant === t.variant
     }
+    if (activeTool.kind === 'FREEHAND' && t.kind === 'FREEHAND') {
+      return activeTool.brush === t.brush
+    }
     return true
   }
+
+  const isAnyFreehandActive = activeTool?.kind === 'FREEHAND'
+  const activeBrush = isAnyFreehandActive
+    ? (activeTool as { kind: 'FREEHAND'; brush: FreehandBrush }).brush
+    : 'pencil'
+  const [brushMenuOpen, setBrushMenuOpen] = useState(false)
+  const brushMenuRef = useRef<HTMLDivElement | null>(null)
+  useEffect(() => {
+    if (!brushMenuOpen) return
+    function onDoc(ev: MouseEvent) {
+      if (brushMenuRef.current && !brushMenuRef.current.contains(ev.target as Node)) {
+        setBrushMenuOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', onDoc)
+    return () => document.removeEventListener('mousedown', onDoc)
+  }, [brushMenuOpen])
 
   return (
     <div
@@ -119,6 +147,68 @@ export function WhiteboardToolbar({
           <Icon className="h-4 w-4" />
         </button>
       ))}
+
+      {/* HU-03 — Herramienta Dibujo libre con sub-menú de pinceles. */}
+      <div ref={brushMenuRef} className="relative">
+        <div className="flex items-center">
+          <button
+            type="button"
+            onClick={() => onSelectTool({ kind: 'FREEHAND', brush: activeBrush })}
+            aria-pressed={isAnyFreehandActive}
+            aria-label={`Dibujar a mano (${BRUSH_PRESETS[activeBrush].label})`}
+            title={`Dibujar · ${BRUSH_PRESETS[activeBrush].label}`}
+            className={`p-2 rounded-l-md transition-colors ${
+              isAnyFreehandActive
+                ? 'bg-primary text-primary-foreground'
+                : 'text-muted-foreground hover:bg-secondary'
+            }`}
+          >
+            <Pencil className="h-4 w-4" />
+          </button>
+          <button
+            type="button"
+            onClick={() => setBrushMenuOpen((v) => !v)}
+            aria-haspopup="menu"
+            aria-expanded={brushMenuOpen}
+            aria-label="Elegir pincel"
+            className={`px-1 py-2 rounded-r-md transition-colors ${
+              isAnyFreehandActive
+                ? 'bg-primary text-primary-foreground'
+                : 'text-muted-foreground hover:bg-secondary'
+            }`}
+          >
+            <ChevronDown className="h-3 w-3" />
+          </button>
+        </div>
+        {brushMenuOpen && (
+          <ul
+            role="menu"
+            className="absolute right-0 mt-1 z-10 min-w-[180px] bg-card border border-border rounded-md shadow-lg py-1"
+          >
+            {FREEHAND_BRUSHES.map((brush) => (
+              <li key={brush} role="none">
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={() => {
+                    setBrushMenuOpen(false)
+                    onSelectTool({ kind: 'FREEHAND', brush })
+                  }}
+                  className={`w-full text-left px-3 py-2 text-xs hover:bg-secondary flex items-center gap-2 ${
+                    activeBrush === brush && isAnyFreehandActive
+                      ? 'text-primary font-semibold'
+                      : 'text-foreground'
+                  }`}
+                >
+                  <span aria-hidden>{BRUSH_PRESETS[brush].emoji}</span>
+                  <span>{BRUSH_PRESETS[brush].label}</span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+
       <span className="mx-1 h-5 w-px bg-border" aria-hidden="true" />
       <label className="flex items-center gap-1.5 px-2 text-xs text-muted-foreground select-none">
         <input
@@ -248,5 +338,7 @@ export function toolToElementType(t: ToolId): WhiteboardElementTypeLiteral {
       return 'CONNECTOR'
     case 'IMAGE':
       return 'IMAGE'
+    case 'FREEHAND':
+      return 'FREEHAND'
   }
 }

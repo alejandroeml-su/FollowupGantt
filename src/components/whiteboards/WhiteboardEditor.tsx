@@ -19,7 +19,13 @@ import {
   updateWhiteboardElements,
 } from '@/lib/actions/whiteboards'
 import { toast } from '@/components/interactions/Toaster'
-import { defaultDataFor, defaultGeometry } from '@/lib/whiteboards/factories'
+import {
+  BRUSH_PRESETS,
+  computeFreehandBounds,
+  defaultDataFor,
+  defaultGeometry,
+  makeFreehandData,
+} from '@/lib/whiteboards/factories'
 import { exportElementsToPng, downloadDataUrl } from '@/lib/whiteboards/export-png'
 import {
   exportElementsToPdf,
@@ -192,6 +198,9 @@ export function WhiteboardEditor({
         setSelectedId(null)
         return
       }
+      // HU-03 — FREEHAND no se inserta por click; se captura por
+      // gesture en el canvas y se persiste vía `handleDrawingCommit`.
+      if (activeTool.kind === 'FREEHAND') return
       const type = toolToElementType(activeTool)
       const geom = defaultGeometry(type)
       const data = activeTool.kind === 'SHAPE'
@@ -227,6 +236,48 @@ export function WhiteboardEditor({
         setActiveTool(null)
       } catch (err) {
         toast.error(err instanceof Error ? err.message : 'Error al insertar elemento')
+      }
+    },
+    [activeTool, whiteboard.id],
+  )
+
+  // HU-03 (2026-05-14) — Trazo libre commit. El canvas devuelve los puntos
+  // en coordenadas mundo. Calculamos el bbox y persistimos el elemento.
+  // No reseteamos `activeTool` al terminar (a diferencia de los otros
+  // tools) para permitir trazos consecutivos sin re-seleccionar el pincel.
+  const handleDrawingCommit = useCallback(
+    async (points: { x: number; y: number }[]) => {
+      if (!activeTool || activeTool.kind !== 'FREEHAND') return
+      if (points.length < 2) return
+      const preset = BRUSH_PRESETS[activeTool.brush]
+      const bounds = computeFreehandBounds(points)
+      const data = makeFreehandData(activeTool.brush, preset.color, preset.width, points)
+      try {
+        const created = await createElement({
+          whiteboardId: whiteboard.id,
+          type: 'FREEHAND',
+          x: bounds.x,
+          y: bounds.y,
+          width: bounds.width,
+          height: bounds.height,
+          rotation: 0,
+          data,
+        })
+        const newEl: WhiteboardElement = {
+          id: created.id,
+          whiteboardId: created.whiteboardId,
+          type: created.type,
+          x: created.x,
+          y: created.y,
+          width: created.width,
+          height: created.height,
+          rotation: created.rotation,
+          zIndex: created.zIndex,
+          data: created.data as WhiteboardElement['data'],
+        }
+        setElements((prev) => [...prev, newEl])
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : 'Error al guardar trazo')
       }
     },
     [activeTool, whiteboard.id],
@@ -522,6 +573,14 @@ export function WhiteboardEditor({
               }}
               snapEnabled={snapEnabled}
               panMode={panMode}
+              drawingMode={
+                activeTool?.kind === 'FREEHAND'
+                  ? { active: true, brush: activeTool.brush }
+                  : undefined
+              }
+              onDrawingCommit={(points) => {
+                void handleDrawingCommit(points)
+              }}
             />
 
             {selectedId && !editingId && !contextMenu && (
