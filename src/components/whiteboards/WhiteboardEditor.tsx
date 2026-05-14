@@ -242,6 +242,43 @@ export function WhiteboardEditor({
     [scheduleAutosave],
   )
 
+  // HU-15 (2026-05-14) — Resize de un elemento. Actualiza state local
+  // + autosave (mismo patrón que handleMove pero con width/height).
+  // Para FREEHAND también escalamos los puntos en proporción.
+  const handleResize = useCallback(
+    (id: string, next: { x: number; y: number; width: number; height: number }) => {
+      setElements((prev) =>
+        prev.map((el) => {
+          if (el.id !== id) return el
+          // Escala de FREEHAND: si el elemento es trazo libre, escalamos
+          // los puntos para que el dibujo siga el resize.
+          if (el.type === 'FREEHAND') {
+            const sx = el.width > 0 ? next.width / el.width : 1
+            const sy = el.height > 0 ? next.height / el.height : 1
+            const data = el.data as WhiteboardElement['data'] & {
+              points: { x: number; y: number; p?: number }[]
+            }
+            const scaledPoints = data.points.map((p) => ({
+              ...p,
+              x: el.x + (p.x - el.x) * sx + (next.x - el.x),
+              y: el.y + (p.y - el.y) * sy + (next.y - el.y),
+            }))
+            return {
+              ...el,
+              ...next,
+              data: { ...data, points: scaledPoints } as WhiteboardElement['data'],
+            }
+          }
+          return { ...el, ...next }
+        }),
+      )
+      const existing = pendingPatches.current.get(id) ?? {}
+      pendingPatches.current.set(id, { ...existing, ...next })
+      scheduleAutosave()
+    },
+    [scheduleAutosave],
+  )
+
   const handleCanvasClick = useCallback(
     async (worldPoint: { x: number; y: number }) => {
       if (!activeTool) {
@@ -1135,6 +1172,7 @@ export function WhiteboardEditor({
                 }
               }}
               onMove={handleMove}
+              onResize={handleResize}
               onCanvasClick={(world) => {
                 setContextMenu(null)
                 setEditingId(null)
