@@ -399,6 +399,12 @@ export function WhiteboardEditor({
           rotation: created.rotation,
           zIndex: created.zIndex,
           data: created.data as WhiteboardElement['data'],
+          // HU-16 hotfix (2026-05-14) — Preservar pageId del server. Sin
+          // esto, `visibleElements.filter(el.pageId === activePageId)` falla
+          // y todo se renderea en Página 1 vía el fallback legacy.
+          pageId: (created as unknown as { pageId?: string | null }).pageId ?? activePageId ?? null,
+          groupId: (created as unknown as { groupId?: string | null }).groupId ?? null,
+          locked: (created as unknown as { locked?: boolean }).locked ?? false,
         }
         setElements((prev) => [...prev, newEl])
         setSelectedId(newEl.id)
@@ -460,6 +466,12 @@ export function WhiteboardEditor({
           rotation: created.rotation,
           zIndex: created.zIndex,
           data: created.data as WhiteboardElement['data'],
+          // HU-16 hotfix (2026-05-14) — Preservar pageId del server. Sin
+          // esto, `visibleElements.filter(el.pageId === activePageId)` falla
+          // y todo se renderea en Página 1 vía el fallback legacy.
+          pageId: (created as unknown as { pageId?: string | null }).pageId ?? activePageId ?? null,
+          groupId: (created as unknown as { groupId?: string | null }).groupId ?? null,
+          locked: (created as unknown as { locked?: boolean }).locked ?? false,
         }
         setElements((prev) => [...prev, newEl])
       } catch (err) {
@@ -553,6 +565,9 @@ export function WhiteboardEditor({
               rotation: created.rotation,
               zIndex: created.zIndex,
               data: created.data as WhiteboardElement['data'],
+              pageId: (created as unknown as { pageId?: string | null }).pageId ?? activePageId ?? null,
+              groupId: (created as unknown as { groupId?: string | null }).groupId ?? null,
+              locked: (created as unknown as { locked?: boolean }).locked ?? false,
             },
           ])
           offset += 30 // cascadear ligeramente cuando hay múltiples
@@ -606,6 +621,9 @@ export function WhiteboardEditor({
             rotation: created.rotation,
             zIndex: created.zIndex,
             data: created.data as WhiteboardElement['data'],
+            pageId: (created as unknown as { pageId?: string | null }).pageId ?? activePageId ?? null,
+            groupId: (created as unknown as { groupId?: string | null }).groupId ?? null,
+            locked: (created as unknown as { locked?: boolean }).locked ?? false,
           },
         ])
         toast.success(isUrl ? 'Enlace insertado' : 'Texto insertado')
@@ -685,6 +703,9 @@ export function WhiteboardEditor({
             rotation: created.rotation,
             zIndex: created.zIndex,
             data: created.data as WhiteboardElement['data'],
+            pageId: (created as unknown as { pageId?: string | null }).pageId ?? activePageId ?? null,
+            groupId: (created as unknown as { groupId?: string | null }).groupId ?? null,
+            locked: (created as unknown as { locked?: boolean }).locked ?? false,
           },
         ])
         setActiveTool(null)
@@ -740,6 +761,9 @@ export function WhiteboardEditor({
             rotation: created.rotation,
             zIndex: created.zIndex,
             data: created.data as WhiteboardElement['data'],
+            pageId: (created as unknown as { pageId?: string | null }).pageId ?? activePageId ?? null,
+            groupId: (created as unknown as { groupId?: string | null }).groupId ?? null,
+            locked: (created as unknown as { locked?: boolean }).locked ?? false,
           }
           setElements((prev) => [...prev, newEl])
           toast.success('Trazo convertido a flecha')
@@ -775,6 +799,12 @@ export function WhiteboardEditor({
           rotation: created.rotation,
           zIndex: created.zIndex,
           data: created.data as WhiteboardElement['data'],
+          // HU-16 hotfix (2026-05-14) — Preservar pageId del server. Sin
+          // esto, `visibleElements.filter(el.pageId === activePageId)` falla
+          // y todo se renderea en Página 1 vía el fallback legacy.
+          pageId: (created as unknown as { pageId?: string | null }).pageId ?? activePageId ?? null,
+          groupId: (created as unknown as { groupId?: string | null }).groupId ?? null,
+          locked: (created as unknown as { locked?: boolean }).locked ?? false,
         }
         setElements((prev) => [...prev, newEl])
         setSelectedId(newEl.id)
@@ -834,6 +864,9 @@ export function WhiteboardEditor({
             rotation: created.rotation,
             zIndex: created.zIndex,
             data: created.data as WhiteboardElement['data'],
+            pageId: (created as unknown as { pageId?: string | null }).pageId ?? activePageId ?? null,
+            groupId: (created as unknown as { groupId?: string | null }).groupId ?? null,
+            locked: (created as unknown as { locked?: boolean }).locked ?? false,
           },
         ])
         setSelectedId(created.id)
@@ -961,6 +994,9 @@ export function WhiteboardEditor({
         rotation: created.rotation,
         zIndex: created.zIndex,
         data: created.data as WhiteboardElement['data'],
+        pageId: (created as unknown as { pageId?: string | null }).pageId ?? activePageId ?? null,
+        groupId: (created as unknown as { groupId?: string | null }).groupId ?? null,
+        locked: (created as unknown as { locked?: boolean }).locked ?? false,
       }
       setElements((prev) => [...prev, newEl])
       setSelectedId(newEl.id)
