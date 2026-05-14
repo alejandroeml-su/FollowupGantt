@@ -251,7 +251,10 @@ export function WhiteboardEditor({
       // HU-03 — FREEHAND no se inserta por click; se captura por
       // gesture en el canvas y se persiste vía `handleDrawingCommit`.
       if (activeTool.kind === 'FREEHAND') return
+      // HU-14 — ERASER no inserta nada; solo borra al click sobre elemento.
+      if (activeTool.kind === 'ERASER') return
       const type = toolToElementType(activeTool)
+      if (!type) return // ERASER u otros sin tipo asociado
       const geom = defaultGeometry(type)
       const data = activeTool.kind === 'SHAPE'
         ? { ...defaultDataFor(type), variant: activeTool.variant }
@@ -491,6 +494,23 @@ export function WhiteboardEditor({
       }
     },
     [whiteboard.id],
+  )
+
+  // HU-14 (2026-05-14) — Borrar un elemento con el eraser. Toast
+  // diminuto en lugar del normal para no saturar al usar el tool en
+  // rafagas. Mantiene el tool activo para borrar más.
+  const handleEraseElement = useCallback(
+    async (elementId: string) => {
+      const previous = elements
+      setElements((prev) => prev.filter((el) => el.id !== elementId))
+      try {
+        await deleteElements(whiteboard.id, [elementId])
+      } catch (err) {
+        setElements(previous)
+        toast.error(err instanceof Error ? err.message : 'Error al borrar')
+      }
+    },
+    [elements, whiteboard.id],
   )
 
   // HU-05 (2026-05-14) — Crear un conector smart anclado a dos
@@ -1090,6 +1110,13 @@ export function WhiteboardEditor({
                   // Deselección total (sin shift).
                   setSelectedId(null)
                   setSelectedIds(new Set())
+                  return
+                }
+                // HU-14 (2026-05-14) — Eraser: click sobre elemento → delete.
+                // No tocamos selectedId/Ids para mantener el tool activo y
+                // permitir borrar varios elementos en sucesión.
+                if (activeTool?.kind === 'ERASER') {
+                  void handleEraseElement(id)
                   return
                 }
                 // HU-05 (2026-05-14) — Smart connector flow.

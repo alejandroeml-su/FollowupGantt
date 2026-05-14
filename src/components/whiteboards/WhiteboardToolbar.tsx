@@ -12,6 +12,7 @@ import {
   Download,
   ChevronDown,
   Pencil,
+  Eraser,
 } from 'lucide-react'
 import type {
   WhiteboardElementTypeLiteral,
@@ -28,6 +29,12 @@ export type ToolId =
   | { kind: 'CONNECTOR' }
   | { kind: 'IMAGE' }
   | { kind: 'FREEHAND'; brush: FreehandBrush }
+  /** HU-14 (2026-05-14) — Borrador. `size` en px define el radio del
+   *  área que detecta colisión con elementos al hacer click/drag. */
+  | { kind: 'ERASER'; size: number }
+
+/** HU-14 — Tamaños de borrador disponibles (radio en px). */
+export const ERASER_SIZES = [6, 12, 24, 48] as const
 
 export type ExportKind = 'png' | 'png-hires' | 'pdf' | 'pdf-selection'
 
@@ -110,6 +117,24 @@ export function WhiteboardToolbar({
     document.addEventListener('mousedown', onDoc)
     return () => document.removeEventListener('mousedown', onDoc)
   }, [brushMenuOpen])
+
+  // HU-14 (2026-05-14) — Sub-menú del Eraser para escoger tamaño.
+  const isEraserActive = activeTool?.kind === 'ERASER'
+  const activeEraserSize = isEraserActive
+    ? (activeTool as { kind: 'ERASER'; size: number }).size
+    : 12
+  const [eraserMenuOpen, setEraserMenuOpen] = useState(false)
+  const eraserMenuRef = useRef<HTMLDivElement | null>(null)
+  useEffect(() => {
+    if (!eraserMenuOpen) return
+    function onDoc(ev: MouseEvent) {
+      if (eraserMenuRef.current && !eraserMenuRef.current.contains(ev.target as Node)) {
+        setEraserMenuOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', onDoc)
+    return () => document.removeEventListener('mousedown', onDoc)
+  }, [eraserMenuOpen])
 
   return (
     <div
@@ -202,6 +227,71 @@ export function WhiteboardToolbar({
                 >
                   <span aria-hidden>{BRUSH_PRESETS[brush].emoji}</span>
                   <span>{BRUSH_PRESETS[brush].label}</span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+
+      {/* HU-14 — Borrador con sub-menú de tamaños. */}
+      <div ref={eraserMenuRef} className="relative">
+        <div className="flex items-center">
+          <button
+            type="button"
+            onClick={() => onSelectTool({ kind: 'ERASER', size: activeEraserSize })}
+            aria-pressed={isEraserActive}
+            aria-label={`Borrador (${activeEraserSize}px)`}
+            title={`Borrador · ${activeEraserSize}px`}
+            className={`p-2 rounded-l-md transition-colors ${
+              isEraserActive
+                ? 'bg-rose-500 text-white'
+                : 'text-muted-foreground hover:bg-secondary'
+            }`}
+          >
+            <Eraser className="h-4 w-4" />
+          </button>
+          <button
+            type="button"
+            onClick={() => setEraserMenuOpen((v) => !v)}
+            aria-haspopup="menu"
+            aria-expanded={eraserMenuOpen}
+            aria-label="Elegir tamaño del borrador"
+            className={`px-1 py-2 rounded-r-md transition-colors ${
+              isEraserActive
+                ? 'bg-rose-500 text-white'
+                : 'text-muted-foreground hover:bg-secondary'
+            }`}
+          >
+            <ChevronDown className="h-3 w-3" />
+          </button>
+        </div>
+        {eraserMenuOpen && (
+          <ul
+            role="menu"
+            className="absolute right-0 mt-1 z-10 min-w-[160px] bg-card border border-border rounded-md shadow-lg py-1"
+          >
+            {ERASER_SIZES.map((size) => (
+              <li key={size} role="none">
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={() => {
+                    setEraserMenuOpen(false)
+                    onSelectTool({ kind: 'ERASER', size })
+                  }}
+                  className={`w-full text-left px-3 py-2 text-xs hover:bg-secondary flex items-center gap-3 ${
+                    activeEraserSize === size && isEraserActive
+                      ? 'text-primary font-semibold'
+                      : 'text-foreground'
+                  }`}
+                >
+                  <span
+                    aria-hidden
+                    className="rounded-full bg-rose-300"
+                    style={{ width: size / 2, height: size / 2, minWidth: 4, minHeight: 4 }}
+                  />
+                  <span>{size}px</span>
                 </button>
               </li>
             ))}
@@ -326,7 +416,7 @@ function ExportMenuItem({
  * convertir un click del toolbar en un `createElement(...)` sin duplicar
  * la lógica en el editor.
  */
-export function toolToElementType(t: ToolId): WhiteboardElementTypeLiteral {
+export function toolToElementType(t: ToolId): WhiteboardElementTypeLiteral | null {
   switch (t.kind) {
     case 'STICKY':
       return 'STICKY'
@@ -340,5 +430,7 @@ export function toolToElementType(t: ToolId): WhiteboardElementTypeLiteral {
       return 'IMAGE'
     case 'FREEHAND':
       return 'FREEHAND'
+    case 'ERASER':
+      return null // no crea elementos
   }
 }
