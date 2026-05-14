@@ -30,6 +30,7 @@ import {
   makeFreehandData,
 } from '@/lib/whiteboards/factories'
 import { recognizeShape, type RecognizedShape } from '@/lib/whiteboards/shape-recognition'
+import { useWhiteboardFollow } from '@/lib/realtime-follow/use-whiteboard-follow'
 import { exportElementsToPng, downloadDataUrl } from '@/lib/whiteboards/export-png'
 import {
   exportElementsToPdf,
@@ -105,6 +106,19 @@ export function WhiteboardEditor({
   const [activeTool, setActiveTool] = useState<ToolId | null>(null)
   const [snapEnabled, setSnapEnabled] = useState(true)
   const [panMode, setPanMode] = useState(false)
+  // HU-07 (2026-05-14) — Follow moderador.
+  const [isHosting, setIsHosting] = useState(false)
+  const [followingHostId, setFollowingHostId] = useState<string | null>(null)
+  const [localViewport, setLocalViewport] = useState({
+    panX: 0,
+    panY: 0,
+    zoom: 1,
+  })
+  const [hostViewport, setHostViewport] = useState<{
+    panX: number
+    panY: number
+    zoom: number
+  } | null>(null)
   const [savingState, setSavingState] = useState<'idle' | 'pending' | 'saving' | 'error'>('idle')
   const [contextMenu, setContextMenu] = useState<{
     elementId: string
@@ -136,6 +150,28 @@ export function WhiteboardEditor({
     // lock por cada render rompería el heartbeat.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [whiteboard.id, resolvedLockUser?.id])
+
+  // HU-07 — Suscripción al canal de follow. Si `isHosting` está activo,
+  // emitimos `localViewport`. Si `followingHostId` está set, recibimos
+  // viewports del host y los aplicamos como `hostViewport` (que el
+  // canvas usa como `externalViewport`).
+  const followChannelName = useMemo(
+    () => (resolvedLockUser ? `whiteboard-follow:${whiteboard.id}` : null),
+    [whiteboard.id, resolvedLockUser],
+  )
+  const follow = useWhiteboardFollow({
+    channelName: followChannelName,
+    currentUser: resolvedLockUser,
+    isHosting,
+    viewport: localViewport,
+    followingHostId,
+    onViewportFromHost: (v) => setHostViewport(v),
+  })
+
+  // Cuando dejamos de seguir, limpiamos el override.
+  useEffect(() => {
+    if (followingHostId === null) setHostViewport(null)
+  }, [followingHostId])
 
   // Resolución del conflicto: el editor autosalva por elemento. El caller
   // tiene tres salidas:
@@ -961,6 +997,25 @@ export function WhiteboardEditor({
               onExport={handleExport}
               hasSelection={selectedId !== null}
             />
+            {/* HU-07 (2026-05-14) — Toggle "Compartir mi vista". Cuando
+                el moderador lo activa, su viewport se emite a todos los
+                viewers conectados al canal. */}
+            <button
+              type="button"
+              onClick={() => setIsHosting((v) => !v)}
+              title={
+                isHosting
+                  ? 'Estás compartiendo tu vista. Click para detener.'
+                  : 'Compartir mi vista para que otros puedan seguir'
+              }
+              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
+                isHosting
+                  ? 'bg-emerald-500 text-white shadow-md'
+                  : 'text-muted-foreground hover:bg-secondary'
+              }`}
+            >
+              📡 {isHosting ? 'Compartiendo' : 'Compartir vista'}
+            </button>
             {presence.users.length > 0 ? (
               <div
                 className="flex items-center"
@@ -972,6 +1027,51 @@ export function WhiteboardEditor({
           </div>
 
           <div className="relative flex-1 overflow-hidden">
+            {/* HU-07 — Banner de hosts compartiendo. Aparece encima del
+                lienzo cuando hay peers activos. Si ya estoy siguiendo,
+                cambia a "Estás siguiendo a X — Dejar de seguir". */}
+            {follow.hosts.length > 0 && (
+              <div className="absolute top-3 left-1/2 z-30 flex -translate-x-1/2 items-center gap-2 rounded-lg border border-emerald-500/40 bg-card/95 px-3 py-1.5 text-xs shadow-xl backdrop-blur">
+                {followingHostId ? (
+                  <>
+                    <span className="text-emerald-400">●</span>
+                    <span className="text-foreground">
+                      Siguiendo a{' '}
+                      <strong>
+                        {follow.hosts.find((h) => h.userId === followingHostId)
+                          ?.name ?? '…'}
+                      </strong>
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setFollowingHostId(null)}
+                      className="ml-2 rounded px-2 py-0.5 text-xs font-medium text-muted-foreground hover:bg-secondary hover:text-foreground"
+                    >
+                      Dejar de seguir
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <span className="text-emerald-400">●</span>
+                    <span className="text-foreground">
+                      {follow.hosts.length === 1
+                        ? `${follow.hosts[0].name} está compartiendo su vista`
+                        : `${follow.hosts.length} usuarios compartiendo`}
+                    </span>
+                    {follow.hosts.map((h) => (
+                      <button
+                        key={h.userId}
+                        type="button"
+                        onClick={() => setFollowingHostId(h.userId)}
+                        className="rounded bg-emerald-500/20 px-2 py-0.5 text-xs font-medium text-emerald-300 hover:bg-emerald-500/30"
+                      >
+                        Seguir a {h.name}
+                      </button>
+                    ))}
+                  </>
+                )}
+              </div>
+            )}
             <WhiteboardCanvas
               elements={elements}
               selectedId={selectedId}
@@ -1069,6 +1169,8 @@ export function WhiteboardEditor({
               onTextDropped={(text, world) => {
                 void handleTextDropped(text, world)
               }}
+              externalViewport={hostViewport}
+              onViewportChange={(v) => setLocalViewport(v)}
             />
 
             {/* HU-12 — Multi-selection toolbar. Aparece cuando hay 2+
