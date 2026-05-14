@@ -330,6 +330,133 @@ export function WhiteboardEditor({
     }
   }, [elements, selectedId, selectedIds, whiteboard.id])
 
+  // HU-02 (2026-05-14) — Drag & drop multimodal. Tope de 5MB por archivo
+  // para mantener los data: URLs en el JSON sin reventar la BD; >5MB
+  // se rechaza con toast (deuda: integrar Supabase Storage para archivos
+  // grandes en iteración futura).
+  const MAX_DROP_BYTES = 5 * 1024 * 1024
+  const readFileAsDataURL = useCallback((file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const r = new FileReader()
+      r.onload = () => resolve(typeof r.result === 'string' ? r.result : '')
+      r.onerror = () => reject(new Error('No se pudo leer el archivo'))
+      r.readAsDataURL(file)
+    })
+  }, [])
+  const handleFilesDropped = useCallback(
+    async (files: File[], worldPoint: { x: number; y: number }) => {
+      // Procesar archivos en serie para que las coords no colisionen y
+      // los IDs vengan en orden.
+      let offset = 0
+      for (const file of files) {
+        if (file.size > MAX_DROP_BYTES) {
+          toast.error(
+            `"${file.name}" supera ${Math.round(MAX_DROP_BYTES / 1024 / 1024)}MB — usa un host externo y pega la URL`,
+          )
+          continue
+        }
+        try {
+          const dataUrl = await readFileAsDataURL(file)
+          const mime = file.type || 'application/octet-stream'
+          // Dimensiones por defecto según tipo. Para imágenes podemos
+          // intentar leer naturalWidth pero por simplicidad fijamos un
+          // tamaño razonable (el usuario puede redimensionar después).
+          const dims = mime.startsWith('audio/')
+            ? { w: 300, h: 60 }
+            : mime === 'application/pdf'
+              ? { w: 360, h: 480 }
+              : { w: 280, h: 200 }
+          const created = await createElement({
+            whiteboardId: whiteboard.id,
+            type: 'IMAGE',
+            x: worldPoint.x - dims.w / 2 + offset,
+            y: worldPoint.y - dims.h / 2 + offset,
+            width: dims.w,
+            height: dims.h,
+            rotation: 0,
+            data: {
+              kind: 'image',
+              url: dataUrl,
+              alt: file.name,
+              mimeType: mime,
+              filename: file.name,
+            },
+          })
+          setElements((prev) => [
+            ...prev,
+            {
+              id: created.id,
+              whiteboardId: created.whiteboardId,
+              type: created.type,
+              x: created.x,
+              y: created.y,
+              width: created.width,
+              height: created.height,
+              rotation: created.rotation,
+              zIndex: created.zIndex,
+              data: created.data as WhiteboardElement['data'],
+            },
+          ])
+          offset += 30 // cascadear ligeramente cuando hay múltiples
+        } catch (err) {
+          toast.error(
+            err instanceof Error ? err.message : `Error al cargar ${file.name}`,
+          )
+        }
+      }
+      if (files.length > 0) toast.success(`${files.length} archivo(s) insertado(s)`)
+    },
+    [whiteboard.id, readFileAsDataURL],
+  )
+
+  // HU-02 — Drop de texto: si parece URL, creamos un TEXT element que
+  // funciona como tarjeta-enlace (clickable). Sin OpenGraph fetch en
+  // MVP — el título se reemplaza con la URL truncada.
+  const handleTextDropped = useCallback(
+    async (text: string, worldPoint: { x: number; y: number }) => {
+      const trimmed = text.trim()
+      if (!trimmed) return
+      const isUrl = /^https?:\/\/\S+$/.test(trimmed)
+      const dims = isUrl ? { w: 280, h: 80 } : { w: 220, h: 80 }
+      try {
+        const created = await createElement({
+          whiteboardId: whiteboard.id,
+          type: 'TEXT',
+          x: worldPoint.x - dims.w / 2,
+          y: worldPoint.y - dims.h / 2,
+          width: dims.w,
+          height: dims.h,
+          rotation: 0,
+          data: {
+            kind: 'text',
+            text: trimmed,
+            color: isUrl ? '#1d4ed8' : '#0f172a',
+            fontSize: 14,
+          },
+        })
+        setElements((prev) => [
+          ...prev,
+          {
+            id: created.id,
+            whiteboardId: created.whiteboardId,
+            type: created.type,
+            x: created.x,
+            y: created.y,
+            width: created.width,
+            height: created.height,
+            rotation: created.rotation,
+            zIndex: created.zIndex,
+            data: created.data as WhiteboardElement['data'],
+          },
+        ])
+        toast.success(isUrl ? 'Enlace insertado' : 'Texto insertado')
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : 'Error al insertar')
+      }
+    },
+    [whiteboard.id],
+  )
+
   // HU-05 (2026-05-14) — Crear un conector smart anclado a dos
   // elementos. Los endpoints se calculan en render time desde los
   // centros actuales (el bbox aquí es solo un placeholder mínimo —
@@ -935,6 +1062,12 @@ export function WhiteboardEditor({
               }
               onDrawingCommit={(points, holdReleased) => {
                 void handleDrawingCommit(points, holdReleased)
+              }}
+              onFilesDropped={(files, world) => {
+                void handleFilesDropped(files, world)
+              }}
+              onTextDropped={(text, world) => {
+                void handleTextDropped(text, world)
               }}
             />
 

@@ -74,6 +74,16 @@ export type ImageData = {
   kind: 'image'
   url: string
   alt: string
+  /** HU-02 (2026-05-14) — Tipo MIME del recurso. Si está presente, el
+   *  renderer decide cómo embeberlo:
+   *    image/* → <img>
+   *    application/pdf → <embed> (preview inline)
+   *    video/* → <video controls>
+   *    audio/* → <audio controls>
+   *  Sin mimeType (legacy) se asume imagen. */
+  mimeType?: string
+  /** HU-02 — Nombre original del archivo (para tooltip + accesibilidad). */
+  filename?: string
 }
 
 // ─────────────────────────── Dibujo libre (HU-03) ────────────────────
