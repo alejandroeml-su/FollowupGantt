@@ -49,8 +49,16 @@ type Props = {
    * Callback que recibe los puntos del trazo en coordenadas mundo al
    * soltar el mouse. El editor crea el `WhiteboardElement` FREEHAND con
    * estos puntos y persiste.
+   *
+   * HU-04 (2026-05-14) — segundo argumento `holdReleased` indica que el
+   * usuario mantuvo el cursor inmóvil >400ms antes de soltar el botón.
+   * El editor usa este flag para invocar `recognizeShape` y convertir
+   * el trazo en una SHAPE perfecta cuando aplique.
    */
-  onDrawingCommit?: (points: { x: number; y: number }[]) => void
+  onDrawingCommit?: (
+    points: { x: number; y: number }[],
+    holdReleased: boolean,
+  ) => void
 }
 
 /**
@@ -103,6 +111,10 @@ export function WhiteboardCanvas({
   // que el cálculo del delta funcione con todos los elementos al mismo
   // delta (no acumulando errores de redondeo del snap).
   const dragOriginsRef = useRef<Map<string, { x: number; y: number }>>(new Map())
+  // HU-04 (2026-05-14) — Timestamp del último mousemove durante un draw.
+  // Si en mouseup el delta vs Date.now() supera 400ms, asumimos
+  // "hold-on-release" y pedimos al editor que intente reconocer la forma.
+  const lastDrawMoveTsRef = useRef<number>(0)
 
   /** Convierte un MouseEvent del DOM a coords del mundo. */
   const eventToWorld = useCallback(
@@ -150,6 +162,11 @@ export function WhiteboardCanvas({
           moved: false,
           drawPoints: [world],
         }
+        // HU-04 — marcamos timestamp inicial. Si el usuario presiona sin
+        // moverse y suelta, la diferencia será >400ms y se intentará
+        // reconocer forma (con un solo punto no se reconoce nada, pero
+        // si el path es corto y estático sí podemos detectarlo).
+        lastDrawMoveTsRef.current = Date.now()
         setDrawingPreview([world])
         return
       }
@@ -216,6 +233,9 @@ export function WhiteboardCanvas({
         const dWorld = Math.hypot(world.x - last.x, world.y - last.y)
         if (dWorld * viewport.zoom > 1.5) {
           drag.drawPoints.push(world)
+          // HU-04 — marcamos timestamp del último movimiento real para
+          // detectar hold-on-release en mouseup.
+          lastDrawMoveTsRef.current = Date.now()
           // Forzamos un re-render solo cada N puntos para no saturar React.
           if (drag.drawPoints.length % 2 === 0) {
             setDrawingPreview([...drag.drawPoints])
@@ -274,8 +294,13 @@ export function WhiteboardCanvas({
         const points = drag.drawPoints
         setDrawingPreview(null)
         if (points.length >= 2 && onDrawingCommit) {
-          onDrawingCommit(points)
+          // HU-04 — `holdReleased` = el usuario detuvo el cursor >400ms
+          // antes de soltar. Es la señal UX para "convertir a forma".
+          const idleMs = Date.now() - lastDrawMoveTsRef.current
+          const holdReleased = idleMs > 400
+          onDrawingCommit(points, holdReleased)
         }
+        lastDrawMoveTsRef.current = 0
         return
       }
       // Click en fondo sin drag → deselecciona o emite onCanvasClick (insertar).

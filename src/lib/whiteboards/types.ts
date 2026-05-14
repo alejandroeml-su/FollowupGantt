@@ -48,6 +48,10 @@ export type ShapeData = {
   fill: string
   stroke: string
   text?: string
+  /** HU-04 (2026-05-14) — Si el SHAPE fue creado por reconocimiento de
+   *  un trazo libre, guardamos los puntos originales para soportar
+   *  "Deshacer conversión" → vuelve a ser FREEHAND. */
+  recognizedFromPoints?: { x: number; y: number }[]
 }
 
 export type ConnectorData = {
