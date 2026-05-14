@@ -456,8 +456,28 @@ export async function deleteElements(
   const meta = await loadWhiteboardForAccess(whiteboardId)
   await ensureAccess(meta)
 
+  // HU-05 (2026-05-14) — Cascade delete de conectores: cualquier
+  // CONNECTOR con `fromId`/`toId` ∈ elementIds queda huérfano si no se
+  // borra. Los listamos aparte (Prisma no soporta JSON path queries
+  // portables entre engines) y los añadimos al set de eliminación.
+  const ids = new Set(elementIds)
+  const connectors = await prisma.whiteboardElement.findMany({
+    where: { whiteboardId, type: 'CONNECTOR' },
+    select: { id: true, data: true },
+  })
+  for (const c of connectors) {
+    const d = c.data as { fromId?: string | null; toId?: string | null } | null
+    if (!d) continue
+    if (
+      (d.fromId && ids.has(d.fromId)) ||
+      (d.toId && ids.has(d.toId))
+    ) {
+      ids.add(c.id)
+    }
+  }
+
   await prisma.whiteboardElement.deleteMany({
-    where: { whiteboardId, id: { in: elementIds } },
+    where: { whiteboardId, id: { in: Array.from(ids) } },
   })
 
   invalidate()

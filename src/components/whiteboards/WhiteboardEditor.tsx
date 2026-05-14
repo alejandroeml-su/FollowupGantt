@@ -97,6 +97,10 @@ export function WhiteboardEditor({
   // uno, ambos son consistentes; si `selectedIds.size > 1`, el toolbar
   // muestra acciones de grupo (Agrupar/Bloquear/Eliminar todo).
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  // HU-05 (2026-05-14) — Smart connectors. Con tool CONNECTOR activa,
+  // el primer click en un elemento marca `connectorAnchor=id`. El
+  // segundo click en otro elemento crea el CONNECTOR con fromId/toId.
+  const [connectorAnchor, setConnectorAnchor] = useState<string | null>(null)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [activeTool, setActiveTool] = useState<ToolId | null>(null)
   const [snapEnabled, setSnapEnabled] = useState(true)
@@ -325,6 +329,68 @@ export function WhiteboardEditor({
       toast.error(err instanceof Error ? err.message : 'Error al eliminar')
     }
   }, [elements, selectedId, selectedIds, whiteboard.id])
+
+  // HU-05 (2026-05-14) — Crear un conector smart anclado a dos
+  // elementos. Los endpoints se calculan en render time desde los
+  // centros actuales (el bbox aquí es solo un placeholder mínimo —
+  // el renderer del Canvas usa los elementos lookup para drawer).
+  const handleCreateSmartConnector = useCallback(
+    async (fromId: string, toId: string) => {
+      const fromEl = elements.find((e) => e.id === fromId)
+      const toEl = elements.find((e) => e.id === toId)
+      if (!fromEl || !toEl) {
+        toast.error('Elementos no encontrados')
+        return
+      }
+      // Bbox inicial que abarca ambos centros (el renderer recalcula
+      // siempre, así que esto es solo el snapshot de creación).
+      const cxA = fromEl.x + fromEl.width / 2
+      const cyA = fromEl.y + fromEl.height / 2
+      const cxB = toEl.x + toEl.width / 2
+      const cyB = toEl.y + toEl.height / 2
+      try {
+        const created = await createElement({
+          whiteboardId: whiteboard.id,
+          type: 'CONNECTOR',
+          x: Math.min(cxA, cxB),
+          y: Math.min(cyA, cyB),
+          width: Math.max(20, Math.abs(cxB - cxA)),
+          height: Math.max(20, Math.abs(cyB - cyA)),
+          rotation: 0,
+          data: {
+            kind: 'connector',
+            fromId,
+            toId,
+            points: [
+              { x: 0, y: 0 },
+              { x: Math.abs(cxB - cxA), y: Math.abs(cyB - cyA) },
+            ],
+            stroke: '#0f172a',
+          },
+        })
+        setElements((prev) => [
+          ...prev,
+          {
+            id: created.id,
+            whiteboardId: created.whiteboardId,
+            type: created.type,
+            x: created.x,
+            y: created.y,
+            width: created.width,
+            height: created.height,
+            rotation: created.rotation,
+            zIndex: created.zIndex,
+            data: created.data as WhiteboardElement['data'],
+          },
+        ])
+        setActiveTool(null)
+        toast.success('Conectados')
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : 'Error al conectar')
+      }
+    },
+    [elements, whiteboard.id],
+  )
 
   // HU-04 (2026-05-14) — Crear un elemento a partir de una forma
   // reconocida. Para SHAPE (circle/rectangle/triangle) preservamos el
@@ -788,9 +854,33 @@ export function WhiteboardEditor({
                 setContextMenu(null)
                 if (id !== editingId) setEditingId(null)
                 if (id === null) {
+                  // HU-05 — Click en canvas vacío con tool CONNECTOR
+                  // activa CANCELA el anchor (UX: "salir del modo
+                  // conector sin completar").
+                  if (activeTool?.kind === 'CONNECTOR' && connectorAnchor) {
+                    setConnectorAnchor(null)
+                  }
                   // Deselección total (sin shift).
                   setSelectedId(null)
                   setSelectedIds(new Set())
+                  return
+                }
+                // HU-05 (2026-05-14) — Smart connector flow.
+                if (activeTool?.kind === 'CONNECTOR') {
+                  if (!connectorAnchor) {
+                    setConnectorAnchor(id)
+                    setSelectedId(id)
+                    toast.success(
+                      'Click en otro elemento para conectarlo (o canvas vacío para cancelar)',
+                    )
+                    return
+                  }
+                  if (id === connectorAnchor) {
+                    toast.error('Selecciona un elemento DIFERENTE para conectar')
+                    return
+                  }
+                  void handleCreateSmartConnector(connectorAnchor, id)
+                  setConnectorAnchor(null)
                   return
                 }
                 // HU-12 — Click en elemento con groupId selecciona TODOS

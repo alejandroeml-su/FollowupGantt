@@ -408,6 +408,7 @@ export function WhiteboardCanvas({
             <WhiteboardElementView
               key={el.id}
               element={el}
+              elements={elements}
               isSelected={
                 el.id === selectedId ||
                 (selectedIds ? selectedIds.has(el.id) : false)
@@ -508,11 +509,16 @@ function ZoomIndicator({
  */
 function WhiteboardElementView({
   element,
+  elements,
   isSelected,
   isEditing,
   onCommitEdit,
 }: {
   element: WhiteboardElement
+  /** HU-05 (2026-05-14) — Necesitamos la lista completa para que los
+   *  CONNECTOR con `fromId`/`toId` recalculen sus endpoints a partir
+   *  de las posiciones actuales de los elementos vinculados. */
+  elements: WhiteboardElement[]
   isSelected: boolean
   isEditing?: boolean
   onCommitEdit?: (id: string, text: string) => void
@@ -605,27 +611,100 @@ function WhiteboardElementView({
       const data = element.data as {
         points: { x: number; y: number }[]
         stroke: string
+        fromId?: string | null
+        toId?: string | null
       }
-      const pts = data.points.length >= 2
-        ? data.points
-        : [
-            { x: 0, y: 0 },
-            { x: element.width, y: element.height },
-          ]
-      const path = pts.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ')
+
+      // HU-05 (2026-05-14) — Si el conector tiene `fromId`/`toId` set
+      // (smart connector), recalculamos los endpoints en coordenadas
+      // mundo a partir del centro de los elementos vinculados. Esto
+      // logra el "reajuste automático al mover el objeto" sin necesidad
+      // de actualizar el conector en BD cada vez que un elemento se
+      // mueve. Si el lookup falla (elemento borrado), caemos al
+      // comportamiento legacy de `points` flotantes.
+      const fromEl = data.fromId ? elements.find((e) => e.id === data.fromId) : null
+      const toEl = data.toId ? elements.find((e) => e.id === data.toId) : null
+
+      let absStart: { x: number; y: number } | null = null
+      let absEnd: { x: number; y: number } | null = null
+      if (fromEl) {
+        absStart = { x: fromEl.x + fromEl.width / 2, y: fromEl.y + fromEl.height / 2 }
+      }
+      if (toEl) {
+        absEnd = { x: toEl.x + toEl.width / 2, y: toEl.y + toEl.height / 2 }
+      }
+
+      // Si tenemos al menos un anchor smart, renderizamos como una
+      // <line> en coords mundo (overlay) en lugar del SVG con viewBox.
+      // Combinamos: si solo from está anchored, el otro endpoint sale
+      // de los `points` (flotante) trasladados al sistema mundo.
+      const localPts =
+        data.points.length >= 2
+          ? data.points
+          : [
+              { x: 0, y: 0 },
+              { x: element.width, y: element.height },
+            ]
+      const fallbackStart = { x: element.x + localPts[0].x, y: element.y + localPts[0].y }
+      const fallbackEnd = {
+        x: element.x + localPts[localPts.length - 1].x,
+        y: element.y + localPts[localPts.length - 1].y,
+      }
+      const finalStart = absStart ?? fallbackStart
+      const finalEnd = absEnd ?? fallbackEnd
+
+      // Bounding box del conector — abarca ambos endpoints con padding.
+      const PAD = 6
+      const minX = Math.min(finalStart.x, finalEnd.x) - PAD
+      const minY = Math.min(finalStart.y, finalEnd.y) - PAD
+      const maxX = Math.max(finalStart.x, finalEnd.x) + PAD
+      const maxY = Math.max(finalStart.y, finalEnd.y) + PAD
+      const bw = maxX - minX
+      const bh = maxY - minY
+
+      const smartStyle: CSSProperties = {
+        position: 'absolute',
+        left: minX,
+        top: minY,
+        width: bw,
+        height: bh,
+      }
       return (
         <div
           data-element-id={element.id}
           data-testid={`connector-${element.id}`}
-          style={baseStyle}
-          className={`cursor-grab ${ringClass}`}
+          style={smartStyle}
+          className={`pointer-events-none ${ringClass}`}
         >
           <svg
-            viewBox={`0 0 ${element.width} ${element.height}`}
+            viewBox={`0 0 ${bw} ${bh}`}
             className="h-full w-full"
             preserveAspectRatio="none"
           >
-            <path d={path} stroke={data.stroke} strokeWidth={2} fill="none" />
+            <defs>
+              <marker
+                id={`arrow-${element.id}`}
+                viewBox="0 0 10 10"
+                refX="9"
+                refY="5"
+                markerWidth="6"
+                markerHeight="6"
+                orient="auto-start-reverse"
+              >
+                <path d="M 0 0 L 10 5 L 0 10 z" fill={data.stroke} />
+              </marker>
+            </defs>
+            <line
+              x1={finalStart.x - minX}
+              y1={finalStart.y - minY}
+              x2={finalEnd.x - minX}
+              y2={finalEnd.y - minY}
+              stroke={data.stroke}
+              strokeWidth={2}
+              fill="none"
+              markerEnd={`url(#arrow-${element.id})`}
+              className="pointer-events-auto cursor-pointer"
+            />
           </svg>
         </div>
       )
