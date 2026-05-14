@@ -2147,10 +2147,22 @@ model WhiteboardElement {
   // al "traer al frente / enviar al fondo".
   zIndex Int @default(0)
 
+  /// HU-12 (2026-05-14) — Agrupación. Elementos con el mismo `groupId`
+  /// se comportan como una unidad: drag mueve todos, delete los borra
+  /// juntos, click selecciona el grupo. UUID generado en cliente al
+  /// pulsar "Agrupar". `null` = sin grupo.
+  groupId String?
+
+  /// HU-12 — Bloqueo. Cuando `true`, el elemento NO se puede mover ni
+  /// editar (pointer-events deshabilitados en el DOM); solo se permite
+  /// hacer "desbloquear" desde el menú contextual.
+  locked Boolean @default(false)
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([whiteboardId, zIndex])
+  @@index([groupId])
 }
 
 // ─────────────────────────────────────────────────────────────

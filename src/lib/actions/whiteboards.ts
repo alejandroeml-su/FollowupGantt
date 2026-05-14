@@ -463,3 +463,81 @@ export async function deleteElements(
   invalidate()
   revalidatePath(`/whiteboards/${whiteboardId}`)
 }
+
+// ─────────────────────────────────────────────────────────────────────
+// HU-12 (2026-05-14) — Multi-selección, agrupación y bloqueo.
+// ─────────────────────────────────────────────────────────────────────
+
+/**
+ * Agrupa N elementos asignándoles un `groupId` común. Si alguno ya
+ * pertenecía a otro grupo, se reasigna (no preservamos grupos anidados).
+ * Devuelve el `groupId` generado para que el cliente lo refleje.
+ */
+export async function groupElements(
+  whiteboardId: string,
+  elementIds: string[],
+): Promise<{ groupId: string }> {
+  if (!whiteboardId) actionError('INVALID_INPUT', 'whiteboardId requerido')
+  if (!Array.isArray(elementIds) || elementIds.length < 2) {
+    actionError('INVALID_INPUT', 'Se requieren al menos 2 elementos para agrupar')
+  }
+  const meta = await loadWhiteboardForAccess(whiteboardId)
+  await ensureAccess(meta)
+
+  const groupId = crypto.randomUUID()
+  await prisma.whiteboardElement.updateMany({
+    where: { whiteboardId, id: { in: elementIds } },
+    data: { groupId },
+  })
+
+  invalidate()
+  revalidatePath(`/whiteboards/${whiteboardId}`)
+  return { groupId }
+}
+
+/**
+ * Desagrupa todos los elementos de un grupo (set `groupId = null`).
+ * Recibe el `groupId` (lo conoce el cliente porque está en cada elemento).
+ */
+export async function ungroupGroup(
+  whiteboardId: string,
+  groupId: string,
+): Promise<void> {
+  if (!whiteboardId) actionError('INVALID_INPUT', 'whiteboardId requerido')
+  if (!groupId) actionError('INVALID_INPUT', 'groupId requerido')
+
+  const meta = await loadWhiteboardForAccess(whiteboardId)
+  await ensureAccess(meta)
+
+  await prisma.whiteboardElement.updateMany({
+    where: { whiteboardId, groupId },
+    data: { groupId: null },
+  })
+
+  invalidate()
+  revalidatePath(`/whiteboards/${whiteboardId}`)
+}
+
+/**
+ * Bloquea o desbloquea N elementos. `locked=true` impide movimiento/
+ * edición desde la UI; sigue siendo eliminable explícitamente.
+ */
+export async function setElementsLocked(
+  whiteboardId: string,
+  elementIds: string[],
+  locked: boolean,
+): Promise<void> {
+  if (!whiteboardId) actionError('INVALID_INPUT', 'whiteboardId requerido')
+  if (!Array.isArray(elementIds) || elementIds.length === 0) return
+
+  const meta = await loadWhiteboardForAccess(whiteboardId)
+  await ensureAccess(meta)
+
+  await prisma.whiteboardElement.updateMany({
+    where: { whiteboardId, id: { in: elementIds } },
+    data: { locked },
+  })
+
+  invalidate()
+  revalidatePath(`/whiteboards/${whiteboardId}`)
+}

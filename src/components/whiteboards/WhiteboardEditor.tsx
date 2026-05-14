@@ -15,7 +15,10 @@ import {
 import {
   createElement,
   deleteElements,
+  groupElements,
   setElementData,
+  setElementsLocked,
+  ungroupGroup,
   updateWhiteboardElements,
 } from '@/lib/actions/whiteboards'
 import { toast } from '@/components/interactions/Toaster'
@@ -87,6 +90,12 @@ export function WhiteboardEditor({
       : null,
   )
   const [selectedId, setSelectedId] = useState<string | null>(null)
+  // HU-12 (2026-05-14) — Multi-selección. `selectedId` se preserva
+  // como "primary" (la última seleccionada — gobierna inline edit y
+  // context menu). `selectedIds` es el set completo. Cuando hay solo
+  // uno, ambos son consistentes; si `selectedIds.size > 1`, el toolbar
+  // muestra acciones de grupo (Agrupar/Bloquear/Eliminar todo).
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [editingId, setEditingId] = useState<string | null>(null)
   const [activeTool, setActiveTool] = useState<ToolId | null>(null)
   const [snapEnabled, setSnapEnabled] = useState(true)
@@ -284,17 +293,82 @@ export function WhiteboardEditor({
   )
 
   const handleDeleteSelected = useCallback(async () => {
-    if (!selectedId) return
+    // HU-12 — borra TODO el set seleccionado (incluye el primary).
+    const ids = new Set<string>(selectedIds)
+    if (selectedId) ids.add(selectedId)
+    if (ids.size === 0) return
+    const idsArr = Array.from(ids)
     const previous = elements
-    setElements((prev) => prev.filter((el) => el.id !== selectedId))
+    setElements((prev) => prev.filter((el) => !ids.has(el.id)))
     setSelectedId(null)
+    setSelectedIds(new Set())
     try {
-      await deleteElements(whiteboard.id, [selectedId])
+      await deleteElements(whiteboard.id, idsArr)
     } catch (err) {
       setElements(previous)
       toast.error(err instanceof Error ? err.message : 'Error al eliminar')
     }
-  }, [elements, selectedId, whiteboard.id])
+  }, [elements, selectedId, selectedIds, whiteboard.id])
+
+  // HU-12 (2026-05-14) — Group, Ungroup, Lock/Unlock.
+  const handleGroupSelected = useCallback(async () => {
+    const ids = Array.from(selectedIds)
+    if (ids.length < 2) {
+      toast.error('Selecciona al menos 2 elementos para agrupar')
+      return
+    }
+    try {
+      const { groupId } = await groupElements(whiteboard.id, ids)
+      setElements((prev) =>
+        prev.map((el) => (ids.includes(el.id) ? { ...el, groupId } : el)),
+      )
+      toast.success(`${ids.length} elementos agrupados`)
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Error al agrupar')
+    }
+  }, [selectedIds, whiteboard.id])
+
+  const handleUngroupSelected = useCallback(async () => {
+    // Toma el primer groupId presente en la selección (si hay varios
+    // grupos, los desagrupa por separado en futuras iteraciones; aquí
+    // hacemos solo el de la selección activa).
+    const primary = elements.find((e) => selectedIds.has(e.id) && e.groupId)
+    if (!primary?.groupId) {
+      toast.error('Los elementos seleccionados no están agrupados')
+      return
+    }
+    const gid = primary.groupId
+    try {
+      await ungroupGroup(whiteboard.id, gid)
+      setElements((prev) =>
+        prev.map((el) => (el.groupId === gid ? { ...el, groupId: null } : el)),
+      )
+      toast.success('Grupo deshecho')
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Error al desagrupar')
+    }
+  }, [elements, selectedIds, whiteboard.id])
+
+  const handleToggleLockSelected = useCallback(async () => {
+    const ids = new Set<string>(selectedIds)
+    if (selectedId) ids.add(selectedId)
+    if (ids.size === 0) return
+    const idsArr = Array.from(ids)
+    // Si TODOS están locked → desbloquear. Si alguno NO lo está → bloquear todos.
+    const allLocked = idsArr.every(
+      (id) => elements.find((e) => e.id === id)?.locked === true,
+    )
+    const nextLocked = !allLocked
+    try {
+      await setElementsLocked(whiteboard.id, idsArr, nextLocked)
+      setElements((prev) =>
+        prev.map((el) => (ids.has(el.id) ? { ...el, locked: nextLocked } : el)),
+      )
+      toast.success(nextLocked ? 'Bloqueado' : 'Desbloqueado')
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Error al cambiar bloqueo')
+    }
+  }, [elements, selectedId, selectedIds, whiteboard.id])
 
   // Actualiza el payload `data` JSON del elemento (texto, color, etc.).
   // Optimista: actualiza UI primero, luego persiste. Si falla, rollback.
@@ -547,10 +621,39 @@ export function WhiteboardEditor({
               elements={elements}
               selectedId={selectedId}
               editingId={editingId}
-              onSelect={(id) => {
-                setSelectedId(id)
+              selectedIds={selectedIds}
+              onSelect={(id, additive) => {
                 setContextMenu(null)
                 if (id !== editingId) setEditingId(null)
+                if (id === null) {
+                  // Deselección total (sin shift).
+                  setSelectedId(null)
+                  setSelectedIds(new Set())
+                  return
+                }
+                // HU-12 — Click en elemento con groupId selecciona TODOS
+                // los miembros del grupo automáticamente (UX tipo Miro).
+                const clicked = elements.find((e) => e.id === id)
+                const groupMates = clicked?.groupId
+                  ? elements.filter((e) => e.groupId === clicked.groupId).map((e) => e.id)
+                  : [id]
+                if (additive) {
+                  // Shift+click → toggle del elemento (o todo el grupo).
+                  setSelectedIds((prev) => {
+                    const next = new Set(prev)
+                    const allInSet = groupMates.every((g) => next.has(g))
+                    if (allInSet) {
+                      for (const g of groupMates) next.delete(g)
+                    } else {
+                      for (const g of groupMates) next.add(g)
+                    }
+                    return next
+                  })
+                  setSelectedId(id)
+                } else {
+                  setSelectedIds(new Set(groupMates))
+                  setSelectedId(id)
+                }
               }}
               onMove={handleMove}
               onCanvasClick={(world) => {
@@ -583,7 +686,34 @@ export function WhiteboardEditor({
               }}
             />
 
-            {selectedId && !editingId && !contextMenu && (
+            {/* HU-12 — Multi-selection toolbar. Aparece cuando hay 2+
+                seleccionados. Muestra Agrupar/Desagrupar (según si los
+                elementos comparten groupId), Bloquear/Desbloquear, y
+                Eliminar todo. Reemplaza al SelectedElementToolbar cuando
+                la selección es múltiple. */}
+            {selectedIds.size > 1 && !editingId && !contextMenu && (
+              <MultiSelectionToolbar
+                count={selectedIds.size}
+                hasGroup={(() => {
+                  const ids = Array.from(selectedIds)
+                  const groups = new Set(
+                    ids
+                      .map((id) => elements.find((e) => e.id === id)?.groupId)
+                      .filter(Boolean) as string[],
+                  )
+                  return groups.size === 1
+                })()}
+                allLocked={Array.from(selectedIds).every(
+                  (id) => elements.find((e) => e.id === id)?.locked === true,
+                )}
+                onGroup={() => void handleGroupSelected()}
+                onUngroup={() => void handleUngroupSelected()}
+                onToggleLock={() => void handleToggleLockSelected()}
+                onDeleteAll={() => void handleDeleteSelected()}
+              />
+            )}
+
+            {selectedId && selectedIds.size <= 1 && !editingId && !contextMenu && (
               <SelectedElementToolbar
                 element={elements.find((e) => e.id === selectedId)}
                 onChangeColor={(color) => {
@@ -595,6 +725,7 @@ export function WhiteboardEditor({
                 onSendToBack={() => void handleChangeZ(selectedId, 'back')}
                 onEdit={() => setEditingId(selectedId)}
                 onDelete={() => void handleDeleteSelected()}
+                onToggleLock={() => void handleToggleLockSelected()}
               />
             )}
 
@@ -671,6 +802,7 @@ function SelectedElementToolbar({
   onSendToBack,
   onEdit,
   onDelete,
+  onToggleLock,
 }: {
   element: WhiteboardElement | undefined
   onChangeColor: (hex: string) => void
@@ -679,6 +811,7 @@ function SelectedElementToolbar({
   onSendToBack: () => void
   onEdit: () => void
   onDelete: () => void
+  onToggleLock?: () => void
 }) {
   if (!element) return null
   const showColor = element.type === 'STICKY' || element.type === 'SHAPE'
@@ -745,10 +878,92 @@ function SelectedElementToolbar({
         <ArrowDownToLine className="h-4 w-4" />
       </button>
       <span className="mx-1 h-5 w-px bg-border" aria-hidden="true" />
+      {onToggleLock && (
+        <button
+          type="button"
+          onClick={onToggleLock}
+          title={element.locked ? 'Desbloquear' : 'Bloquear'}
+          className="rounded-md p-1.5 text-muted-foreground hover:bg-secondary hover:text-foreground"
+        >
+          {element.locked ? '🔓' : '🔒'}
+        </button>
+      )}
       <button
         type="button"
         onClick={onDelete}
         title="Eliminar"
+        className="rounded-md p-1.5 text-muted-foreground hover:bg-rose-500/15 hover:text-rose-400"
+      >
+        <Trash2 className="h-4 w-4" />
+      </button>
+    </div>
+  )
+}
+
+/**
+ * HU-12 (2026-05-14) — Toolbar de multi-selección. Aparece cuando hay
+ * 2+ elementos seleccionados. Permite Agrupar/Desagrupar, Bloquear,
+ * y Eliminar todo.
+ */
+function MultiSelectionToolbar({
+  count,
+  hasGroup,
+  allLocked,
+  onGroup,
+  onUngroup,
+  onToggleLock,
+  onDeleteAll,
+}: {
+  count: number
+  hasGroup: boolean
+  allLocked: boolean
+  onGroup: () => void
+  onUngroup: () => void
+  onToggleLock: () => void
+  onDeleteAll: () => void
+}) {
+  return (
+    <div
+      role="toolbar"
+      aria-label="Acciones sobre selección múltiple"
+      className="absolute left-1/2 top-3 z-30 flex -translate-x-1/2 items-center gap-1 rounded-xl border border-border bg-card/95 px-2 py-1.5 shadow-xl backdrop-blur"
+    >
+      <span className="px-2 text-xs font-semibold text-foreground">
+        {count} seleccionados
+      </span>
+      <span className="mx-1 h-5 w-px bg-border" aria-hidden="true" />
+      {hasGroup ? (
+        <button
+          type="button"
+          onClick={onUngroup}
+          title="Desagrupar"
+          className="rounded-md px-2 py-1 text-xs font-medium text-muted-foreground hover:bg-secondary hover:text-foreground"
+        >
+          Desagrupar
+        </button>
+      ) : (
+        <button
+          type="button"
+          onClick={onGroup}
+          title="Agrupar (los elementos se moverán juntos)"
+          className="rounded-md px-2 py-1 text-xs font-medium text-muted-foreground hover:bg-secondary hover:text-foreground"
+        >
+          Agrupar
+        </button>
+      )}
+      <button
+        type="button"
+        onClick={onToggleLock}
+        title={allLocked ? 'Desbloquear' : 'Bloquear'}
+        className="rounded-md px-2 py-1 text-xs font-medium text-muted-foreground hover:bg-secondary hover:text-foreground"
+      >
+        {allLocked ? '🔓 Desbloquear' : '🔒 Bloquear'}
+      </button>
+      <span className="mx-1 h-5 w-px bg-border" aria-hidden="true" />
+      <button
+        type="button"
+        onClick={onDeleteAll}
+        title="Eliminar todos"
         className="rounded-md p-1.5 text-muted-foreground hover:bg-rose-500/15 hover:text-rose-400"
       >
         <Trash2 className="h-4 w-4" />
