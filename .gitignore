@@ -56,3 +56,10 @@ next-env.d.ts
 
 .vercel
 .env*.local
+backup/
+
+# Claude Code · state local (worktrees de agentes, scheduled tasks, etc.)
+.claude/
+
+# Documentos locales que no son del repo
+docs/AVANTE_*.xlsx
