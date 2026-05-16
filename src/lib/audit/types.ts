@@ -211,6 +211,14 @@ export const KNOWN_AUDIT_ACTIONS = [
   // Support Chatbot flotante (cualquier rol autenticado · in-memory rate limit).
   'support.chat_started',
   'support.chat_message_sent',
+  // R4 · US-7.2 Chat View — Canales realtime por proyecto.
+  'chat.channel_created',
+  'chat.channel_deleted',
+  'chat.message_sent',
+  'chat.message_edited',
+  'chat.message_deleted',
+  'chat.reaction_added',
+  'chat.reaction_removed',
 ] as const
 
 export type AuditAction = (typeof KNOWN_AUDIT_ACTIONS)[number]
@@ -377,6 +385,14 @@ export const ACTION_LABELS: Record<AuditAction, string> = {
   // Support Chatbot
   'support.chat_started': 'Soporte · chat iniciado',
   'support.chat_message_sent': 'Soporte · mensaje enviado',
+  // R4 · US-7.2 Chat View
+  'chat.channel_created': 'Chat · canal creado',
+  'chat.channel_deleted': 'Chat · canal eliminado',
+  'chat.message_sent': 'Chat · mensaje enviado',
+  'chat.message_edited': 'Chat · mensaje editado',
+  'chat.message_deleted': 'Chat · mensaje eliminado',
+  'chat.reaction_added': 'Chat · reacción agregada',
+  'chat.reaction_removed': 'Chat · reacción removida',
 }
 
 // ───────────────────────── Tipos de entidad ─────────────────────────
