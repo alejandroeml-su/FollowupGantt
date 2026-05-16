@@ -211,6 +211,14 @@ export const KNOWN_AUDIT_ACTIONS = [
   // Support Chatbot flotante (cualquier rol autenticado · in-memory rate limit).
   'support.chat_started',
   'support.chat_message_sent',
+  // US-7.5 · Proofing — anotaciones sobre attachments multimedia (QA/Diseño).
+  'proofing.annotation_created',
+  'proofing.annotation_replied',
+  'proofing.annotation_resolved',
+  'proofing.annotation_reopened',
+  'proofing.annotation_changes_requested',
+  'proofing.annotation_deleted',
+  'proofing.version_created',
 ] as const
 
 export type AuditAction = (typeof KNOWN_AUDIT_ACTIONS)[number]
@@ -377,6 +385,14 @@ export const ACTION_LABELS: Record<AuditAction, string> = {
   // Support Chatbot
   'support.chat_started': 'Soporte · chat iniciado',
   'support.chat_message_sent': 'Soporte · mensaje enviado',
+  // US-7.5 · Proofing
+  'proofing.annotation_created': 'Proofing · anotación creada',
+  'proofing.annotation_replied': 'Proofing · reply agregado',
+  'proofing.annotation_resolved': 'Proofing · anotación resuelta',
+  'proofing.annotation_reopened': 'Proofing · anotación reabierta',
+  'proofing.annotation_changes_requested': 'Proofing · cambios solicitados',
+  'proofing.annotation_deleted': 'Proofing · anotación eliminada',
+  'proofing.version_created': 'Proofing · versión de attachment creada',
 }
 
 // ───────────────────────── Tipos de entidad ─────────────────────────

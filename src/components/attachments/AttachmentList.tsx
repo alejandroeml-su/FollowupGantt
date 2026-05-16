@@ -31,6 +31,17 @@ import {
 import type { AttachmentDTO } from '@/lib/storage/attachment-validation'
 import { AttachmentUploader } from './AttachmentUploader'
 import { AttachmentPreview } from './AttachmentPreview'
+// US-7.5 · Proofing — modal con anotaciones ancladas para imagen/PDF.
+import { ProofingModal } from '@/components/proofing/ProofingModal'
+
+/**
+ * US-7.5 · Decide si un mime soporta proofing. Por ahora image/* y PDF;
+ * (multi-page PDF y video se difieren).
+ */
+function supportsProofing(mime: string | null | undefined): boolean {
+  const m = (mime ?? '').toLowerCase()
+  return m.startsWith('image/') || m === 'application/pdf'
+}
 
 interface Props {
   taskId: string
@@ -57,6 +68,9 @@ export function AttachmentList({ taskId }: Props) {
   const [error, setError] = useState<string | null>(null)
   const [showUploader, setShowUploader] = useState(false)
   const [previewing, setPreviewing] = useState<AttachmentDTO | null>(null)
+  // US-7.5 · Cuando el attachment soporta proofing (image/pdf), abrimos el
+  // modal con canvas + anotaciones en vez del preview básico.
+  const [proofing, setProofing] = useState<AttachmentDTO | null>(null)
   const lastTaskIdRef = useRef<string | null>(null)
 
   useEffect(() => {
@@ -182,10 +196,24 @@ export function AttachmentList({ taskId }: Props) {
                 <span className="flex shrink-0 items-center gap-1">
                   <button
                     type="button"
-                    onClick={() => setPreviewing(att)}
-                    aria-label={`Vista previa de ${att.filename}`}
+                    onClick={() => {
+                      // US-7.5 · Para image/pdf vamos directo al modal de
+                      // proofing (anotaciones ancladas). Para otros mimes,
+                      // fallback al preview clásico (descarga, etc.).
+                      if (supportsProofing(att.mimeType)) {
+                        setProofing(att)
+                      } else {
+                        setPreviewing(att)
+                      }
+                    }}
+                    aria-label={
+                      supportsProofing(att.mimeType)
+                        ? `Abrir proofing de ${att.filename}`
+                        : `Vista previa de ${att.filename}`
+                    }
                     className="rounded p-1 text-muted-foreground hover:bg-muted"
                     data-testid="attachment-preview-button"
+                    data-proofing-supported={supportsProofing(att.mimeType)}
                   >
                     <Eye className="h-3.5 w-3.5" aria-hidden />
                   </button>
@@ -242,6 +270,15 @@ export function AttachmentList({ taskId }: Props) {
             />
           </div>
         </div>
+      ) : null}
+
+      {proofing ? (
+        <ProofingModal
+          attachmentId={proofing.id}
+          mimeTypeHint={proofing.mimeType}
+          filenameHint={proofing.filename}
+          onClose={() => setProofing(null)}
+        />
       ) : null}
     </section>
   )
