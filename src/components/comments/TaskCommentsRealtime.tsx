@@ -20,12 +20,17 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { MessageSquare, Send } from 'lucide-react'
+import { MessageSquare, Send, Video } from 'lucide-react'
 import { useTaskComments } from '@/lib/realtime-comments/use-task-comments'
 import { useTypingIndicator } from '@/lib/realtime-comments/use-typing-indicator'
 import type { SerializedComment } from '@/lib/types'
 import { TypingIndicator } from './TypingIndicator'
 import { MentionTextarea, type MentionUser } from '@/components/mentions/MentionTextarea'
+import { ClipRecorder } from '@/components/clips/ClipRecorder'
+import {
+  canRecordClips,
+  type ClipDTO,
+} from '@/lib/storage/clip-validation'
 
 type Props = {
   taskId: string
@@ -153,6 +158,39 @@ export function TaskCommentsRealtime({ taskId, currentUser, mentionableUsers }: 
   const [draft, setDraft] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState<string | null>(null)
+
+  // Wave R4 · US-7.3 — Grabación de clip desde el composer. Por ahora el
+  // clip se asocia a la `task` (no al comment, que aún no existe) y al
+  // confirmar se inserta automáticamente un comentario con un marcador
+  // `🎥 Clip:` enlazando a la URL pública. La sección dedicada del
+  // TaskDrawer (`TaskClipsSection`) lo listará también.
+  const [recorderOpen, setRecorderOpen] = useState(false)
+  const [canRecord, setCanRecord] = useState(false)
+  // Feature detection sólo cliente — `canRecordClips` consulta `navigator`.
+  // Patrón compartido con `TaskClipsSection`: hidratamos el flag tras
+  // mount para evitar mismatch SSR ↔ CSR.
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setCanRecord(canRecordClips())
+  }, [])
+
+  const handleClipCreated = useCallback(
+    async (clip: ClipDTO) => {
+      // Mensaje plantilla en markdown simple — el formatter de
+      // TaskCommentsRealtime ya soporta `[txt](url)`.
+      const link = `[🎥 Clip de video](${clip.videoUrl})`
+      try {
+        await addComment(link)
+      } catch (err) {
+        setSubmitError(
+          err instanceof Error
+            ? err.message
+            : 'No se pudo publicar el clip como comentario',
+        )
+      }
+    },
+    [addComment],
+  )
 
   const listRef = useRef<HTMLUListElement | null>(null)
   const lastCountRef = useRef<number>(0)
@@ -310,17 +348,40 @@ export function TaskCommentsRealtime({ taskId, currentUser, mentionableUsers }: 
               ? `Comentando como ${currentUser.name}`
               : 'Inicia sesión para comentar'}
           </span>
-          <button
-            type="submit"
-            data-testid="comments-submit"
-            disabled={submitting || !draft.trim() || !currentUser}
-            className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed text-white px-4 py-1.5 rounded-lg text-sm font-bold transition-all"
-          >
-            <Send className="h-3.5 w-3.5" />
-            Enviar
-          </button>
+          <div className="flex items-center gap-2">
+            {canRecord && currentUser ? (
+              <button
+                type="button"
+                onClick={() => setRecorderOpen(true)}
+                data-testid="comments-record-clip"
+                aria-label="Grabar clip de video"
+                title="Grabar clip de video (R4 · US-7.3)"
+                className="flex items-center gap-1 rounded-lg border border-border bg-background px-2 py-1.5 text-xs text-foreground hover:bg-muted"
+              >
+                <Video className="h-3.5 w-3.5" aria-hidden />
+                <span aria-hidden>🎥</span>
+                Clip
+              </button>
+            ) : null}
+            <button
+              type="submit"
+              data-testid="comments-submit"
+              disabled={submitting || !draft.trim() || !currentUser}
+              className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed text-white px-4 py-1.5 rounded-lg text-sm font-bold transition-all"
+            >
+              <Send className="h-3.5 w-3.5" />
+              Enviar
+            </button>
+          </div>
         </div>
       </form>
+      {recorderOpen ? (
+        <ClipRecorder
+          taskId={taskId}
+          onCreated={handleClipCreated}
+          onClose={() => setRecorderOpen(false)}
+        />
+      ) : null}
     </section>
   )
 }

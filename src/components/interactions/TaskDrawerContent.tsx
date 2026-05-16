@@ -30,6 +30,7 @@ import { TaskGoalsSection } from '@/components/goals/TaskGoalsSection'
 import { TaskDocsSection } from '@/components/docs/TaskDocsSection'
 import { TaskChecklistSection } from '@/components/tasks/TaskChecklistSection'
 import { AttachmentList } from '@/components/attachments/AttachmentList'
+import { TaskClipsSection } from '@/components/clips/TaskClipsSection'
 import { TaskAuditHistorySection } from '@/components/tasks/TaskAuditHistorySection'
 import { TaskInsightsSection } from '@/components/tasks/TaskInsightsSection'
 import { TaskRisksSection } from '@/components/tasks/TaskRisksSection'
@@ -330,6 +331,17 @@ export function TaskDrawerContent({
            */}
           <div className="border-t border-border bg-card/40 px-6 py-4">
             <AttachmentList taskId={task.id} />
+          </div>
+          {/*
+           * Wave R4 · US-7.3 — Clips de video grabados in-browser (Screen
+           * Capture API + MediaRecorder). El bucket `clips` es separado
+           * de `attachments` por: cap 100MB, mime fijo video/webm, RBAC
+           * vía proyecto dueño. Feature detection oculta el botón
+           * "Grabar clip" en Safari iOS / Chrome Android donde
+           * `getDisplayMedia` no existe.
+           */}
+          <div className="border-t border-border bg-card/40 px-6 py-4">
+            <TaskClipsSection taskId={task.id} />
           </div>
           {/*
            * Equipo D2 — Auditoría: últimos eventos del entityType "task" para
