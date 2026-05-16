@@ -77,6 +77,9 @@ enum NotificationType {
   IMPORT_COMPLETED
   /// Wave P18-B — notificación generada por una AutomationRule.
   AUTOMATION
+  /// US-7.5 · Proofing — anotación nueva o reply sobre un Attachment del que
+  /// el usuario es uploader/author. Link apunta al modal de proofing.
+  PROOFING_ANNOTATION
 }
 
 // Ola P2 · Equipo P2-1 — Vistas guardadas multi-surface.
@@ -326,6 +329,15 @@ model User {
   inspectionsAsInspector QualityInspection[] @relation("InspectionInspector")
   defectsOwned           Defect[]             @relation("DefectOwner")
   defectsReported        Defect[]             @relation("DefectReporter")
+
+  // US-7.5 · Proofing — anotaciones sobre attachments multimedia.
+  // `authored` y `resolved` son separadas porque el resolver puede no
+  // coincidir con el author (QA marca como RESOLVED un comentario de Diseño).
+  // `SetNull` en ambas para preservar el histórico de comentarios incluso
+  // si el usuario es borrado.
+  proofingAnnotationsAuthored ProofingAnnotation[] @relation("ProofingAuthor")
+  proofingAnnotationsResolved ProofingAnnotation[] @relation("ProofingResolver")
+  uploadedAttachmentVersions  AttachmentVersion[]  @relation("AttachmentVersionUploader")
 
   // Wave P8 · Equipo P8-5 — Calendar sync (Google + Microsoft + ICS).
   // Conexiones por provider (Google Calendar, MS Graph, ICS feed). Un
@@ -1449,6 +1461,12 @@ model Attachment {
 
   createdAt  DateTime @default(now())
   uploadedAt DateTime @default(now())
+
+  // US-7.5 · Proofing — anotaciones ancladas (coordenadas normalizadas)
+  // y versionado opcional del asset (v1, v2…). Cascade al borrar el
+  // attachment porque las anotaciones no tienen sentido sin su asset.
+  proofingAnnotations ProofingAnnotation[]
+  versions            AttachmentVersion[]
 
   @@index([taskId])
   @@index([uploadedById, uploadedAt])
@@ -4282,4 +4300,120 @@ model AutoPilotRun {
   rollbackOps  Json?
 
   @@index([workspaceId, appliedAt(sort: Desc)])
+}
+
+// ─────────────────────────────────────────────────────────────
+// US-7.5 · Proofing (R4)
+//
+// Anotaciones ancladas sobre `Attachment` tipo imagen/PDF para flujos
+// de revisión QA/Diseño. Coordenadas siempre normalizadas (0..1) para
+// independizarlas del tamaño de render del canvas. Threading vía
+// `parentAnnotationId` self-referential.
+//
+// Decisiones de diseño:
+//   - Sin enum nativo de status: usamos `String` con check a nivel
+//     server action ('OPEN' | 'RESOLVED' | 'CHANGES_REQUESTED'). El
+//     check evita migración futura cuando el flujo agregue nuevos
+//     estados (ej. 'ARCHIVED', 'DUPLICATE').
+//   - `pageNumber` es opcional porque imágenes no tienen páginas y los
+//     PDFs por ahora siempre renderizan página 1. Reservado para
+//     multi-page (deuda registrada).
+//   - `attachmentVersionId` opcional: la anotación puede anclarse a
+//     una versión concreta del asset cuando exista `AttachmentVersion`,
+//     o quedar sin versionado (default v1 implícita).
+//   - Cascade en `attachment` (sin asset no hay marker); SetNull en
+//     `author`/`resolver` para preservar comentarios cuando se borra
+//     un usuario (alineado con `Comment` y `Defect`).
+// ─────────────────────────────────────────────────────────────
+
+/// US-7.5 · Estados del flujo de proofing.
+/// OPEN — pendiente de atención.
+/// RESOLVED — el responsable confirmó el fix.
+/// CHANGES_REQUESTED — el revisor solicitó iteraciones adicionales.
+enum ProofingAnnotationStatus {
+  OPEN
+  RESOLVED
+  CHANGES_REQUESTED
+}
+
+model ProofingAnnotation {
+  id           String     @id @default(uuid())
+  attachmentId String
+  attachment   Attachment @relation(fields: [attachmentId], references: [id], onDelete: Cascade)
+
+  /// Coordenadas normalizadas en rango [0..1] respecto al bounding-box
+  /// renderizado del asset. Server action valida el rango.
+  x Float
+  y Float
+
+  /// Página para PDFs multi-página (1-indexed). NULL para imágenes y
+  /// PDFs de 1 página (default render).
+  pageNumber Int?
+
+  /// Contenido del comentario. Markdown libre (sin sanitizer adicional;
+  /// se renderiza como texto plano hasta que UI implemente markdown).
+  text String
+
+  status ProofingAnnotationStatus @default(OPEN)
+
+  /// Self-reference para threading. Una anotación raíz (`parent = null`)
+  /// puede tener replies que sólo existen como respuesta a ella.
+  parentAnnotationId String?
+  parent             ProofingAnnotation?  @relation("ProofingThread", fields: [parentAnnotationId], references: [id], onDelete: Cascade)
+  replies            ProofingAnnotation[] @relation("ProofingThread")
+
+  /// Versión específica del asset que se está anotando. NULL = última
+  /// versión (o asset sin versionar). Se materializa al crear cuando hay
+  /// `AttachmentVersion` activa.
+  attachmentVersionId String?
+  attachmentVersion   AttachmentVersion? @relation(fields: [attachmentVersionId], references: [id], onDelete: SetNull)
+
+  authorId String?
+  author   User?   @relation("ProofingAuthor", fields: [authorId], references: [id], onDelete: SetNull)
+
+  resolvedAt   DateTime?
+  resolvedById String?
+  resolvedBy   User?     @relation("ProofingResolver", fields: [resolvedById], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([attachmentId, status, createdAt])
+  @@index([parentAnnotationId])
+  @@index([authorId])
+}
+
+/// US-7.5 · Versiones de un Attachment. Permite "Compare versions"
+/// lado a lado con anotaciones por versión. v1 puede materializarse de
+/// forma lazy: si no hay versiones, se trata el `Attachment` original
+/// como única versión implícita.
+model AttachmentVersion {
+  id           String     @id @default(uuid())
+  attachmentId String
+  attachment   Attachment @relation(fields: [attachmentId], references: [id], onDelete: Cascade)
+
+  /// Número de versión (1-indexed). Único por attachment.
+  version Int
+
+  /// `storagePath` de la versión en Supabase Storage. Mantenemos paths
+  /// independientes por versión para soportar rollback sin sobrescribir.
+  storagePath String
+
+  /// MIME y tamaño cacheados (consistencia con `Attachment.mimeType`).
+  mimeType  String?
+  sizeBytes Int?
+
+  uploadedById String?
+  uploadedBy   User?   @relation("AttachmentVersionUploader", fields: [uploadedById], references: [id], onDelete: SetNull)
+
+  /// Comentario opcional al subir la versión (ej. "Aplicado feedback
+  /// del review v1").
+  note String?
+
+  createdAt DateTime @default(now())
+
+  annotations ProofingAnnotation[]
+
+  @@unique([attachmentId, version])
+  @@index([attachmentId, version(sort: Desc)])
 }
