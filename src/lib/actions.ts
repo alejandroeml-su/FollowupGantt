@@ -168,6 +168,27 @@ export async function createProject(formData: FormData) {
     await requireProjectCapacity(workspaceIdFromForm)
   }
 
+  // R4 · US-7.4 — Generar `inboundEmailAlias` único derivado del nombre.
+  // Se hace en un loop best-effort: si el slug colisiona (raro, pero
+  // posible con nombres muy genéricos), reintenta con sufijo numérico
+  // hasta 5 veces. Si todos fallan, dejamos NULL y el operador puede
+  // setearlo manualmente luego desde /settings/integrations.
+  const { buildSlugCandidate, buildAliasFromSlug } = await import(
+    '@/lib/email/inbound-alias'
+  )
+  let inboundEmailAlias: string | null = null
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const candidate = buildAliasFromSlug(buildSlugCandidate(name, attempt))
+    const taken = await prisma.project.findUnique({
+      where: { inboundEmailAlias: candidate },
+      select: { id: true },
+    })
+    if (!taken) {
+      inboundEmailAlias = candidate
+      break
+    }
+  }
+
   const created = await prisma.project.create({
     data: {
       name,
@@ -176,6 +197,7 @@ export async function createProject(formData: FormData) {
       areaId: areaId || null,
       methodology,
       workspaceId: workspaceIdFromForm,
+      inboundEmailAlias,
     },
     select: { id: true },
   })

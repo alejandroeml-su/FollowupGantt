@@ -708,10 +708,76 @@ model Project {
   budgetCurrency String?
   expenses       Expense[]
 
+  /// R4 · US-7.4 — Email ClickApp (Email-to-Task).
+  /// Alias único `inbox+<slug>@<INBOUND_EMAIL_DOMAIN>` al que se envían
+  /// correos para crear tareas (o agregar comentarios si subject incluye
+  /// `[#MNEMONIC]`). Se genera en createProject como slug del nombre.
+  /// NULL en proyectos pre-existentes; backfill manual cuando se requiera.
+  inboundEmailAlias String?         @unique
+  inboundEmails     InboundEmail[]
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([workspaceId])
+}
+
+/// R4 · US-7.4 — Email ClickApp.
+///
+/// Registro inmutable de cada correo recibido por el webhook
+/// `/api/inbound/email` (SendGrid Inbound Parse). Cumple dos roles:
+///   1. Trazabilidad — quién envió qué, cuándo, contra qué proyecto.
+///   2. Cola de retry — si la creación de la tarea falla (BD, RBAC,
+///      validación), el row queda en `status = FAILED` con `errorMsg`
+///      para reproceso manual desde /settings/integrations.
+///
+/// El parseo del cuerpo HTML se sanitiza (strip tags) antes de persistir
+/// en `bodyText`; `bodyHtml` guarda el HTML crudo por si se requiere
+/// auditoría forense. Tamaño max attachment: 25 MB (límite SendGrid).
+model InboundEmail {
+  id String @id @default(uuid())
+
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  fromEmail String
+  fromName  String?
+  subject   String
+  bodyText  String  @db.Text
+  bodyHtml  String? @db.Text
+
+  /// Tarea creada (cuando el email originó una task nueva).
+  taskId String?
+
+  /// Comentario agregado (cuando el subject coincidió con un mnemonic).
+  commentId String?
+
+  /// Estado del procesamiento. `PENDING` es el estado inicial dentro del
+  /// webhook handler; se transiciona a `PROCESSED` o `FAILED` dentro de
+  /// la misma transacción.
+  status      InboundEmailStatus @default(PENDING)
+  errorMsg    String?
+  processedAt DateTime?
+  receivedAt  DateTime           @default(now())
+
+  /// Headers relevantes para debugging (Message-ID, In-Reply-To, etc.).
+  /// Shape libre, lo persistimos como Json para no encadenar columnas.
+  headers Json?
+
+  /// Score de SPAM reportado por SendGrid (0-10 aprox). Si > 5 rechazamos
+  /// con `status = FAILED` y `errorMsg = SPAM_REJECTED`.
+  spamScore Float?
+
+  createdAt DateTime @default(now())
+
+  @@index([projectId, receivedAt])
+  @@index([status])
+}
+
+enum InboundEmailStatus {
+  PENDING
+  PROCESSED
+  FAILED
 }
 
 // Fases del Proyecto (Waterfall / PMI)
