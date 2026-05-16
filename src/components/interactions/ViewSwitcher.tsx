@@ -10,6 +10,7 @@ import {
   Calendar as CalIcon,
   Table as TableIcon,
   LineChart,
+  Users,
 } from 'lucide-react'
 import { hrefWithFilters, pickFilters } from '@/lib/filters'
 
@@ -20,6 +21,8 @@ const VIEWS = [
   { href: '/timeline', label: 'Timeline', icon: LineChart },
   { href: '/calendar', label: 'Calendar', icon: CalIcon },
   { href: '/table', label: 'Table', icon: TableIcon },
+  // US-5.1 · Box View — capacidad individual por miembro del equipo.
+  { href: '/box-view', label: 'Box', icon: Users },
 ] as const
 
 /**
