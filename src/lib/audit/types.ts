@@ -227,6 +227,12 @@ export const KNOWN_AUDIT_ACTIONS = [
   'proofing.annotation_changes_requested',
   'proofing.annotation_deleted',
   'proofing.version_created',
+  // US-9.2 · Wave R5 — Gap Analysis (AS-IS vs TO-BE)
+  'gap.created',
+  'gap.updated',
+  'gap.deleted',
+  'gap.dimension_recalculated',
+  'gap.exported',
 ] as const
 
 export type AuditAction = (typeof KNOWN_AUDIT_ACTIONS)[number]
@@ -409,6 +415,12 @@ export const ACTION_LABELS: Record<AuditAction, string> = {
   'proofing.annotation_changes_requested': 'Proofing · cambios solicitados',
   'proofing.annotation_deleted': 'Proofing · anotación eliminada',
   'proofing.version_created': 'Proofing · versión de attachment creada',
+  // US-9.2 · Wave R5 — Gap Analysis
+  'gap.created': 'Gap Analysis · análisis creado',
+  'gap.updated': 'Gap Analysis · análisis actualizado',
+  'gap.deleted': 'Gap Analysis · análisis eliminado',
+  'gap.dimension_recalculated': 'Gap Analysis · métricas auto recalculadas',
+  'gap.exported': 'Gap Analysis · exportado a Excel',
 }
 
 // ───────────────────────── Tipos de entidad ─────────────────────────
