@@ -1,21 +1,43 @@
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
-import { ArrowLeft, Database, Server, Building, User as UserIcon, AlertTriangle } from 'lucide-react'
-import { getCIDetail } from '@/lib/actions/cmdb'
+import {
+  ArrowLeft,
+  Database,
+  Server,
+  Building,
+  User as UserIcon,
+  AlertTriangle,
+  Clock,
+  ArrowRightCircle,
+} from 'lucide-react'
+import {
+  getCIDetail,
+  listCILifecycleEvents,
+  listCIChangeRequests,
+} from '@/lib/actions/cmdb'
 import { queryAuditEvents } from '@/lib/actions/audit'
 import { CIRelationTree } from '@/components/cmdb/CIRelationTree'
+import { CIStatusChanger } from '@/components/cmdb/CIStatusChanger'
+import {
+  CIChangeRequestsClient,
+  type CIChangeRequestRow,
+} from '@/components/cmdb/CIChangeRequestsClient'
 import { ACTION_LABELS } from '@/lib/audit/types'
 import { getCurrentUser } from '@/lib/auth/get-current-user'
 import { hasAdminRole } from '@/lib/auth/permissions'
 
 /**
  * Wave R5 · US-9.3 — CMDB · Detalle de un Configuration Item.
+ * Wave R5-Extended — Pestañas adicionales: Historial (lifecycle audit
+ * trail) y Cambios (Change Requests ligeros).
  *
  * Tabs (rendered as anchored sections — no JS necesario):
- *   1. Overview · ficha del CI con atributos custom
+ *   1. Overview · ficha del CI con atributos custom + cambio de estado
  *   2. Relaciones · árbol jerárquico in/out
  *   3. Tickets relacionados · tasks ITIL linkeadas vía TaskCILink
- *   4. Auditoría · últimos eventos audit con entityId === ciId
+ *   4. Historial · timeline de transiciones de CIStatus (R5-Extended)
+ *   5. Cambios · Change Requests ligeros (R5-Extended)
+ *   6. Auditoría · últimos eventos audit con entityId === ciId
  */
 export const dynamic = 'force-dynamic'
 
@@ -62,6 +84,8 @@ export default async function CIDetailPage({ params }: Props) {
   // evitar UX rota).
   const viewer = await getCurrentUser()
   const canSeeImpact = !!viewer && hasAdminRole(viewer.roles)
+  const isAdmin = !!viewer && hasAdminRole(viewer.roles)
+  const currentUserId = viewer?.id ?? ''
 
   // Audit del CI (best-effort: si falla, no rompemos la página).
   let auditItems: Awaited<ReturnType<typeof queryAuditEvents>>['items'] = []
@@ -75,6 +99,37 @@ export default async function CIDetailPage({ params }: Props) {
   } catch {
     auditItems = []
   }
+
+  // Wave R5-Extended — lifecycle events + change requests (best-effort,
+  // no rompemos la página si alguna query falla porque la tabla aún no
+  // existe en BD — la migración se aplica vía MCP bajo autorización).
+  let lifecycleEvents: Awaited<ReturnType<typeof listCILifecycleEvents>> = []
+  try {
+    lifecycleEvents = await listCILifecycleEvents(ci.id)
+  } catch {
+    lifecycleEvents = []
+  }
+
+  let changeRequestsRaw: Awaited<
+    ReturnType<typeof listCIChangeRequests>
+  > = []
+  try {
+    changeRequestsRaw = await listCIChangeRequests(ci.id)
+  } catch {
+    changeRequestsRaw = []
+  }
+  // Serializamos fechas para pasarlas al Client Component.
+  const changeRequests: CIChangeRequestRow[] = changeRequestsRaw.map((r) => ({
+    id: r.id,
+    title: r.title,
+    rationale: r.rationale,
+    plannedAt: r.plannedAt ? r.plannedAt.toISOString() : null,
+    executedAt: r.executedAt ? r.executedAt.toISOString() : null,
+    status: r.status,
+    createdAt: r.createdAt.toISOString(),
+    requestedBy: r.requestedBy,
+    approvedBy: r.approvedBy,
+  }))
 
   const attributes =
     ci.attributes && typeof ci.attributes === 'object' && !Array.isArray(ci.attributes)
@@ -105,6 +160,10 @@ export default async function CIDetailPage({ params }: Props) {
             </p>
           </div>
         </div>
+        {/* Wave R5-Extended — Cambio de estado con audit trail */}
+        {!ci.retiredAt || ci.status === 'RETIRED' ? (
+          <CIStatusChanger ciId={ci.id} currentStatus={ci.status} />
+        ) : null}
       </header>
 
       <div className="flex-1 overflow-auto p-6">
@@ -122,6 +181,18 @@ export default async function CIDetailPage({ params }: Props) {
             </a>
             <a href="#tickets" className="text-muted-foreground hover:text-foreground">
               Tickets ({ci.taskLinks.length})
+            </a>
+            <a
+              href="#history"
+              className="text-muted-foreground hover:text-foreground"
+            >
+              Historial ({lifecycleEvents.length})
+            </a>
+            <a
+              href="#changes"
+              className="text-muted-foreground hover:text-foreground"
+            >
+              Cambios ({changeRequests.length})
             </a>
             <a href="#audit" className="text-muted-foreground hover:text-foreground">
               Auditoría ({auditItems.length})
@@ -272,6 +343,64 @@ export default async function CIDetailPage({ params }: Props) {
                 ))}
               </ul>
             )}
+          </section>
+
+          {/* Wave R5-Extended · Historial · Timeline de transiciones de
+              `CIStatus`. La query es best-effort: si la tabla no existe
+              todavía (migración pendiente), mostramos placeholder. */}
+          <section id="history" className="space-y-3">
+            <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
+              Historial de estado
+            </h2>
+            {lifecycleEvents.length === 0 ? (
+              <p className="rounded-md border border-dashed border-border bg-subtle/40 p-3 text-xs text-muted-foreground">
+                Sin transiciones registradas todavía. Cambia el estado con
+                el botón superior para empezar a generar histórico.
+              </p>
+            ) : (
+              <ol className="space-y-1.5">
+                {lifecycleEvents.map((ev) => (
+                  <li
+                    key={ev.id}
+                    className="flex items-start gap-2 rounded-md border border-border bg-card px-3 py-2 text-xs"
+                  >
+                    <Clock className="mt-0.5 h-3 w-3 shrink-0 text-muted-foreground" />
+                    <span className="font-mono text-[10px] text-muted-foreground">
+                      {new Date(ev.createdAt).toLocaleString('es-MX')}
+                    </span>
+                    <span className="flex-1 text-foreground">
+                      <span className="font-mono text-[10px] uppercase tracking-wider">
+                        {ev.fromStatus
+                          ? STATUS_LABEL[ev.fromStatus] ?? ev.fromStatus
+                          : 'Inicial'}
+                      </span>
+                      <ArrowRightCircle className="mx-1 inline h-3 w-3 text-muted-foreground" />
+                      <span className="font-mono text-[10px] uppercase tracking-wider text-primary">
+                        {STATUS_LABEL[ev.toStatus] ?? ev.toStatus}
+                      </span>
+                      {ev.note ? (
+                        <span className="ml-2 italic text-muted-foreground">
+                          · {ev.note}
+                        </span>
+                      ) : null}
+                    </span>
+                    <span className="text-muted-foreground">
+                      {ev.actor?.name ?? '—'}
+                    </span>
+                  </li>
+                ))}
+              </ol>
+            )}
+          </section>
+
+          {/* Wave R5-Extended · Cambios · Change Requests ligeros. */}
+          <section id="changes" className="space-y-3">
+            <CIChangeRequestsClient
+              ciId={ci.id}
+              currentUserId={currentUserId}
+              isAdmin={isAdmin}
+              initialRows={changeRequests}
+            />
           </section>
 
           {/* Audit */}

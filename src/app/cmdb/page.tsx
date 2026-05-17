@@ -1,6 +1,9 @@
-import { Database } from 'lucide-react'
+import Link from 'next/link'
+import { Database, Upload } from 'lucide-react'
 import { searchCIs, type SearchCIsInput } from '@/lib/actions/cmdb'
 import { CmdbTableClient } from '@/components/cmdb/CmdbTableClient'
+import { getCurrentUser } from '@/lib/auth/get-current-user'
+import { hasAdminRole } from '@/lib/auth/permissions'
 
 /**
  * Wave R5 · US-9.3 — CMDB simplificado · listado.
@@ -76,6 +79,10 @@ export default async function CmdbPage({
   const sp = await searchParams
   const filters = parseSearch(sp)
   const result = await searchCIs(filters)
+  // Wave R5-Extended — el botón "Importar" sólo se muestra a ADMIN+
+  // (página `/cmdb/import` gate por hasAdminRole también).
+  const user = await getCurrentUser()
+  const canImport = !!user && hasAdminRole(user.roles)
 
   return (
     <div className="flex h-full flex-col bg-background">
@@ -90,6 +97,14 @@ export default async function CmdbPage({
             workspace
           </p>
         </div>
+        {canImport ? (
+          <Link
+            href="/cmdb/import"
+            className="inline-flex items-center gap-1 rounded-md border border-border bg-card px-2.5 py-1 text-xs font-medium text-foreground hover:bg-subtle"
+          >
+            <Upload className="h-3 w-3" /> Importar CSV
+          </Link>
+        ) : null}
       </header>
       <div className="flex-1 overflow-auto p-6">
         <CmdbTableClient

@@ -423,6 +423,17 @@ model User {
   ownedConfigurationItems   ConfigurationItem[] @relation("CIOwner")
   /// CIs creados por este usuario (auditoría). SetNull al borrar.
   createdConfigurationItems ConfigurationItem[] @relation("CICreator")
+  /// Wave R5-Extended · CMDB avanzado — eventos de transición de
+  /// `CIStatus` registrados por este usuario (lifecycle audit trail).
+  /// SetNull en `CILifecycleEvent.actorId` preserva el evento aunque
+  /// el actor sea eliminado (compliance ITIL).
+  ciLifecycleEvents CILifecycleEvent[]
+  /// Wave R5-Extended · CMDB avanzado — change requests sobre CIs.
+  /// Mantienen ambas relaciones (requester + approver) con SetNull en
+  /// la BD para no perder el registro del cambio si los actores se
+  /// retiran.
+  ciChangeRequestsRequested CIChangeRequest[] @relation("CIChangeRequester")
+  ciChangeRequestsApproved  CIChangeRequest[] @relation("CIChangeApprover")
   /// US-9.2 · Wave R5 — Gap Analysis. Análisis (AS-IS vs TO-BE) creados
   /// por este usuario. `SetNull` en `GapAnalysis.createdById` para preservar
   /// el análisis aunque su autor original se elimine (compliance auditoría).
@@ -4767,6 +4778,17 @@ model ConfigurationItem {
 
   /// Tickets (Task ITIL) que afectan/usan este CI.
   taskLinks TaskCILink[]
+
+  /// Wave R5-Extended · Audit trail de transiciones de `CIStatus`.
+  /// Cada `updateCiStatus` persiste un evento aquí. Sirve para reconstruir
+  /// la historia del CI sin depender únicamente de `AuditEvent` global.
+  lifecycleEvents CILifecycleEvent[]
+
+  /// Wave R5-Extended · Change Requests asociados a este CI. Versión
+  /// simplificada (no es un workflow ITIL formal completo): registra
+  /// la propuesta, aprobación y ejecución de cambios sobre el activo.
+  changeRequests CIChangeRequest[]
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -4823,6 +4845,77 @@ model TaskCILink {
   @@unique([taskId, ciId, role])
   @@index([taskId])
   @@index([ciId])
+}
+
+// ─────────────────────────────────────────────────────────────
+// Wave R5-Extended · CMDB avanzado (13 SP)
+//
+// Tres bloques que cierran el módulo CMDB tras `Impact Analysis`:
+//   1. Lifecycle audit trail — `CILifecycleEvent`.
+//   2. Bulk Import (sin schema dedicado — es un import transactional
+//      que escribe sobre `ConfigurationItem`; queda fuera de Prisma).
+//   3. Change Requests ligeros — `CIChangeRequest`.
+//
+// Out of scope:
+//   - Workflow CAB completo (ya existe `ChangeRequest` PMI separado).
+//   - Versionado de configuración (R5.5+).
+// ─────────────────────────────────────────────────────────────
+
+/// Registro inmutable de cada transición de `CIStatus`. Se inserta una
+/// fila cada vez que se llama a `updateCiStatus`. `fromStatus = null` se
+/// utiliza cuando el evento representa el alta del CI (no hubo estado
+/// previo). El `note` opcional permite documentar el porqué del cambio.
+model CILifecycleEvent {
+  id         String @id @default(cuid())
+  ciId       String
+  ci         ConfigurationItem @relation(fields: [ciId], references: [id], onDelete: Cascade)
+  fromStatus CIStatus?
+  toStatus   CIStatus
+  note       String?
+  /// SetNull en `actorId` preserva el evento aunque el actor sea
+  /// eliminado del sistema (compliance auditoría).
+  actorId    String?
+  actor      User?    @relation(fields: [actorId], references: [id], onDelete: SetNull)
+  createdAt  DateTime @default(now())
+
+  @@index([ciId, createdAt])
+  @@map("CILifecycleEvent")
+}
+
+/// Estados del workflow ligero de Change Request sobre un CI.
+/// PROPOSED → APPROVED → EXECUTED es la ruta nominal; REJECTED y
+/// CANCELLED son terminales alternativas. NO modelamos ITIL CAB
+/// completo aquí (ese workflow vive en `ChangeRequest` PMI).
+enum CIChangeStatus {
+  PROPOSED
+  APPROVED
+  REJECTED
+  EXECUTED
+  CANCELLED
+}
+
+/// Versión simplificada de Change Request sobre un CI. Cualquier
+/// usuario con visibilidad del workspace puede solicitar un cambio;
+/// sólo ADMIN puede aprobar/ejecutar. La separación entre `plannedAt`
+/// y `executedAt` permite registrar la ventana de mantenimiento
+/// planificada vs la real.
+model CIChangeRequest {
+  id            String           @id @default(cuid())
+  ciId          String
+  ci            ConfigurationItem @relation(fields: [ciId], references: [id], onDelete: Cascade)
+  title         String
+  rationale     String?
+  plannedAt     DateTime?
+  executedAt    DateTime?
+  status        CIChangeStatus   @default(PROPOSED)
+  requestedById String
+  requestedBy   User             @relation("CIChangeRequester", fields: [requestedById], references: [id])
+  approvedById  String?
+  approvedBy    User?            @relation("CIChangeApprover", fields: [approvedById], references: [id])
+  createdAt     DateTime         @default(now())
+
+  @@index([ciId, status])
+  @@map("CIChangeRequest")
 }
 
 // ─────────────────────────────────────────────────────────────

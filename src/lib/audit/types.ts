@@ -236,6 +236,14 @@ export const KNOWN_AUDIT_ACTIONS = [
   'ci.relation_removed',
   'ci.task_linked',
   'ci.task_unlinked',
+  // Wave R5-Extended · CMDB avanzado (13 SP) — Lifecycle, Bulk Import,
+  // Change Requests ligeros. Ver `src/lib/actions/cmdb.ts`.
+  'ci.status_changed',
+  'ci.bulk_imported',
+  'ci.change_requested',
+  'ci.change_approved',
+  'ci.change_executed',
+  'ci.change_cancelled',
   // US-9.2 · Wave R5 — Gap Analysis (AS-IS vs TO-BE)
   'gap.created',
   'gap.updated',
@@ -442,6 +450,13 @@ export const ACTION_LABELS: Record<AuditAction, string> = {
   'ci.relation_removed': 'CMDB · relación entre CIs eliminada',
   'ci.task_linked': 'CMDB · ticket linkeado a CI',
   'ci.task_unlinked': 'CMDB · ticket desvinculado de CI',
+  // Wave R5-Extended · CMDB avanzado
+  'ci.status_changed': 'CMDB · estado del CI cambiado',
+  'ci.bulk_imported': 'CMDB · import bulk de CIs',
+  'ci.change_requested': 'CMDB · cambio solicitado',
+  'ci.change_approved': 'CMDB · cambio aprobado',
+  'ci.change_executed': 'CMDB · cambio ejecutado',
+  'ci.change_cancelled': 'CMDB · cambio cancelado/rechazado',
   // US-9.2 · Wave R5 — Gap Analysis
   'gap.created': 'Gap Analysis · análisis creado',
   'gap.updated': 'Gap Analysis · análisis actualizado',
