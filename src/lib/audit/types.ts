@@ -242,6 +242,12 @@ export const KNOWN_AUDIT_ACTIONS = [
   'gap.deleted',
   'gap.dimension_recalculated',
   'gap.exported',
+  // Wave R5 Extended · US R5E — AI Auto-Apply de refinements de tarea.
+  // Cuando el usuario acepta uno o varios campos propuestos por la IA en
+  // el diff side-by-side del drawer/modal, persistimos los campos
+  // aceptados con esta acción. El `metadata` lleva `{ fields, model }`
+  // para trazar qué se aplicó y con qué modelo (llm / heuristic).
+  'task.ai_applied',
   // Wave R5 Extended · US-Reporting-PDF — Status Report PMI / Sprint Review.
   // @react-pdf/renderer streamed binary, audita kind + projectId + sprintId opcional.
   'report.exported',
@@ -442,6 +448,8 @@ export const ACTION_LABELS: Record<AuditAction, string> = {
   'gap.deleted': 'Gap Analysis · análisis eliminado',
   'gap.dimension_recalculated': 'Gap Analysis · métricas auto recalculadas',
   'gap.exported': 'Gap Analysis · exportado a Excel',
+  // Wave R5 Extended — AI Auto-Apply
+  'task.ai_applied': 'IA · refinement aplicado a tarea',
   // Wave R5 Extended · US-Reporting-PDF
   'report.exported': 'Reporte PDF · descarga generada',
 }
