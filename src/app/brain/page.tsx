@@ -18,6 +18,7 @@
 import { Suspense, useState } from 'react';
 import dynamic from 'next/dynamic';
 import { Sparkles, Loader2 } from 'lucide-react';
+import { useTranslation } from '@/lib/i18n/use-translation';
 
 type Tab = 'knowledge' | 'pm' | 'insights' | 'strategist' | 'writer';
 
@@ -50,6 +51,10 @@ const WriterAI = dynamic(
 );
 
 export default function BrainAIPage() {
+  // Wave R5E (2026-05-17) — Header bilingüe. Las tabs y el contenido AI
+  // siguen en es-MX (deuda registrada) porque el LLM responde según el
+  // prompt, no según UI strings.
+  const { t } = useTranslation();
   const [activeTab, setActiveTab] = useState<Tab>('knowledge');
 
   return (
@@ -58,9 +63,9 @@ export default function BrainAIPage() {
         <div>
           <h1 className="text-xl font-bold bg-gradient-to-r from-indigo-400 to-purple-400 bg-clip-text text-transparent flex items-center gap-2">
             <Sparkles className="h-5 w-5 text-indigo-400" />
-            Avante Brain AI
+            {t('pages.brain.title')}
           </h1>
-          <p className="mt-1 text-xs text-muted-foreground">Inteligencia Artificial integrada en todo tu entorno de trabajo</p>
+          <p className="mt-1 text-xs text-muted-foreground">{t('pages.brain.subtitle')}</p>
         </div>
         <div className="flex bg-card rounded-lg p-1 border border-border">
           <TabButton active={activeTab === 'knowledge'} onClick={() => setActiveTab('knowledge')}>

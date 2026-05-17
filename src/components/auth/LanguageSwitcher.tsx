@@ -21,9 +21,13 @@ export function LanguageSwitcher({ collapsed = false }: { collapsed?: boolean })
   const { locale, setLocale, t } = useTranslation()
   const [isPending, startTransition] = useTransition()
 
+  // Wave R5E (2026-05-17) — Migrado a BCP-47. Mostramos sólo los 2
+  // primeros caracteres como abreviación (ES/EN) para no romper el
+  // layout compacto del Sidebar. El selector con etiqueta completa vive
+  // en `/settings/profile` (LocaleSelector).
   const labels: Record<Locale, string> = {
-    es: 'ES',
-    en: 'EN',
+    'es-MX': 'ES',
+    'en-US': 'EN',
   }
 
   const handleSwitch = (next: Locale) => {
@@ -59,7 +63,7 @@ export function LanguageSwitcher({ collapsed = false }: { collapsed?: boolean })
           type="button"
           aria-pressed={locale === l}
           aria-label={
-            l === 'es' ? t('userMenu.languageSpanish') : t('userMenu.languageEnglish')
+            l === 'es-MX' ? t('userMenu.languageSpanish') : t('userMenu.languageEnglish')
           }
           disabled={isPending}
           onClick={() => handleSwitch(l)}

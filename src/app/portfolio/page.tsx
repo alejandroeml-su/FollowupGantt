@@ -1,6 +1,7 @@
 import { Layers } from 'lucide-react'
 import { loadPortfolioOverview } from '@/lib/portfolio/aggregations'
 import { PortfolioDashboard } from '@/components/portfolio/PortfolioDashboard'
+import { getServerT } from '@/lib/i18n/server'
 
 export const dynamic = 'force-dynamic'
 
@@ -24,18 +25,19 @@ export default async function PortfolioPage({ searchParams }: PageProps) {
     excludeClosed: true,
   })
 
+  // Wave R5E (2026-05-17) — Header bilingüe.
+  const t = await getServerT()
+
   return (
     <div className="flex h-full flex-col bg-background">
       <header className="flex shrink-0 items-center justify-between border-b border-border bg-card px-6 py-4">
         <div>
           <h1 className="inline-flex items-center gap-2 text-xl font-bold text-foreground">
             <Layers className="h-5 w-5 text-indigo-400" />
-            Portfolio
+            {t('pages.portfolio.title')}
           </h1>
           <p className="mt-0.5 text-xs text-muted-foreground">
-            Vista ejecutiva multi-proyecto · {overview.totals.projects} proyecto
-            {overview.totals.projects === 1 ? '' : 's'} activo
-            {overview.totals.projects === 1 ? '' : 's'} · generado{' '}
+            {t('pages.portfolio.subtitle')} · {overview.totals.projects} ·{' '}
             {new Date(overview.generatedAt).toLocaleString('es-MX')}
           </p>
         </div>

@@ -8,6 +8,7 @@ import { CalendarBoardClient } from '@/components/interactions/CalendarBoardClie
 import { getCurrentUserPresence } from '@/lib/auth/get-current-user-presence'
 import { getCurrentUser } from '@/lib/auth/get-current-user'
 import { resolveProjectVisibility } from '@/lib/auth/visibility'
+import { getServerT } from '@/lib/i18n/server'
 
 export const dynamic = 'force-dynamic'
 
@@ -125,17 +126,19 @@ export default async function CalendarPage({
     }),
   ])
 
+  // Wave R5E (2026-05-17) — Header bilingüe.
+  const t = await getServerT()
+
   return (
     <div className="flex h-full flex-col bg-background transition-colors duration-300">
       <header className="flex shrink-0 items-center justify-between border-b border-border bg-card/50 px-8 py-4">
         <div>
           <GlobalBreadcrumbs />
           <h1 className="mt-1 text-xl font-semibold text-foreground">
-            Calendar View · Planificación mensual
+            {t('pages.calendar.title')}
           </h1>
           <p className="mt-1 text-xs text-muted-foreground">
-            Click en una fecha para crear actividad. Arrastra una actividad a otro
-            día para moverla. Filtra por Gerencia, Área o Proyecto para ver el mes completo.
+            {t('pages.calendar.subtitle')}
           </p>
         </div>
         <div className="flex items-center gap-3">

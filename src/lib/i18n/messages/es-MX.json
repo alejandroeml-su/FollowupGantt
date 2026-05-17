@@ -178,9 +178,41 @@
   "userMenu": {
     "logout": "Cerrar sesión",
     "language": "Idioma",
-    "languageSpanish": "Español",
-    "languageEnglish": "Inglés",
+    "languageSpanish": "Español (México)",
+    "languageEnglish": "Inglés (Estados Unidos)",
     "switchLanguage": "Cambiar idioma"
+  },
+  "auth": {
+    "loginTitle": "Iniciar sesión",
+    "loginSubtitle": "Accede a tu espacio de trabajo de Sync.",
+    "emailLabel": "Correo electrónico",
+    "emailPlaceholder": "tu@empresa.com",
+    "passwordLabel": "Contraseña",
+    "loginButton": "Iniciar sesión",
+    "loginPending": "Iniciando…",
+    "resetSuccess": "Contraseña actualizada. Inicia sesión con tu nueva contraseña.",
+    "oauthError": "No se pudo completar el inicio de sesión externo ({error}). Intenta de nuevo.",
+    "forgotPasswordLink": "¿Olvidaste tu contraseña?",
+    "forgotTitle": "Recuperar contraseña",
+    "forgotSubtitle": "Ingresa tu correo y te enviaremos un enlace para restablecer tu contraseña.",
+    "forgotSubmit": "Enviar enlace",
+    "forgotSending": "Enviando…",
+    "forgotSuccess": "Si existe una cuenta con ese correo, recibirás un mensaje con instrucciones en los próximos minutos.",
+    "backToLogin": "Volver a iniciar sesión",
+    "resetTitle": "Nueva contraseña",
+    "resetSubtitle": "Define una contraseña segura (mínimo 8 caracteres).",
+    "newPasswordLabel": "Nueva contraseña",
+    "confirmPasswordLabel": "Confirmar contraseña",
+    "resetSubmit": "Cambiar contraseña",
+    "resetSaving": "Guardando…",
+    "profileLoginPrompt": "Inicia sesión para gestionar tu perfil y las notificaciones push."
+  },
+  "kanban": {
+    "headerTitle": "Tablero Kanban · DnD + Menú contextual",
+    "columnTodo": "Por hacer",
+    "columnInProgress": "En progreso",
+    "columnReview": "Revisión",
+    "columnDone": "Completada"
   },
   "task": {
     "form": {
@@ -252,9 +284,39 @@
       "totalTasks": "Tareas totales",
       "environment": "Entorno"
     },
+    "list": {
+      "title": "Vista de Lista",
+      "subtitle": "Listado completo de tareas con filtros y vistas archivadas."
+    },
+    "kanban": {
+      "title": "Tablero Kanban",
+      "subtitle": "Tablero arrastrable por estado · DnD + Menú contextual"
+    },
+    "timeline": {
+      "title": "Timeline",
+      "subtitle": "Línea de tiempo agrupable por proyecto, sprint o asignado."
+    },
+    "calendar": {
+      "title": "Calendario",
+      "subtitle": "Planificación mensual · arrastra para mover, click para crear."
+    },
+    "portfolio": {
+      "title": "Portafolio",
+      "subtitle": "Vista ejecutiva multi-proyecto"
+    },
+    "brain": {
+      "title": "Avante Brain AI",
+      "subtitle": "Inteligencia Artificial integrada en todo tu entorno de trabajo"
+    },
+    "dashboards": {
+      "title": "Dashboards Ejecutivos & Gobernanza",
+      "subtitle": "KPIs PMBOK · EVM · Retorno · Eficiencia operativa"
+    },
     "gantt": {
       "title": "Gantt",
-      "subtitle": "Cronograma de proyecto"
+      "subtitle": "Cronograma de proyecto",
+      "headerTitle": "Cronograma · Drag horizontal y resize",
+      "headerHint": "Arrastra el cuerpo para desplazar; los bordes para redimensionar. Teclado: ←/→ desplaza, Shift+← /→ cambia fin, Alt+← /→ cambia inicio."
     },
     "sprints": {
       "title": "Sprints",
@@ -305,7 +367,13 @@
       "identity": "Identidad",
       "tourTitle": "Tour de bienvenida",
       "tourBody": "¿Quieres volver a ver el recorrido guiado de Sync? Reinicia el tour en cualquier momento.",
-      "futureTitle": "Próximamente"
+      "futureTitle": "Próximamente",
+      "futureBody": "Aquí podrás configurar zona horaria, tema visual y avatar. Tema e idioma también están disponibles en el footer del Sidebar.",
+      "localeTitle": "Idioma de la interfaz",
+      "localeBody": "Selecciona el idioma para los menús, formularios y mensajes de Sync. La preferencia se guarda por usuario y persiste entre sesiones.",
+      "localeSelectLabel": "Idioma",
+      "localeSaving": "Aplicando…",
+      "localeReloadHint": "Al cambiar, la página se recargará para aplicar el nuevo idioma."
     },
     "sessions": {
       "title": "Sesiones activas",

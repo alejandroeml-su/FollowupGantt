@@ -4,6 +4,16 @@ import { generateObject } from 'ai'
 import { anthropic } from '@ai-sdk/anthropic'
 import prisma from '@/lib/prisma'
 import { getServerLocale } from '@/lib/i18n/server'
+
+/**
+ * Wave R5E (2026-05-17) — `getServerLocale()` ahora devuelve BCP-47
+ * (`es-MX`/`en-US`). Para los prompts del LLM nos basta el código corto
+ * de idioma (`es`/`en`) ya que el contenido del prompt no varía por
+ * región. Helper local para no propagar el cambio por toda la API.
+ */
+function localeShort(bcp47: string): 'es' | 'en' {
+  return bcp47.toLowerCase().startsWith('en') ? 'en' : 'es'
+}
 import {
   StandupReportSchema,
   RiskReportSchema,
@@ -285,8 +295,8 @@ export async function generateStandupReport(input?: { projectId?: string }): Pro
     throw new Error('ANTHROPIC_API_KEY no está configurada en el servidor.')
   }
   const ctx = await gatherStandupContext(input?.projectId)
-  // Wave P20 — Locale-aware prompts (es/en).
-  const locale = await getServerLocale()
+  // Wave P20 / R5E — Locale-aware prompts (es/en) sobre BCP-47.
+  const locale = localeShort(await getServerLocale())
   const promptLine =
     locale === 'en'
       ? `Current date: ${today()}\n\nLast 24h activity:`
@@ -325,8 +335,8 @@ export async function generateRiskAnalysis(input: { projectId: string }): Promis
 
   let object: RiskReport
   try {
-    // Wave P20 — Locale-aware prompts (es/en).
-    const locale = await getServerLocale()
+    // Wave P20 / R5E — Locale-aware prompts (es/en) sobre BCP-47.
+    const locale = localeShort(await getServerLocale())
     const promptLine =
       locale === 'en'
         ? `Project data to analyze:`

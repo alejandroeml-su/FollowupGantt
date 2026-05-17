@@ -3,6 +3,7 @@
 import { useState, useTransition } from 'react'
 import Link from 'next/link'
 import { requestPasswordResetAction } from './actions'
+import { useTranslation } from '@/lib/i18n/use-translation'
 
 /**
  * Página "Recuperar contraseña" (Ola P3 · Auth completo).
@@ -17,6 +18,7 @@ import { requestPasswordResetAction } from './actions'
  *     stateless).
  */
 export default function ForgotPasswordPage() {
+  const { t } = useTranslation()
   const [email, setEmail] = useState('')
   const [submitted, setSubmitted] = useState(false)
   const [pending, startTransition] = useTransition()
@@ -33,11 +35,10 @@ export default function ForgotPasswordPage() {
     <main className="flex min-h-screen items-center justify-center bg-background px-4">
       <div className="w-full max-w-sm rounded-2xl border border-border bg-card p-8 shadow-lg">
         <h1 className="mb-2 text-2xl font-bold text-foreground">
-          Recuperar contraseña
+          {t('auth.forgotTitle')}
         </h1>
         <p className="mb-6 text-sm text-muted-foreground">
-          Ingresa tu email y te enviaremos un enlace para restablecer tu
-          contraseña.
+          {t('auth.forgotSubtitle')}
         </p>
 
         {submitted ? (
@@ -46,8 +47,7 @@ export default function ForgotPasswordPage() {
             role="status"
             className="rounded-md border border-primary/30 bg-primary/10 px-3 py-3 text-sm text-foreground"
           >
-            Si existe una cuenta con ese email, recibirás un correo con
-            instrucciones en los próximos minutos.
+            {t('auth.forgotSuccess')}
           </div>
         ) : (
           <form onSubmit={handleSubmit} className="space-y-4" noValidate>
@@ -56,7 +56,7 @@ export default function ForgotPasswordPage() {
                 htmlFor="email"
                 className="mb-1.5 block text-sm font-medium text-foreground"
               >
-                Email
+                {t('auth.emailLabel')}
               </label>
               <input
                 id="email"
@@ -68,7 +68,7 @@ export default function ForgotPasswordPage() {
                 onChange={(e) => setEmail(e.target.value)}
                 data-testid="forgot-email"
                 className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground outline-none focus:border-primary focus:ring-1 focus:ring-primary/40"
-                placeholder="tu@empresa.com"
+                placeholder={t('auth.emailPlaceholder')}
               />
             </div>
             <button
@@ -77,14 +77,14 @@ export default function ForgotPasswordPage() {
               data-testid="forgot-submit"
               className="w-full rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60"
             >
-              {pending ? 'Enviando…' : 'Enviar enlace'}
+              {pending ? t('auth.forgotSending') : t('auth.forgotSubmit')}
             </button>
           </form>
         )}
 
         <p className="mt-6 text-center text-xs text-muted-foreground">
           <Link href="/login" className="hover:text-foreground hover:underline">
-            Volver a iniciar sesión
+            {t('auth.backToLogin')}
           </Link>
         </p>
       </div>

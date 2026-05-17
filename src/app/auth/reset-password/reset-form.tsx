@@ -2,6 +2,7 @@
 
 import { useActionState } from 'react'
 import { confirmResetAction, type ConfirmResetState } from './actions'
+import { useTranslation } from '@/lib/i18n/use-translation'
 
 /**
  * Form cliente para confirmar reset de contraseña. Usa
@@ -9,6 +10,7 @@ import { confirmResetAction, type ConfirmResetState } from './actions'
  * action.
  */
 export default function ResetPasswordForm({ token }: { token: string }) {
+  const { t } = useTranslation()
   const [state, formAction, pending] = useActionState<
     ConfirmResetState,
     FormData
@@ -24,7 +26,7 @@ export default function ResetPasswordForm({ token }: { token: string }) {
           htmlFor="password"
           className="mb-1.5 block text-sm font-medium text-foreground"
         >
-          Nueva contraseña
+          {t('auth.newPasswordLabel')}
         </label>
         <input
           id="password"
@@ -42,7 +44,7 @@ export default function ResetPasswordForm({ token }: { token: string }) {
           htmlFor="confirm"
           className="mb-1.5 block text-sm font-medium text-foreground"
         >
-          Confirmar contraseña
+          {t('auth.confirmPasswordLabel')}
         </label>
         <input
           id="confirm"
@@ -70,7 +72,7 @@ export default function ResetPasswordForm({ token }: { token: string }) {
         data-testid="reset-submit"
         className="w-full rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60"
       >
-        {pending ? 'Guardando…' : 'Cambiar contraseña'}
+        {pending ? t('auth.resetSaving') : t('auth.resetSubmit')}
       </button>
     </form>
   )

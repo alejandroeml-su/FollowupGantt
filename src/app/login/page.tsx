@@ -3,6 +3,7 @@ import Link from 'next/link'
 import { getCurrentUser } from '@/lib/auth'
 import LoginForm from './login-form'
 import OAuthButtons from '@/components/auth/OAuthButtons'
+import { getServerT } from '@/lib/i18n/server'
 
 /**
  * Página de inicio de sesión.
@@ -28,15 +29,19 @@ export default async function LoginPage({
 
   const oauthError = params.error
   const resetSuccess = params.reset === 'ok'
+  // Wave R5E (2026-05-17) — i18n bilingüe: el login es la primera
+  // pantalla que ve el usuario, así que respetamos la cookie de locale
+  // si existe; si no, el proxy ya la seteó vía Accept-Language.
+  const t = await getServerT()
 
   return (
     <main className="flex min-h-screen items-center justify-center bg-background px-4">
       <div className="w-full max-w-sm rounded-2xl border border-border bg-card p-8 shadow-lg">
         <h1 className="mb-2 text-2xl font-bold text-foreground">
-          Iniciar sesión
+          {t('auth.loginTitle')}
         </h1>
         <p className="mb-6 text-sm text-muted-foreground">
-          Accede a tu espacio de trabajo de Sync.
+          {t('auth.loginSubtitle')}
         </p>
 
         {resetSuccess ? (
@@ -45,7 +50,7 @@ export default async function LoginPage({
             role="status"
             className="mb-4 rounded-md border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-700 dark:text-emerald-300"
           >
-            Contraseña actualizada. Inicia sesión con tu nueva contraseña.
+            {t('auth.resetSuccess')}
           </p>
         ) : null}
 
@@ -55,8 +60,7 @@ export default async function LoginPage({
             role="alert"
             className="mb-4 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive"
           >
-            No se pudo completar el inicio de sesión externo
-            ({oauthError}). Intenta de nuevo.
+            {t('auth.oauthError', { error: oauthError })}
           </p>
         ) : null}
 
@@ -67,7 +71,7 @@ export default async function LoginPage({
             href="/auth/forgot-password"
             className="text-muted-foreground hover:text-foreground hover:underline"
           >
-            ¿Olvidaste tu contraseña?
+            {t('auth.forgotPasswordLink')}
           </Link>
         </div>
 

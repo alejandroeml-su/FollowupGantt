@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import { SESSION_COOKIE_NAME } from '@/lib/auth/session'
+import { LOCALE_COOKIE, resolveAcceptLanguage } from '@/lib/i18n/translate'
 
 /**
  * Proxy (antes "middleware") para checks optimistas de autenticación.
@@ -83,8 +84,32 @@ export function proxy(req: NextRequest) {
     }
   }
 
-  const passThrough = () =>
-    NextResponse.next({ request: { headers: requestHeaders } })
+  // Wave R5E (2026-05-17) — i18n bilingüe. Si el usuario aún no tiene
+  // cookie `x-locale`, resolvemos su preferencia con `Accept-Language`
+  // (parser tolerante a `q=...` weights). El locale resultante se
+  // persiste como cookie no-httpOnly por 1 año para que el siguiente
+  // request server-side la encuentre de inmediato. Si la cookie ya
+  // existe, NO la sobrescribimos (respetamos la elección manual desde
+  // /settings/profile o el LanguageSwitcher del sidebar).
+  const existingLocale = req.cookies.get(LOCALE_COOKIE)?.value
+  let detectedLocale: string | null = null
+  if (!existingLocale) {
+    const acceptLanguage = req.headers.get('accept-language')
+    detectedLocale = resolveAcceptLanguage(acceptLanguage)
+  }
+
+  const passThrough = () => {
+    const res = NextResponse.next({ request: { headers: requestHeaders } })
+    if (detectedLocale) {
+      const oneYear = 60 * 60 * 24 * 365
+      res.cookies.set(LOCALE_COOKIE, detectedLocale, {
+        path: '/',
+        maxAge: oneYear,
+        sameSite: 'lax',
+      })
+    }
+    return res
+  }
 
   // Ignorar rutas internas / públicas explícitamente.
   // /invite/<token> es público porque la página se encarga de redirigir

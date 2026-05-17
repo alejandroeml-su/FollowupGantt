@@ -8,6 +8,7 @@ import { getCurrentUserPresence } from '@/lib/auth/get-current-user-presence'
 import { getCurrentUser } from '@/lib/auth/get-current-user'
 import { resolveProjectVisibility } from '@/lib/auth/visibility'
 import { buildTaskTreeInclude, DEFAULT_TREE_DEPTH } from '@/lib/tasks/load-tree'
+import { getServerT } from '@/lib/i18n/server'
 
 export const dynamic = 'force-dynamic'
 
@@ -75,13 +76,16 @@ export default async function ListViewPage() {
     serializeTask(t as unknown as Record<string, unknown>),
   )
 
+  // Wave R5E (2026-05-17) — Header bilingüe.
+  const t = await getServerT()
+
   return (
     <div className="flex h-full flex-col bg-background transition-colors duration-300">
       <header className="flex shrink-0 items-center justify-between border-b border-border bg-background px-6 py-4">
         <div>
           <GlobalBreadcrumbs />
           <h1 className="mt-1 text-2xl font-bold text-foreground">
-            Vista de Lista
+            {t('pages.list.title')}
           </h1>
         </div>
         <div className="flex items-center gap-3">

@@ -1,5 +1,6 @@
 import { redirect } from 'next/navigation'
 import ResetPasswordForm from './reset-form'
+import { getServerT } from '@/lib/i18n/server'
 
 /**
  * Página de confirmación del reset (Ola P3 · Auth completo).
@@ -19,14 +20,16 @@ export default async function ResetPasswordPage({
     redirect('/auth/forgot-password')
   }
 
+  const t = await getServerT()
+
   return (
     <main className="flex min-h-screen items-center justify-center bg-background px-4">
       <div className="w-full max-w-sm rounded-2xl border border-border bg-card p-8 shadow-lg">
         <h1 className="mb-2 text-2xl font-bold text-foreground">
-          Nueva contraseña
+          {t('auth.resetTitle')}
         </h1>
         <p className="mb-6 text-sm text-muted-foreground">
-          Define una contraseña segura (mínimo 8 caracteres).
+          {t('auth.resetSubtitle')}
         </p>
         <ResetPasswordForm token={token} />
       </div>

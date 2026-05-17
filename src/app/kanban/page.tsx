@@ -11,6 +11,7 @@ import {
   buildTaskTreeInclude,
   DEFAULT_TREE_DEPTH,
 } from '@/lib/tasks/load-tree'
+import { getServerT } from '@/lib/i18n/server'
 
 export const dynamic = 'force-dynamic'
 
@@ -74,13 +75,16 @@ export default async function KanbanBoard() {
     }),
   ])
 
+  // Wave R5E (2026-05-17) — Header bilingüe.
+  const t = await getServerT()
+
   return (
     <div className="flex h-full flex-col bg-background transition-colors duration-300">
       <header className="flex shrink-0 items-center justify-between border-b border-border bg-card/50 px-8 py-4">
         <div>
           <GlobalBreadcrumbs />
           <h1 className="mt-1 text-xl font-semibold text-foreground">
-            Tablero Kanban · DnD + Menú contextual
+            {t('kanban.headerTitle')}
           </h1>
           <div className="mt-1 flex items-center gap-4 text-xs text-muted-foreground">
             <span className="flex items-center">
