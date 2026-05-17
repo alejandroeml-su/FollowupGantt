@@ -326,11 +326,16 @@ export default async function GanttTimeline({
         </div>
       </header>
 
-      {/* Mobile: lista vertical (Gantt timeline inusable en <sm). */}
+      {/* Mobile: lista vertical (Gantt timeline inusable en <sm).
+          Wave R5E · mobile-first refinements — la GanttListMobile ahora
+          pinta una mini "week-bar" colapsada por tarea dentro del rango
+          visible (start/days), reemplazando la matriz diaria. */}
       <div className="flex-1 overflow-auto md:hidden">
         <GanttListMobile
           tasks={tasks}
           rangeLabel={win.label}
+          rangeStart={win.start.toISOString()}
+          rangeDays={win.days}
           projects={projects}
           users={users}
           allTasks={tasks}
