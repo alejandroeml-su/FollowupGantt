@@ -11,7 +11,7 @@ import {
   Bell, PenSquare, Brain, Scale, FileBarChart, Plug, FileSignature, Workflow,
   DatabaseBackup, UserPlus, Layers, ShieldAlert as ShieldAlertIcon,
   DollarSign, GitBranch, Users2, ListTree, Sparkles as SparklesIcon, CheckSquare,
-  LineChart, GitMerge,
+  LineChart, GitMerge, MessageSquare,
   // Wave P12 (final compliance)
   CalendarClock, Lightbulb, Activity, BookOpen, Megaphone,
   // Wave P20-C · Brain Auto-Pilot
@@ -73,6 +73,9 @@ const topRoutes: RouteItem[] = [
   { name: 'sidebar.items.mindmaps', path: '/mindmaps', icon: Network },
   { name: 'sidebar.items.notifications', path: '/notifications', icon: Bell },
   { name: 'sidebar.items.whiteboards', path: '/whiteboards', icon: PenSquare },
+  // R4 · US-7.2 Chat View · acceso rápido al chat del proyecto activo
+  // (la página `/chat` redirige al proyecto activo via heurística).
+  { name: 'sidebar.items.chat', path: '/chat', icon: MessageSquare },
   { name: 'sidebar.brain', path: '/brain', icon: Sparkles },
 ];
 

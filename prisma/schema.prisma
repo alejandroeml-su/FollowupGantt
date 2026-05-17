@@ -330,8 +330,8 @@ model User {
 
   // Wave P18-A · Quality Inspections + Defect Tracking
   inspectionsAsInspector QualityInspection[] @relation("InspectionInspector")
-  defectsOwned           Defect[]             @relation("DefectOwner")
-  defectsReported        Defect[]             @relation("DefectReporter")
+  defectsOwned           Defect[]            @relation("DefectOwner")
+  defectsReported        Defect[]            @relation("DefectReporter")
 
   // US-7.5 · Proofing — anotaciones sobre attachments multimedia.
   // `authored` y `resolved` son separadas porque el resolver puede no
@@ -407,6 +407,14 @@ model User {
   /// SetNull en `AutoPilotRun.appliedById` preserva el run aunque el
   /// actor sea eliminado (mismo criterio que `BrainStrategistInsight.ackBy`).
   autoPilotRunsApplied AutoPilotRun[] @relation("AutoPilotRunAppliedBy")
+
+  /// R4 · US-7.2 Chat View — Mensajes enviados por este usuario en chats
+  /// de proyecto + reacciones emoji propias. SetNull en `ChatMessage.authorId`
+  /// preserva el historial de la conversación cuando se elimina al usuario
+  /// (los rows del chat son evidencia de comunicación; mismo criterio que
+  /// `Comment.authorId`).
+  chatMessages         ChatMessage[]         @relation("ChatMessageAuthor")
+  chatMessageReactions ChatMessageReaction[] @relation("ChatReactionUser")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -722,6 +730,13 @@ model Project {
   budget         Decimal?  @db.Decimal(14, 2)
   budgetCurrency String?
   expenses       Expense[]
+
+  /// R4 · US-7.2 Chat View — Canales de comunicación interna del proyecto.
+  /// A diferencia de `Comment` (por-tarea), `ChatChannel` cuelga del
+  /// proyecto y agrupa conversaciones temáticas (general/dev/qa/custom).
+  /// Cascade al borrar proyecto: la conversación carece de sentido sin
+  /// su proyecto contenedor.
+  chatChannels ChatChannel[]
 
   /// R4 · US-7.4 — Email ClickApp (Email-to-Task).
   /// Alias único `inbox+<slug>@<INBOUND_EMAIL_DOMAIN>` al que se envían
@@ -1180,7 +1195,7 @@ model Task {
 
   /// Wave P18-A · Quality Inspections + Defect Tracking.
   inspections QualityInspection[] @relation("TaskInspections")
-  defects     Defect[]             @relation("TaskDefects")
+  defects     Defect[]            @relation("TaskDefects")
 
   // Módulo ITIL (SLA Management)
   slaResponseLimit   DateTime? // Límite de tiempo para responder
@@ -1418,6 +1433,112 @@ model Comment {
   clips Clip[]
 
   createdAt DateTime @default(now())
+}
+
+// ─── R4 · US-7.2 Chat View ────────────────────────────────────────
+//
+// Canales de comunicación por proyecto. La diferencia clave contra
+// `Comment` es la granularidad: Comment vive por-tarea (contexto fino),
+// ChatChannel vive por-proyecto (contexto grueso, conversación de equipo).
+// El operador puede crear múltiples canales temáticos por proyecto
+// (general, dev, qa, custom) y los mensajes se reciben en tiempo real
+// vía Supabase Realtime (postgres_changes + broadcast para typing).
+//
+// Visibilidad: filtrada en server actions vía `resolveProjectVisibility`
+// — un usuario sólo puede ver canales de proyectos que tiene permitidos.
+// La RLS y los hooks del cliente respetan ese filtro.
+enum ChatChannelKind {
+  /// Canal por defecto del proyecto. Se crea automáticamente al
+  /// inicializar el primer chat (lazy) y no es eliminable por UX.
+  GENERAL
+  /// Canal temático (ej. #dev, #qa, #release-2026). Eliminable por
+  /// managers del proyecto.
+  TOPIC
+  /// Canal privado · roadmap futuro para invitados específicos.
+  /// Hoy se trata como TOPIC con visibilidad de proyecto.
+  PRIVATE
+}
+
+model ChatChannel {
+  id        String          @id @default(uuid())
+  projectId String
+  project   Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  name      String
+  kind      ChatChannelKind @default(TOPIC)
+
+  /// Descripción opcional · "para qué sirve este canal" (1-line).
+  description String?
+
+  /// Snapshot del último mensaje para listados eficientes (sidebar)
+  /// sin tener que hacer `MAX(createdAt)` por canal en cada render.
+  /// Se actualiza dentro de la misma transacción que crea el mensaje.
+  lastMessageAt DateTime?
+
+  messages ChatMessage[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([projectId, name])
+  @@index([projectId, lastMessageAt])
+}
+
+model ChatMessage {
+  id        String      @id @default(uuid())
+  channelId String
+  channel   ChatChannel @relation(fields: [channelId], references: [id], onDelete: Cascade)
+
+  authorId String?
+  author   User?   @relation("ChatMessageAuthor", fields: [authorId], references: [id], onDelete: SetNull)
+
+  content String
+
+  /// Threading mínimo · reply directo a otro mensaje del mismo canal.
+  /// NO se soportan chains profundos: si A es respuesta de B, una
+  /// respuesta a A se almacena con `parentMessageId = A.id` pero la
+  /// UI sólo renderiza un nivel de indent (el parent inmediato).
+  /// SetNull para no romper si se elimina el mensaje padre.
+  parentMessageId String?
+  parentMessage   ChatMessage?  @relation("ChatMessageReplies", fields: [parentMessageId], references: [id], onDelete: SetNull)
+  replies         ChatMessage[] @relation("ChatMessageReplies")
+
+  /// Soft-edit: cuando un autor edita su mensaje, registramos el momento
+  /// para que la UI muestre "(editado)" sin perder el `createdAt`.
+  editedAt DateTime?
+
+  /// Soft-delete: el row sobrevive (auditoría) pero la UI lo oculta. Si
+  /// el mensaje tiene respuestas, mantenemos `parentMessageId` válido
+  /// para que las replies sigan ancladas.
+  deletedAt DateTime?
+
+  reactions ChatMessageReaction[]
+
+  createdAt DateTime @default(now())
+
+  @@index([channelId, createdAt])
+  @@index([parentMessageId])
+}
+
+model ChatMessageReaction {
+  id        String      @id @default(uuid())
+  messageId String
+  message   ChatMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
+
+  userId String
+  user   User   @relation("ChatReactionUser", fields: [userId], references: [id], onDelete: Cascade)
+
+  /// Emoji como string corto (1-8 chars). Validación blanda en server
+  /// action: no permitimos contenido arbitrario, sólo el set canónico
+  /// soportado por el composer (configurable en `lib/chat/emojis.ts`).
+  emoji String
+
+  createdAt DateTime @default(now())
+
+  /// Una reacción única por (message, user, emoji): si el mismo user
+  /// vuelve a clickear el mismo emoji, lo quitamos (toggle) en lugar
+  /// de duplicar el row.
+  @@unique([messageId, userId, emoji])
+  @@index([messageId])
 }
 
 // Historial de cambios / Auditoría
@@ -1855,8 +1976,8 @@ model NotificationPreference {
 /// Wave R4-B · Tipo de transporte de la suscripción push.
 enum PushSubscriptionKind {
   WEB_PUSH // browser estándar (VAPID + p256dh+auth)
-  APNS     // iOS Capacitor (device token APNs)
-  FCM      // Android Capacitor (registration token FCM)
+  APNS // iOS Capacitor (device token APNs)
+  FCM // Android Capacitor (registration token FCM)
 }
 
 model PushSubscription {
@@ -2505,11 +2626,11 @@ model BillingSubscription {
 
   /// Stripe customer ID (`cus_xxx`). Null hasta que el WS hace su primer
   /// checkout (workspaces nuevos arrancan FREE sin tocar Stripe).
-  stripeCustomerId String?
+  stripeCustomerId     String?
   /// Stripe subscription ID (`sub_xxx`). Null mientras esté en FREE.
   stripeSubscriptionId String? @unique
   /// Stripe price ID (`price_xxx`) del plan suscrito.
-  stripePriceId String?
+  stripePriceId        String?
 
   /// Plan vigente: FREE / PRO / ENTERPRISE (string libre — ver D-R4E-2).
   tier String @default("FREE")
@@ -2522,9 +2643,9 @@ model BillingSubscription {
   currentPeriodEnd DateTime?
   /// Si el WS marcó cancelación, fecha en que efectivamente se baja.
   /// Mientras `cancelAt > now`, el WS conserva sus features paid.
-  cancelAt DateTime?
+  cancelAt         DateTime?
   /// Si el WS está en trial gratuito, fecha de fin. UI muestra banner.
-  trialEndsAt DateTime?
+  trialEndsAt      DateTime?
 
   /// Cantidad de seats incluidos en la sub (Stripe `quantity`). Default 1
   /// para FREE; el `requireCapacity('users', …)` valida contra
@@ -2540,9 +2661,9 @@ model BillingSubscription {
 }
 
 model BillingInvoice {
-  id              String @id @default(uuid())
-  workspaceId     String
-  workspace       Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  id          String    @id @default(uuid())
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 
   /// Stripe invoice ID (`in_xxx`). @unique → key de idempotencia.
   stripeInvoiceId String @unique
@@ -2554,13 +2675,13 @@ model BillingInvoice {
   status          String
 
   /// URL del PDF de Stripe. La UI ofrece descarga directa.
-  invoicePdfUrl   String?
+  invoicePdfUrl String?
 
   /// Periodo facturado (Stripe `period_start` / `period_end`).
-  periodStart     DateTime
-  periodEnd       DateTime
+  periodStart DateTime
+  periodEnd   DateTime
 
-  createdAt       DateTime @default(now())
+  createdAt DateTime @default(now())
 
   @@index([workspaceId, createdAt(sort: Desc)])
   @@index([status])
@@ -2718,28 +2839,28 @@ model Webhook {
 // ─────────────────────────────────────────────────────────────
 
 model ApiKey {
-  id           String    @id @default(uuid())
+  id          String    @id @default(uuid())
   // Etiqueta descriptiva: "Integración SAP S/4HANA producción".
-  name         String
+  name        String
   // Primeros 8 chars del key para mostrar en lista sin exponer el resto.
   // El formato canónico del key plano es `sk_<prefix>_<secret>`; el `prefix`
   // aquí es solo el segmento aleatorio (8 chars), no incluye `sk_`.
-  prefix       String
+  prefix      String
   // Hash SHA-256 (hex) del key plano completo. NUNCA almacenamos plaintext.
-  hashedKey    String    @unique
+  hashedKey   String    @unique
   // Array de scopes Postgres-native: ["read:projects","write:tasks"].
   // Ver `src/lib/api/v2-scopes.ts` para el catálogo válido.
-  scopes       String[]
+  scopes      String[]
   // Workspace owner. Cascade: borrar workspace purga sus keys.
-  workspaceId  String
-  workspace    Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   // Usuario que creó la key (auditoría). SetNull preserva la key si el
   // usuario es eliminado (la integración sigue funcionando).
-  createdById  String?
-  createdBy    User?     @relation("ApiKeyCreator", fields: [createdById], references: [id], onDelete: SetNull)
-  lastUsedAt   DateTime?
-  expiresAt    DateTime?
-  revokedAt    DateTime?
+  createdById String?
+  createdBy   User?     @relation("ApiKeyCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  lastUsedAt  DateTime?
+  expiresAt   DateTime?
+  revokedAt   DateTime?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -4116,6 +4237,7 @@ enum BrainInsightStatus {
   APPLIED
   DISMISSED
 }
+
 // ─────────────────────────────────────────────────────────────
 // Wave P17-C · Self-Service Admin — GlobalTemplate
 //
@@ -4212,7 +4334,7 @@ model BrainStrategistInsight {
   status String @default("NEW")
 
   ackById String?
-  ackBy   User?   @relation("StrategistInsightAck", fields: [ackById], references: [id], onDelete: SetNull)
+  ackBy   User?     @relation("StrategistInsightAck", fields: [ackById], references: [id], onDelete: SetNull)
   ackedAt DateTime?
 
   resolvedAt DateTime?
@@ -4238,13 +4360,13 @@ model SsoProvider {
   workspaceId String
   workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 
-  name String
-  kind SsoProviderKind @default(SAML)
-  entityId String
-  ssoUrl String
-  x509Cert String @db.Text
+  name         String
+  kind         SsoProviderKind @default(SAML)
+  entityId     String
+  ssoUrl       String
+  x509Cert     String          @db.Text
   attributeMap Json
-  enabled Boolean @default(true)
+  enabled      Boolean         @default(true)
 
   links SsoUserLink[]
 
@@ -4263,7 +4385,7 @@ model SsoUserLink {
   providerId String
   provider   SsoProvider @relation(fields: [providerId], references: [id], onDelete: Cascade)
 
-  externalId String
+  externalId  String
   lastLoginAt DateTime?
 
   createdAt DateTime @default(now())
@@ -4313,13 +4435,13 @@ model RetentionPolicy {
 }
 
 model RetentionPurgeRun {
-  id          String               @id @default(uuid())
-  policyId    String
-  policy      RetentionPolicy      @relation(fields: [policyId], references: [id], onDelete: Cascade)
-  startedAt   DateTime             @default(now())
-  completedAt DateTime?
-  deletedCount Int                 @default(0)
-  status      RetentionPurgeStatus @default(RUNNING)
+  id           String               @id @default(uuid())
+  policyId     String
+  policy       RetentionPolicy      @relation(fields: [policyId], references: [id], onDelete: Cascade)
+  startedAt    DateTime             @default(now())
+  completedAt  DateTime?
+  deletedCount Int                  @default(0)
+  status       RetentionPurgeStatus @default(RUNNING)
   errorMessage String?
 
   @@index([policyId, startedAt(sort: Desc)])
@@ -4352,7 +4474,7 @@ model AutoPilotRun {
   proposalSnapshot Json
 
   appliedById String?
-  appliedBy   User?   @relation("AutoPilotRunAppliedBy", fields: [appliedById], references: [id], onDelete: SetNull)
+  appliedBy   User?    @relation("AutoPilotRunAppliedBy", fields: [appliedById], references: [id], onDelete: SetNull)
   appliedAt   DateTime @default(now())
 
   rolledBackAt DateTime?
