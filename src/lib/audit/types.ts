@@ -242,6 +242,9 @@ export const KNOWN_AUDIT_ACTIONS = [
   'gap.deleted',
   'gap.dimension_recalculated',
   'gap.exported',
+  // Wave R5 Extended · US-Reporting-PDF — Status Report PMI / Sprint Review.
+  // @react-pdf/renderer streamed binary, audita kind + projectId + sprintId opcional.
+  'report.exported',
 ] as const
 
 export type AuditAction = (typeof KNOWN_AUDIT_ACTIONS)[number]
@@ -439,6 +442,8 @@ export const ACTION_LABELS: Record<AuditAction, string> = {
   'gap.deleted': 'Gap Analysis · análisis eliminado',
   'gap.dimension_recalculated': 'Gap Analysis · métricas auto recalculadas',
   'gap.exported': 'Gap Analysis · exportado a Excel',
+  // Wave R5 Extended · US-Reporting-PDF
+  'report.exported': 'Reporte PDF · descarga generada',
 }
 
 // ───────────────────────── Tipos de entidad ─────────────────────────
