@@ -49,6 +49,8 @@ const TYPE_LABEL: Record<NotificationType, string> = {
   DEPENDENCY_VIOLATION: 'Dependencia',
   IMPORT_COMPLETED: 'Import',
   AUTOMATION: 'Automatización',
+  // US-7.5 · Proofing.
+  PROOFING_ANNOTATION: 'Proofing',
 }
 
 function iconFor(type: NotificationType) {

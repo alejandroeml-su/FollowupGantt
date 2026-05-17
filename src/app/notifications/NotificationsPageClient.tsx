@@ -39,6 +39,9 @@ const TYPE_LABEL: Record<NotificationType, string> = {
   DEPENDENCY_VIOLATION: 'Dependencia',
   IMPORT_COMPLETED: 'Import',
   AUTOMATION: 'Automatización',
+  // US-7.5 · Proofing — comentario/reply sobre un attachment del que el
+  // usuario es uploader/author.
+  PROOFING_ANNOTATION: 'Proofing',
 }
 
 function iconFor(type: NotificationType) {

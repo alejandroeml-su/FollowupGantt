@@ -68,6 +68,8 @@ const topRoutes: RouteItem[] = [
   { name: 'sidebar.items.timeline', path: '/timeline', icon: LineChart },
   { name: 'sidebar.items.calendar', path: '/calendar', icon: CalendarDays },
   { name: 'sidebar.items.table', path: '/table', icon: Table },
+  // US-5.1 · Box View (R3 final) — capacidad individual por miembro.
+  { name: 'sidebar.items.boxView', path: '/box-view', icon: Users },
   { name: 'sidebar.items.mindmaps', path: '/mindmaps', icon: Network },
   { name: 'sidebar.items.notifications', path: '/notifications', icon: Bell },
   { name: 'sidebar.items.whiteboards', path: '/whiteboards', icon: PenSquare },

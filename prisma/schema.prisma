@@ -77,6 +77,9 @@ enum NotificationType {
   IMPORT_COMPLETED
   /// Wave P18-B — notificación generada por una AutomationRule.
   AUTOMATION
+  /// US-7.5 · Proofing — anotación nueva o reply sobre un Attachment del que
+  /// el usuario es uploader/author. Link apunta al modal de proofing.
+  PROOFING_ANNOTATION
 }
 
 // Ola P2 · Equipo P2-1 — Vistas guardadas multi-surface.
@@ -238,6 +241,9 @@ model User {
   // semántico de `userId` durante migración). Inversa nombrada porque la
   // relación con `userId` ya ocupa la default.
   uploadedAttachments Attachment[]       @relation("AttachmentUploadedBy")
+  // Wave R4 · US-7.3 — Clips de video creados por este usuario. SetNull
+  // en Clip.authorId preserva el clip si el autor es eliminado.
+  authoredClips       Clip[]             @relation("ClipAuthor")
   mindMaps            MindMap[]          @relation("MindMapOwner")
 
   // Time Tracking (Ola P1, Equipo 4) — un usuario tiene múltiples entries
@@ -326,6 +332,15 @@ model User {
   inspectionsAsInspector QualityInspection[] @relation("InspectionInspector")
   defectsOwned           Defect[]            @relation("DefectOwner")
   defectsReported        Defect[]            @relation("DefectReporter")
+
+  // US-7.5 · Proofing — anotaciones sobre attachments multimedia.
+  // `authored` y `resolved` son separadas porque el resolver puede no
+  // coincidir con el author (QA marca como RESOLVED un comentario de Diseño).
+  // `SetNull` en ambas para preservar el histórico de comentarios incluso
+  // si el usuario es borrado.
+  proofingAnnotationsAuthored ProofingAnnotation[] @relation("ProofingAuthor")
+  proofingAnnotationsResolved ProofingAnnotation[] @relation("ProofingResolver")
+  uploadedAttachmentVersions  AttachmentVersion[]  @relation("AttachmentVersionUploader")
 
   // Wave P8 · Equipo P8-5 — Calendar sync (Google + Microsoft + ICS).
   // Conexiones por provider (Google Calendar, MS Graph, ICS feed). Un
@@ -723,10 +738,76 @@ model Project {
   /// su proyecto contenedor.
   chatChannels ChatChannel[]
 
+  /// R4 · US-7.4 — Email ClickApp (Email-to-Task).
+  /// Alias único `inbox+<slug>@<INBOUND_EMAIL_DOMAIN>` al que se envían
+  /// correos para crear tareas (o agregar comentarios si subject incluye
+  /// `[#MNEMONIC]`). Se genera en createProject como slug del nombre.
+  /// NULL en proyectos pre-existentes; backfill manual cuando se requiera.
+  inboundEmailAlias String?         @unique
+  inboundEmails     InboundEmail[]
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([workspaceId])
+}
+
+/// R4 · US-7.4 — Email ClickApp.
+///
+/// Registro inmutable de cada correo recibido por el webhook
+/// `/api/inbound/email` (SendGrid Inbound Parse). Cumple dos roles:
+///   1. Trazabilidad — quién envió qué, cuándo, contra qué proyecto.
+///   2. Cola de retry — si la creación de la tarea falla (BD, RBAC,
+///      validación), el row queda en `status = FAILED` con `errorMsg`
+///      para reproceso manual desde /settings/integrations.
+///
+/// El parseo del cuerpo HTML se sanitiza (strip tags) antes de persistir
+/// en `bodyText`; `bodyHtml` guarda el HTML crudo por si se requiere
+/// auditoría forense. Tamaño max attachment: 25 MB (límite SendGrid).
+model InboundEmail {
+  id String @id @default(uuid())
+
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  fromEmail String
+  fromName  String?
+  subject   String
+  bodyText  String  @db.Text
+  bodyHtml  String? @db.Text
+
+  /// Tarea creada (cuando el email originó una task nueva).
+  taskId String?
+
+  /// Comentario agregado (cuando el subject coincidió con un mnemonic).
+  commentId String?
+
+  /// Estado del procesamiento. `PENDING` es el estado inicial dentro del
+  /// webhook handler; se transiciona a `PROCESSED` o `FAILED` dentro de
+  /// la misma transacción.
+  status      InboundEmailStatus @default(PENDING)
+  errorMsg    String?
+  processedAt DateTime?
+  receivedAt  DateTime           @default(now())
+
+  /// Headers relevantes para debugging (Message-ID, In-Reply-To, etc.).
+  /// Shape libre, lo persistimos como Json para no encadenar columnas.
+  headers Json?
+
+  /// Score de SPAM reportado por SendGrid (0-10 aprox). Si > 5 rechazamos
+  /// con `status = FAILED` y `errorMsg = SPAM_REJECTED`.
+  spamScore Float?
+
+  createdAt DateTime @default(now())
+
+  @@index([projectId, receivedAt])
+  @@index([status])
+}
+
+enum InboundEmailStatus {
+  PENDING
+  PROCESSED
+  FAILED
 }
 
 // Fases del Proyecto (Waterfall / PMI)
@@ -1239,6 +1320,11 @@ model Task {
   attachments   Attachment[]
   collaborators TaskCollaborator[]
 
+  // Wave R4 · US-7.3 — Clips de video grabados in-browser desde el
+  // TaskDrawer. Cascade al borrar la task. La relación inversa con
+  // `Comment` vive en el propio `Clip` (XOR enforced en BD via CHECK).
+  clips Clip[]
+
   // Enlace opcional desde nodos de Mapa Mental
   mindMapNodes MindMapNode[] @relation("TaskMindMapNodes")
 
@@ -1341,6 +1427,10 @@ model Comment {
 
   authorId String?
   author   User?   @relation("CommentAuthor", fields: [authorId], references: [id])
+
+  // Wave R4 · US-7.3 — Clips de video adjuntos directamente al comment.
+  // Permite "Mira este bug en clip" sin tener que adjuntarlo al task.
+  clips Clip[]
 
   createdAt DateTime @default(now())
 }
@@ -1505,8 +1595,62 @@ model Attachment {
   createdAt  DateTime @default(now())
   uploadedAt DateTime @default(now())
 
+  // US-7.5 · Proofing — anotaciones ancladas (coordenadas normalizadas)
+  // y versionado opcional del asset (v1, v2…). Cascade al borrar el
+  // attachment porque las anotaciones no tienen sentido sin su asset.
+  proofingAnnotations ProofingAnnotation[]
+  versions            AttachmentVersion[]
+
   @@index([taskId])
   @@index([uploadedById, uploadedAt])
+}
+
+// ─────────────────────────────────────────────────────────────
+// Wave R4 · US-7.3 — Clips de video grabados in-browser.
+//
+// Un Clip es un blob `video/webm` grabado con Screen Capture API +
+// MediaRecorder desde el navegador, subido al bucket `clips` (separado
+// de `attachments` por: cap 100MB, mime fijo `video/webm`, ownership por
+// folder con userId, thumbnail jpeg en path paralelo).
+//
+// XOR: el clip pertenece a UNA `Task` O a UN `Comment`, nunca a ambos
+// ni a ninguno. Se enforce en BD vía CHECK (`docs/features/clips-migration.sql`)
+// y en el server action `createClip` con validación zod.
+// ─────────────────────────────────────────────────────────────
+model Clip {
+  id String @id @default(uuid())
+
+  // XOR · `taskId` y `commentId` son mutuamente excluyentes (uno y solo
+  // uno NOT NULL). Prisma no expone CHECK constraints declarativos así
+  // que el guard vive en `docs/features/clips-migration.sql` y en el
+  // server action.
+  taskId String?
+  task   Task?   @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  commentId String?
+  comment   Comment? @relation(fields: [commentId], references: [id], onDelete: Cascade)
+
+  authorId String?
+  author   User?   @relation("ClipAuthor", fields: [authorId], references: [id], onDelete: SetNull)
+
+  // Path en bucket `clips`: `{userId}/{clipId}/video.webm`
+  storagePath String
+
+  // Path del primer-frame jpeg `{userId}/{clipId}/thumb.jpg`. Puede ser
+  // null si la captura de frame falló (degradación elegante: el player
+  // muestra placeholder en su lugar).
+  thumbnailPath String?
+
+  // Capturados del MediaRecorder + blob.size.
+  durationSec Int @default(0)
+  sizeBytes   Int @default(0)
+  mimeType    String @default("video/webm")
+
+  createdAt DateTime @default(now())
+
+  @@index([taskId, createdAt])
+  @@index([commentId, createdAt])
+  @@index([authorId])
 }
 
 // Dependencias entre tareas (FS, SS, FF, SF)
@@ -4338,4 +4482,120 @@ model AutoPilotRun {
   rollbackOps  Json?
 
   @@index([workspaceId, appliedAt(sort: Desc)])
+}
+
+// ─────────────────────────────────────────────────────────────
+// US-7.5 · Proofing (R4)
+//
+// Anotaciones ancladas sobre `Attachment` tipo imagen/PDF para flujos
+// de revisión QA/Diseño. Coordenadas siempre normalizadas (0..1) para
+// independizarlas del tamaño de render del canvas. Threading vía
+// `parentAnnotationId` self-referential.
+//
+// Decisiones de diseño:
+//   - Sin enum nativo de status: usamos `String` con check a nivel
+//     server action ('OPEN' | 'RESOLVED' | 'CHANGES_REQUESTED'). El
+//     check evita migración futura cuando el flujo agregue nuevos
+//     estados (ej. 'ARCHIVED', 'DUPLICATE').
+//   - `pageNumber` es opcional porque imágenes no tienen páginas y los
+//     PDFs por ahora siempre renderizan página 1. Reservado para
+//     multi-page (deuda registrada).
+//   - `attachmentVersionId` opcional: la anotación puede anclarse a
+//     una versión concreta del asset cuando exista `AttachmentVersion`,
+//     o quedar sin versionado (default v1 implícita).
+//   - Cascade en `attachment` (sin asset no hay marker); SetNull en
+//     `author`/`resolver` para preservar comentarios cuando se borra
+//     un usuario (alineado con `Comment` y `Defect`).
+// ─────────────────────────────────────────────────────────────
+
+/// US-7.5 · Estados del flujo de proofing.
+/// OPEN — pendiente de atención.
+/// RESOLVED — el responsable confirmó el fix.
+/// CHANGES_REQUESTED — el revisor solicitó iteraciones adicionales.
+enum ProofingAnnotationStatus {
+  OPEN
+  RESOLVED
+  CHANGES_REQUESTED
+}
+
+model ProofingAnnotation {
+  id           String     @id @default(uuid())
+  attachmentId String
+  attachment   Attachment @relation(fields: [attachmentId], references: [id], onDelete: Cascade)
+
+  /// Coordenadas normalizadas en rango [0..1] respecto al bounding-box
+  /// renderizado del asset. Server action valida el rango.
+  x Float
+  y Float
+
+  /// Página para PDFs multi-página (1-indexed). NULL para imágenes y
+  /// PDFs de 1 página (default render).
+  pageNumber Int?
+
+  /// Contenido del comentario. Markdown libre (sin sanitizer adicional;
+  /// se renderiza como texto plano hasta que UI implemente markdown).
+  text String
+
+  status ProofingAnnotationStatus @default(OPEN)
+
+  /// Self-reference para threading. Una anotación raíz (`parent = null`)
+  /// puede tener replies que sólo existen como respuesta a ella.
+  parentAnnotationId String?
+  parent             ProofingAnnotation?  @relation("ProofingThread", fields: [parentAnnotationId], references: [id], onDelete: Cascade)
+  replies            ProofingAnnotation[] @relation("ProofingThread")
+
+  /// Versión específica del asset que se está anotando. NULL = última
+  /// versión (o asset sin versionar). Se materializa al crear cuando hay
+  /// `AttachmentVersion` activa.
+  attachmentVersionId String?
+  attachmentVersion   AttachmentVersion? @relation(fields: [attachmentVersionId], references: [id], onDelete: SetNull)
+
+  authorId String?
+  author   User?   @relation("ProofingAuthor", fields: [authorId], references: [id], onDelete: SetNull)
+
+  resolvedAt   DateTime?
+  resolvedById String?
+  resolvedBy   User?     @relation("ProofingResolver", fields: [resolvedById], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([attachmentId, status, createdAt])
+  @@index([parentAnnotationId])
+  @@index([authorId])
+}
+
+/// US-7.5 · Versiones de un Attachment. Permite "Compare versions"
+/// lado a lado con anotaciones por versión. v1 puede materializarse de
+/// forma lazy: si no hay versiones, se trata el `Attachment` original
+/// como única versión implícita.
+model AttachmentVersion {
+  id           String     @id @default(uuid())
+  attachmentId String
+  attachment   Attachment @relation(fields: [attachmentId], references: [id], onDelete: Cascade)
+
+  /// Número de versión (1-indexed). Único por attachment.
+  version Int
+
+  /// `storagePath` de la versión en Supabase Storage. Mantenemos paths
+  /// independientes por versión para soportar rollback sin sobrescribir.
+  storagePath String
+
+  /// MIME y tamaño cacheados (consistencia con `Attachment.mimeType`).
+  mimeType  String?
+  sizeBytes Int?
+
+  uploadedById String?
+  uploadedBy   User?   @relation("AttachmentVersionUploader", fields: [uploadedById], references: [id], onDelete: SetNull)
+
+  /// Comentario opcional al subir la versión (ej. "Aplicado feedback
+  /// del review v1").
+  note String?
+
+  createdAt DateTime @default(now())
+
+  annotations ProofingAnnotation[]
+
+  @@unique([attachmentId, version])
+  @@index([attachmentId, version(sort: Desc)])
 }
