@@ -187,6 +187,8 @@ const menuGroups: RouteGroup[] = [
       { name: 'sidebar.items.timesheets', path: '/timesheets', icon: Clock },
       { name: 'sidebar.items.workload', path: '/workload', icon: ClipboardList },
       { name: 'sidebar.items.leveling', path: '/leveling', icon: Scale },
+      // Wave R5 · US-9.3 — CMDB simplificado (Gestión de Activos ITIL).
+      { name: 'sidebar.items.cmdb', path: '/cmdb', icon: DatabaseBackup },
     ],
   },
   // ── Documentación & Procesos (gestión cualitativa) ─────────────

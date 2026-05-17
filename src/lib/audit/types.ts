@@ -227,6 +227,15 @@ export const KNOWN_AUDIT_ACTIONS = [
   'proofing.annotation_changes_requested',
   'proofing.annotation_deleted',
   'proofing.version_created',
+  // Wave R5 · US-9.3 — CMDB simplificado (Configuration Items + relaciones).
+  'ci.created',
+  'ci.updated',
+  'ci.retired',
+  'ci.deleted',
+  'ci.relation_added',
+  'ci.relation_removed',
+  'ci.task_linked',
+  'ci.task_unlinked',
   // US-9.2 · Wave R5 — Gap Analysis (AS-IS vs TO-BE)
   'gap.created',
   'gap.updated',
@@ -415,6 +424,15 @@ export const ACTION_LABELS: Record<AuditAction, string> = {
   'proofing.annotation_changes_requested': 'Proofing · cambios solicitados',
   'proofing.annotation_deleted': 'Proofing · anotación eliminada',
   'proofing.version_created': 'Proofing · versión de attachment creada',
+  // Wave R5 · US-9.3 — CMDB
+  'ci.created': 'CMDB · Configuration Item creado',
+  'ci.updated': 'CMDB · Configuration Item actualizado',
+  'ci.retired': 'CMDB · Configuration Item retirado',
+  'ci.deleted': 'CMDB · Configuration Item eliminado',
+  'ci.relation_added': 'CMDB · relación entre CIs agregada',
+  'ci.relation_removed': 'CMDB · relación entre CIs eliminada',
+  'ci.task_linked': 'CMDB · ticket linkeado a CI',
+  'ci.task_unlinked': 'CMDB · ticket desvinculado de CI',
   // US-9.2 · Wave R5 — Gap Analysis
   'gap.created': 'Gap Analysis · análisis creado',
   'gap.updated': 'Gap Analysis · análisis actualizado',
