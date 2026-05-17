@@ -30,7 +30,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { RealtimeChannel } from '@supabase/supabase-js'
 import { supabase } from '@/lib/supabase'
-import type { SerializedChatMessage } from '@/lib/actions/chat'
+import type { SerializedChatMessage } from '@/lib/chat/shared'
 import {
   listMessages,
   sendMessage as sendMessageAction,

@@ -49,6 +49,7 @@ import { useUIStore } from '@/lib/stores/ui'
 import { useTaskShortcuts } from '@/lib/hooks/useTaskShortcuts'
 import { useTaskRealtimeRefresh } from '@/lib/realtime/use-task-realtime'
 import { EpicBadge } from '@/components/epics/EpicBadge'
+import { TaskCiDownBadge } from '@/components/cmdb/TaskCiDownBadge'
 import { toast } from './Toaster'
 import { TaskFiltersBar } from './TaskFiltersBar'
 import { EMPTY_TASK_FILTERS, filterTasks, type TaskFilters } from '@/lib/taskFilters'
@@ -710,6 +711,9 @@ function SortableKanbanCard({
                 <MessageSquare className="h-3 w-3" /> {commentCount}
               </span>
             )}
+            {/* Wave R5-Extended · US-9.3E — badge "CI caído" si alguno de
+                los CIs vinculados está en INCIDENT/MAINTENANCE. */}
+            <TaskCiDownBadge taskId={task.id} />
           </div>
           <span
             className={clsx(

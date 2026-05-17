@@ -3,10 +3,23 @@
  *
  * Server component. Lista los 3 reportes ejecutivos disponibles con
  * enlaces de descarga directos a las APIs.
+ *
+ * Wave R5 Extended (US-Reporting-PDF) — sumamos 2 cards adicionales con
+ * generación PDF server-side vía `@react-pdf/renderer`:
+ *   - Status Report PMI (PDF) → /api/v2/reports/{id}?kind=status
+ *   - Sprint Review (PDF)     → /api/v2/reports/{id}?kind=sprint-review&sprintId=<active>
+ *     (deshabilitado si no hay sprint ACTIVE).
  */
 
 import Link from 'next/link'
-import { ArrowLeft, FileBarChart, FileSpreadsheet, BookOpen } from 'lucide-react'
+import {
+  ArrowLeft,
+  FileBarChart,
+  FileSpreadsheet,
+  BookOpen,
+  FileText,
+  FilePlus2,
+} from 'lucide-react'
 import { notFound } from 'next/navigation'
 import prisma from '@/lib/prisma'
 
@@ -24,6 +37,14 @@ export default async function ProjectReportsPage({ params }: PageProps) {
     select: { id: true, name: true },
   })
   if (!project) notFound()
+
+  // Wave R5 Extended — sprint activo para link directo al PDF de Sprint Review.
+  // Si no hay sprint ACTIVE, la card queda deshabilitada con tooltip explícito.
+  const activeSprint = await prisma.sprint.findFirst({
+    where: { projectId, status: 'ACTIVE' },
+    select: { id: true, name: true },
+    orderBy: { startDate: 'desc' },
+  })
 
   return (
     <div className="flex h-full flex-col bg-background">
@@ -47,6 +68,43 @@ export default async function ProjectReportsPage({ params }: PageProps) {
 
       <div className="flex-1 overflow-auto p-6">
         <div className="mx-auto max-w-3xl space-y-4">
+          {/* Wave R5 Extended · Status Report PMI en PDF nativo
+              (sin Cmd+P → preferido para correos y archivos formales). */}
+          <ReportCard
+            icon={FileText}
+            title="Status Report PMI (PDF)"
+            description="PDF ejecutivo de una página con avance del proyecto, EVM (PV/EV/AC/SPI/CPI del último snapshot), top 5 riesgos abiertos, próximos hitos y desviaciones de cronograma. Generado server-side, descarga directa sin abrir vista intermedia."
+            cta="Descargar PDF"
+            href={`/api/v2/reports/${projectId}?kind=status`}
+            tone="indigo"
+            download
+          />
+
+          {/* Wave R5 Extended · Sprint Review PDF. Disabled si no hay
+              sprint ACTIVE — evita 404 silencioso del API. */}
+          <ReportCard
+            icon={FilePlus2}
+            title={
+              activeSprint
+                ? `Sprint Review (PDF) · ${activeSprint.name}`
+                : 'Sprint Review (PDF)'
+            }
+            description={
+              activeSprint
+                ? `PDF con objetivo del sprint, velocity (SP completados vs planificados), tabla de historias y takeaways de la retrospectiva si existe.`
+                : 'No hay sprint activo en este proyecto. Activa un sprint para habilitar la descarga del Sprint Review.'
+            }
+            cta={activeSprint ? 'Descargar PDF' : 'Sin sprint activo'}
+            href={
+              activeSprint
+                ? `/api/v2/reports/${projectId}?kind=sprint-review&sprintId=${activeSprint.id}`
+                : '#'
+            }
+            tone="emerald"
+            download={!!activeSprint}
+            disabled={!activeSprint}
+          />
+
           <ReportCard
             icon={FileBarChart}
             title="Status Report"
@@ -106,6 +164,7 @@ function ReportCard({
   target,
   download,
   tone,
+  disabled,
 }: {
   icon: typeof FileBarChart
   title: string
@@ -115,6 +174,8 @@ function ReportCard({
   target?: '_blank'
   download?: boolean
   tone: 'indigo' | 'emerald' | 'amber'
+  /** Wave R5 Extended — soporta cards no-clickeables (ej. sprint inactivo). */
+  disabled?: boolean
 }) {
   const toneClasses = {
     indigo: 'border-indigo-500/40 bg-indigo-500/5',
@@ -135,14 +196,23 @@ function ReportCard({
       </header>
       <p className="mt-2 text-xs text-muted-foreground leading-relaxed">{description}</p>
       <div className="mt-3">
-        <a
-          href={href}
-          target={target}
-          download={download}
-          className={`inline-flex items-center gap-2 rounded-md px-3 py-1.5 text-xs font-semibold text-white ${buttonClasses}`}
-        >
-          {cta}
-        </a>
+        {disabled ? (
+          <span
+            aria-disabled="true"
+            className="inline-flex items-center gap-2 rounded-md bg-muted px-3 py-1.5 text-xs font-semibold text-muted-foreground opacity-60"
+          >
+            {cta}
+          </span>
+        ) : (
+          <a
+            href={href}
+            target={target}
+            download={download}
+            className={`inline-flex items-center gap-2 rounded-md px-3 py-1.5 text-xs font-semibold text-white ${buttonClasses}`}
+          >
+            {cta}
+          </a>
+        )}
       </div>
     </article>
   )

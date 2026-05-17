@@ -863,6 +863,46 @@ export async function getCIDetail(ciId: string) {
 }
 
 /**
+ * Wave R5-Extended — Para el badge "CI caído" en TaskCard/Kanban.
+ *
+ * Devuelve, dado un set de Task IDs, los IDs que tienen al menos un CI
+ * vinculado en estado "alerta" (INCIDENT o MAINTENANCE) y no retirado.
+ *
+ * Mapeo con el spec original de la historia (DOWN/DEGRADED no son
+ * literales del enum del repo):
+ *   - DOWN     → INCIDENT
+ *   - DEGRADED → MAINTENANCE
+ *
+ * Se devuelve un array (en lugar de Set) para que sea serializable a
+ * través del wire de los server actions.
+ */
+export async function getTasksWithImpactedCI(
+  taskIds: string[],
+): Promise<string[]> {
+  return withMetrics('action.cmdb.getTasksWithImpactedCI', async () => {
+    if (!taskIds || taskIds.length === 0) return []
+    // Cota dura: la card kanban podría enviar 1000 IDs; truncamos para
+    // evitar abuso del endpoint.
+    const trimmed = taskIds.slice(0, 500)
+    await requireUser()
+
+    const links = await prisma.taskCILink.findMany({
+      where: {
+        taskId: { in: trimmed },
+        ci: {
+          retiredAt: null,
+          status: { in: ['INCIDENT', 'MAINTENANCE'] },
+        },
+      },
+      select: { taskId: true },
+    })
+    const out = new Set<string>()
+    for (const l of links) out.add(l.taskId)
+    return Array.from(out)
+  })
+}
+
+/**
  * Stats agregadas del CMDB para el dashboard widget. Devuelve:
  *   - countByStatus: cuántos CIs hay por cada CIStatus
  *   - countByCriticality: idem por criticidad

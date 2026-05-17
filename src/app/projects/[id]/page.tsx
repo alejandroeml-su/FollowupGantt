@@ -20,7 +20,7 @@ type PageProps = {
 
 export default async function ProjectDetailManagement({ params }: PageProps) {
   const { id } = await params;
-  const [currentUser, sprintReleases] = await Promise.all([
+  const [currentUser, sprintReleases, activeSprint] = await Promise.all([
     getCurrentUserPresence(),
     // Wave P9 follow-up — Releases con scopeMode=SPRINT activas para
     // que el modal "Nuevo Sprint" pueda ofrecer asociación.
@@ -34,6 +34,13 @@ export default async function ProjectDetailManagement({ params }: PageProps) {
       select: { id: true, name: true, version: true, scopeMode: true },
       orderBy: { plannedDate: 'asc' },
     }),
+    // Wave R5 Extended (US-Reporting-PDF) — sprint activo para que el
+    // dropdown "Exportar PDF" del header pueda enlazar al Sprint Review.
+    prisma.sprint.findFirst({
+      where: { projectId: id, status: 'ACTIVE' },
+      select: { id: true, name: true },
+      orderBy: { startDate: 'desc' },
+    }),
   ]);
 
   return (
@@ -41,6 +48,7 @@ export default async function ProjectDetailManagement({ params }: PageProps) {
       projectId={id}
       currentUser={currentUser}
       sprintReleases={sprintReleases}
+      activeSprint={activeSprint}
     />
   );
 }

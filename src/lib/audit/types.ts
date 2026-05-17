@@ -248,6 +248,9 @@ export const KNOWN_AUDIT_ACTIONS = [
   // aceptados con esta acción. El `metadata` lleva `{ fields, model }`
   // para trazar qué se aplicó y con qué modelo (llm / heuristic).
   'task.ai_applied',
+  // Wave R5 Extended · US-Reporting-PDF — Status Report PMI / Sprint Review.
+  // @react-pdf/renderer streamed binary, audita kind + projectId + sprintId opcional.
+  'report.exported',
 ] as const
 
 export type AuditAction = (typeof KNOWN_AUDIT_ACTIONS)[number]
@@ -447,6 +450,8 @@ export const ACTION_LABELS: Record<AuditAction, string> = {
   'gap.exported': 'Gap Analysis · exportado a Excel',
   // Wave R5 Extended — AI Auto-Apply
   'task.ai_applied': 'IA · refinement aplicado a tarea',
+  // Wave R5 Extended · US-Reporting-PDF
+  'report.exported': 'Reporte PDF · descarga generada',
 }
 
 // ───────────────────────── Tipos de entidad ─────────────────────────

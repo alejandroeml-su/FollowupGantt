@@ -25,6 +25,7 @@
     "@prisma/adapter-pg": "^7.8.0",
     "@radix-ui/react-context-menu": "^2.2.16",
     "@radix-ui/react-dialog": "^1.1.15",
+    "@react-pdf/renderer": "^4.5.1",
     "@sendgrid/mail": "^8.1.6",
     "@sentry/nextjs": "^10.51.0",
     "@stripe/stripe-js": "^9.4.0",
