@@ -20,6 +20,7 @@ import { getBaselinesForProject } from '@/lib/actions/baselines'
 import { getCurrentUserPresence } from '@/lib/auth/get-current-user-presence'
 import { getCurrentUser } from '@/lib/auth/get-current-user'
 import { resolveProjectVisibility } from '@/lib/auth/visibility'
+import { getServerT } from '@/lib/i18n/server'
 
 export const dynamic = 'force-dynamic'
 
@@ -280,6 +281,9 @@ export default async function GanttTimeline({
     }
   }
 
+  // Wave R5E (2026-05-17) — Header bilingüe.
+  const tt = await getServerT()
+
   return (
     <div className="flex h-full flex-col bg-background transition-colors duration-300">
       {/* Wave P16-C · mobile-first: header pasa a stack vertical en <md
@@ -289,11 +293,10 @@ export default async function GanttTimeline({
         <div>
           <GlobalBreadcrumbs />
           <h1 className="mt-1 text-lg font-semibold text-foreground md:text-xl">
-            Cronograma · Drag horizontal y resize
+            {tt('pages.gantt.headerTitle')}
           </h1>
           <p className="mt-1 hidden text-xs text-muted-foreground md:block">
-            Arrastra el cuerpo para desplazar; los bordes para redimensionar.
-            Teclado: ←/→ desplaza, Shift+← /→ cambia fin, Alt+← /→ cambia inicio.
+            {tt('pages.gantt.headerHint')}
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2 md:gap-3">

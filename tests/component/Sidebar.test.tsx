@@ -23,7 +23,8 @@ import userEvent from '@testing-library/user-event'
 // ── Mocks ──────────────────────────────────────────────────────────
 
 let currentPath = '/'
-let currentLocale: 'es' | 'en' = 'es'
+// Wave R5E (2026-05-17) — Migrado a BCP-47 (`es-MX`/`en-US`).
+let currentLocale: 'es-MX' | 'en-US' = 'es-MX'
 
 vi.mock('next/navigation', () => ({
   usePathname: () => currentPath,
@@ -74,7 +75,7 @@ import { useUIStore } from '@/lib/stores/ui'
 
 beforeEach(() => {
   currentPath = '/'
-  currentLocale = 'es'
+  currentLocale = 'es-MX'
   useUIStore.setState({
     mobileSidebarOpen: false,
     sidebarCollapsed: false,
@@ -186,13 +187,13 @@ describe('Sidebar · drawer mobile', () => {
 })
 
 describe('Sidebar · i18n', () => {
-  it('renderiza "Pizarras" en locale ES y "Whiteboards" en locale EN', () => {
-    currentLocale = 'es'
+  it('renderiza "Pizarras" en locale es-MX y "Whiteboards" en locale en-US', () => {
+    currentLocale = 'es-MX'
     const { unmount } = render(<Sidebar />)
     expect(screen.getByRole('link', { name: /Pizarras/i })).toBeInTheDocument()
     unmount()
 
-    currentLocale = 'en'
+    currentLocale = 'en-US'
     render(<Sidebar />)
     expect(screen.getByRole('link', { name: /Whiteboards/i })).toBeInTheDocument()
   })

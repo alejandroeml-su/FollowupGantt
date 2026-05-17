@@ -11,6 +11,7 @@ import { getCmdbHealthStats } from '@/lib/actions/cmdb'
 import type { KPIFilters } from '@/lib/kpi-calc'
 import { KPIFilters as KPIFiltersPanel } from '@/components/dashboard/KPIFilters'
 import { KPIDashboardView } from '@/components/dashboard/KPIDashboardView'
+import { getServerT } from '@/lib/i18n/server'
 
 export const dynamic = 'force-dynamic'
 
@@ -70,16 +71,19 @@ export default async function DashboardsPage({
     topByIncidents: [],
   }
 
+  // Wave R5E (2026-05-17) — Header bilingüe.
+  const t = await getServerT()
+
   return (
     <div className="flex h-full flex-col bg-background">
       <header className="flex h-16 shrink-0 items-center justify-between border-b border-border bg-subtle/50 px-8">
         <div>
           <h1 className="flex items-center gap-2 text-xl font-semibold text-white">
             <LayoutTemplate className="h-5 w-5 text-indigo-400" />
-            Dashboards Ejecutivos & Gobernanza
+            {t('pages.dashboards.title')}
           </h1>
           <p className="mt-1 text-xs text-muted-foreground">
-            KPIs PMBOK · EVM · Retorno · Eficiencia operativa
+            {t('pages.dashboards.subtitle')}
           </p>
         </div>
       </header>

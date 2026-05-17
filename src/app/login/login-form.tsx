@@ -2,9 +2,11 @@
 
 import { useActionState } from 'react'
 import { loginAction, type LoginActionState } from '@/lib/auth/actions'
+import { useTranslation } from '@/lib/i18n/use-translation'
 
 /**
  * Formulario de login (Ola P1 · Auth MVP).
+ * Wave R5E (2026-05-17) — strings traducidos vía `useTranslation`.
  *
  * Usa `useActionState` (React 19) — el helper recomendado por la doc
  * Next 16 para coordinar pending state + errores con server actions.
@@ -14,6 +16,7 @@ import { loginAction, type LoginActionState } from '@/lib/auth/actions'
  * ejecutar si hubo error. Por eso no manejamos un estado `ok=true`.
  */
 export default function LoginForm() {
+  const { t } = useTranslation()
   const [state, formAction, pending] = useActionState<
     LoginActionState,
     FormData
@@ -28,7 +31,7 @@ export default function LoginForm() {
           htmlFor="email"
           className="mb-1.5 block text-sm font-medium text-foreground"
         >
-          Email
+          {t('auth.emailLabel')}
         </label>
         <input
           id="email"
@@ -38,7 +41,7 @@ export default function LoginForm() {
           required
           data-testid="login-email"
           className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground outline-none focus:border-primary focus:ring-1 focus:ring-primary/40"
-          placeholder="tu@empresa.com"
+          placeholder={t('auth.emailPlaceholder')}
         />
       </div>
       <div>
@@ -46,7 +49,7 @@ export default function LoginForm() {
           htmlFor="password"
           className="mb-1.5 block text-sm font-medium text-foreground"
         >
-          Contraseña
+          {t('auth.passwordLabel')}
         </label>
         <input
           id="password"
@@ -73,7 +76,7 @@ export default function LoginForm() {
         data-testid="login-submit"
         className="w-full rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60"
       >
-        {pending ? 'Iniciando…' : 'Iniciar sesión'}
+        {pending ? t('auth.loginPending') : t('auth.loginButton')}
       </button>
     </form>
   )

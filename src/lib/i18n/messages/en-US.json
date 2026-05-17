@@ -178,9 +178,41 @@
   "userMenu": {
     "logout": "Sign out",
     "language": "Language",
-    "languageSpanish": "Spanish",
-    "languageEnglish": "English",
+    "languageSpanish": "Spanish (Mexico)",
+    "languageEnglish": "English (United States)",
     "switchLanguage": "Switch language"
+  },
+  "auth": {
+    "loginTitle": "Sign in",
+    "loginSubtitle": "Access your Sync workspace.",
+    "emailLabel": "Email",
+    "emailPlaceholder": "you@company.com",
+    "passwordLabel": "Password",
+    "loginButton": "Sign in",
+    "loginPending": "Signing in…",
+    "resetSuccess": "Password updated. Sign in with your new password.",
+    "oauthError": "Could not complete external sign-in ({error}). Please try again.",
+    "forgotPasswordLink": "Forgot your password?",
+    "forgotTitle": "Recover password",
+    "forgotSubtitle": "Enter your email and we'll send you a link to reset your password.",
+    "forgotSubmit": "Send link",
+    "forgotSending": "Sending…",
+    "forgotSuccess": "If an account exists for that email, you will receive instructions in the next few minutes.",
+    "backToLogin": "Back to sign in",
+    "resetTitle": "New password",
+    "resetSubtitle": "Set a secure password (minimum 8 characters).",
+    "newPasswordLabel": "New password",
+    "confirmPasswordLabel": "Confirm password",
+    "resetSubmit": "Change password",
+    "resetSaving": "Saving…",
+    "profileLoginPrompt": "Sign in to manage your profile and push notifications."
+  },
+  "kanban": {
+    "headerTitle": "Kanban Board · DnD + Context menu",
+    "columnTodo": "To do",
+    "columnInProgress": "In progress",
+    "columnReview": "Review",
+    "columnDone": "Done"
   },
   "task": {
     "form": {
@@ -252,9 +284,39 @@
       "totalTasks": "Total tasks",
       "environment": "Environment"
     },
+    "list": {
+      "title": "List View",
+      "subtitle": "Full task listing with filters and archived view."
+    },
+    "kanban": {
+      "title": "Kanban Board",
+      "subtitle": "Status-based draggable board · DnD + context menu"
+    },
+    "timeline": {
+      "title": "Timeline",
+      "subtitle": "Groupable timeline by project, sprint, or assignee."
+    },
+    "calendar": {
+      "title": "Calendar",
+      "subtitle": "Monthly planning · drag to move, click to create."
+    },
+    "portfolio": {
+      "title": "Portfolio",
+      "subtitle": "Executive multi-project view"
+    },
+    "brain": {
+      "title": "Avante Brain AI",
+      "subtitle": "AI integrated across your entire workspace"
+    },
+    "dashboards": {
+      "title": "Executive Dashboards & Governance",
+      "subtitle": "PMBOK KPIs · EVM · ROI · Operational efficiency"
+    },
     "gantt": {
       "title": "Gantt",
-      "subtitle": "Project timeline"
+      "subtitle": "Project timeline",
+      "headerTitle": "Schedule · Horizontal drag and resize",
+      "headerHint": "Drag the body to move; the edges to resize. Keyboard: ←/→ moves, Shift+← /→ changes end, Alt+← /→ changes start."
     },
     "sprints": {
       "title": "Sprints",
@@ -305,7 +367,13 @@
       "identity": "Identity",
       "tourTitle": "Welcome tour",
       "tourBody": "Would you like to see the guided Sync tour again? You can restart it anytime.",
-      "futureTitle": "Coming soon"
+      "futureTitle": "Coming soon",
+      "futureBody": "Here you'll be able to set timezone, visual theme, and avatar. Theme and language are also available in the Sidebar footer.",
+      "localeTitle": "Interface language",
+      "localeBody": "Pick the language for Sync's menus, forms, and messages. The preference is stored per user and persists between sessions.",
+      "localeSelectLabel": "Language",
+      "localeSaving": "Applying…",
+      "localeReloadHint": "When you change it, the page will reload to apply the new language."
     },
     "sessions": {
       "title": "Active sessions",

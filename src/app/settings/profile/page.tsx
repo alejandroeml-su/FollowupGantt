@@ -13,6 +13,7 @@
 
 import { getCurrentUser } from '@/lib/auth'
 import { ProfilePushSection } from '@/components/profile/ProfilePushSection'
+import { ProfileLocaleSection } from '@/components/profile/ProfileLocaleSection'
 import { RestartTourButton } from '@/components/onboarding/RestartTourButton'
 import { getServerT } from '@/lib/i18n/server'
 
@@ -63,6 +64,11 @@ export default async function ProfilePage() {
             </dl>
           </section>
 
+          {/* Wave R5E (2026-05-17) — Selector de idioma BCP-47.
+              Ubicado entre Identidad y Push para que sea lo primero que
+              el usuario vea tras su email — bilingüe es-MX/en-US. */}
+          <ProfileLocaleSection />
+
           <ProfilePushSection userId={user.id} />
 
           <section
@@ -96,9 +102,7 @@ export default async function ProfilePage() {
               {t('pages.profile.futureTitle')}
             </h2>
             <p className="mt-1 text-sm text-muted-foreground">
-              Aquí podrás configurar idioma, zona horaria, tema visual y
-              avatar. Por ahora estos ajustes están centralizados en el
-              footer del Sidebar.
+              {t('pages.profile.futureBody')}
             </p>
           </section>
         </div>
@@ -107,7 +111,7 @@ export default async function ProfilePage() {
           data-testid="profile-empty-state"
           className="rounded-2xl border border-border bg-card p-6 text-sm text-muted-foreground"
         >
-          Inicia sesión para gestionar tu perfil y las notificaciones push.
+          {t('auth.profileLoginPrompt')}
         </div>
       )}
     </main>

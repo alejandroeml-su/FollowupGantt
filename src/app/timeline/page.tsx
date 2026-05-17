@@ -9,6 +9,7 @@ import { getCurrentUserPresence } from '@/lib/auth/get-current-user-presence'
 import { resolveProjectVisibility } from '@/lib/auth/visibility'
 import { serializeTask, type SerializedTask } from '@/lib/types'
 import { buildTaskTreeInclude, DEFAULT_TREE_DEPTH } from '@/lib/tasks/load-tree'
+import { getServerT } from '@/lib/i18n/server'
 
 export const dynamic = 'force-dynamic'
 
@@ -141,6 +142,9 @@ export default async function TimelinePage() {
     assigneeId: t.assigneeId ?? null,
   }))
 
+  // Wave R5E (2026-05-17) — Header bilingüe.
+  const t = await getServerT()
+
   return (
     <div className="flex h-full flex-col bg-background">
       <header className="flex shrink-0 items-center justify-between border-b border-border bg-card px-6 py-4">
@@ -148,11 +152,10 @@ export default async function TimelinePage() {
           <GlobalBreadcrumbs />
           <h1 className="mt-1 inline-flex items-center gap-2 text-xl font-bold text-foreground">
             <LineChart className="h-5 w-5 text-indigo-400" />
-            Timeline
+            {t('pages.timeline.title')}
           </h1>
           <p className="mt-0.5 text-xs text-muted-foreground">
-            Línea de tiempo agrupable · {tasks.length} tarea
-            {tasks.length === 1 ? '' : 's'} con fechas
+            {t('pages.timeline.subtitle')} · {tasks.length}
           </p>
         </div>
         <ViewSwitcher />

@@ -50,19 +50,27 @@ function actionLabel(action: string): string {
   return action
 }
 
-function formatAbsolute(iso: string, locale: 'es' | 'en' = 'es'): string {
+// Wave R5E (2026-05-17) — Aceptamos cualquier BCP-47 que empiece por
+// "en" como inglés; el resto se trata como español. Conserva la
+// firma original (corta) para no romper callers.
+type AuditLocale = string
+function isEnglish(locale: AuditLocale): boolean {
+  return typeof locale === 'string' && locale.toLowerCase().startsWith('en')
+}
+
+function formatAbsolute(iso: string, locale: AuditLocale = 'es-MX'): string {
   try {
-    const dateLocale = locale === 'en' ? enUS : es
-    const pattern = locale === 'en' ? "MMM d, yyyy · HH:mm:ss" : "d 'de' MMM yyyy · HH:mm:ss"
+    const dateLocale = isEnglish(locale) ? enUS : es
+    const pattern = isEnglish(locale) ? "MMM d, yyyy · HH:mm:ss" : "d 'de' MMM yyyy · HH:mm:ss"
     return format(new Date(iso), pattern, { locale: dateLocale })
   } catch {
     return iso
   }
 }
 
-function formatRelative(iso: string, locale: 'es' | 'en' = 'es'): string {
+function formatRelative(iso: string, locale: AuditLocale = 'es-MX'): string {
   try {
-    const dateLocale = locale === 'en' ? enUS : es
+    const dateLocale = isEnglish(locale) ? enUS : es
     return formatDistanceToNow(new Date(iso), { addSuffix: true, locale: dateLocale })
   } catch {
     return iso
@@ -313,7 +321,9 @@ function EventRow({
   event: SerializedAuditEvent
   isOpen: boolean
   onToggle: () => void
-  locale: 'es' | 'en'
+  // Wave R5E (2026-05-17) — BCP-47 (es-MX/en-US). Aceptamos string para
+  // permitir aliases backward-compat.
+  locale: string
 }) {
   const { t } = useTranslation()
   const Chevron = isOpen ? ChevronDown : ChevronRight
@@ -459,7 +469,9 @@ function PurgeConfirmDialog({
   isPending: boolean
   onConfirm: () => void
   onCancel: () => void
-  locale: 'es' | 'en'
+  // Wave R5E (2026-05-17) — BCP-47 (es-MX/en-US). Aceptamos string para
+  // permitir aliases backward-compat.
+  locale: string
 }) {
   const { t } = useTranslation()
   return (

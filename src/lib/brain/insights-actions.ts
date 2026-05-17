@@ -27,6 +27,14 @@ import {
 } from './insights-types'
 
 /**
+ * Wave R5E (2026-05-17) — `getServerLocale()` ahora devuelve BCP-47.
+ * El prompt builder espera `'es' | 'en'`; helper local para no propagar.
+ */
+function localeShort(bcp47: string): 'es' | 'en' {
+  return bcp47.toLowerCase().startsWith('en') ? 'en' : 'es'
+}
+
+/**
  * Wave P20 (i18n) — Devuelve el system prompt del Brain Insights AI
  * adaptado al locale del usuario (es/en). El esquema de respuesta y
  * datos del proyecto se mantienen iguales — solo cambia el idioma del
@@ -260,8 +268,8 @@ export async function generateProjectInsights(input: {
 
   let report: InsightsReport
   try {
-    // Wave P20 — Pick locale from user cookie so Brain insights match UI lang.
-    const locale = await getServerLocale()
+    // Wave P20 / R5E — Pick locale from user cookie so Brain insights match UI lang.
+    const locale = localeShort(await getServerLocale())
     const promptHeader =
       locale === 'en' ? 'Project data' : 'Datos del proyecto'
     const result = await generateObject({
