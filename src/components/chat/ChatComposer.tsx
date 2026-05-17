@@ -15,7 +15,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Send, Smile, X } from 'lucide-react'
-import { ALLOWED_REACTION_EMOJIS } from '@/lib/actions/chat'
+import { ALLOWED_REACTION_EMOJIS } from '@/lib/chat/shared'
 import {
   MentionTextarea,
   type MentionUser,

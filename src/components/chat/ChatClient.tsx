@@ -29,13 +29,12 @@ import {
   Trash2,
 } from 'lucide-react'
 import { clsx } from 'clsx'
+import { createChannel, searchMessages } from '@/lib/actions/chat'
 import {
+  ALLOWED_REACTION_EMOJIS,
   type SerializedChatChannel,
   type SerializedChatMessage,
-  createChannel,
-  searchMessages,
-  ALLOWED_REACTION_EMOJIS,
-} from '@/lib/actions/chat'
+} from '@/lib/chat/shared'
 import { useChatChannel } from '@/lib/realtime/use-chat-channel'
 import { usePresence } from '@/lib/realtime/use-presence'
 import type { PresenceIdentity } from '@/lib/realtime/types'
