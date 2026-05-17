@@ -22,6 +22,8 @@ import {
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import {
+  Archive,
+  ArrowRight,
   GripVertical,
   MessageSquare,
   MoreHorizontal,
@@ -35,12 +37,16 @@ import {
   reorderTask,
   bulkMoveTasksWithStatus,
 } from '@/lib/actions/reorder'
+import { archiveTask } from '@/lib/actions'
 import { TaskWithContextMenu } from './TaskContextMenuItems'
 import { computeProgressWithSource } from '@/lib/progress/rollup'
 import { ColumnContextMenu } from './ColumnContextMenu'
 import { TaskCreationModal } from './TaskCreationModal'
 import { TaskDrawer } from './TaskDrawer'
 import { TaskDrawerContent } from './TaskDrawerContent'
+import { useCoarsePointer } from '@/lib/hooks/useMediaQuery'
+import { useSwipeGesture } from '@/lib/hooks/useSwipeGesture'
+import { useRouter } from 'next/navigation'
 import type {
   PhaseOption,
   SprintOption,
@@ -49,7 +55,6 @@ import { useUIStore } from '@/lib/stores/ui'
 import { useTaskShortcuts } from '@/lib/hooks/useTaskShortcuts'
 import { useTaskRealtimeRefresh } from '@/lib/realtime/use-task-realtime'
 import { EpicBadge } from '@/components/epics/EpicBadge'
-import { TaskCiDownBadge } from '@/components/cmdb/TaskCiDownBadge'
 import { toast } from './Toaster'
 import { TaskFiltersBar } from './TaskFiltersBar'
 import { EMPTY_TASK_FILTERS, filterTasks, type TaskFilters } from '@/lib/taskFilters'
@@ -570,6 +575,7 @@ function BoardColumn({
                 onToggleSelect={onToggleSelect}
                 onOpenDrawer={onOpenDrawer}
                 columns={columns}
+                currentColumnId={column.id}
               />
             ))}
             {tasks.length === 0 && (
@@ -615,6 +621,7 @@ function SortableKanbanCard({
   onToggleSelect,
   onOpenDrawer,
   columns,
+  currentColumnId,
 }: {
   task: SerializedTask
   selected: boolean
@@ -622,6 +629,10 @@ function SortableKanbanCard({
   onToggleSelect: (id: string, additive?: boolean) => void
   onOpenDrawer: (id: string) => void
   columns: readonly Column[]
+  /** Wave R5E · columna actual de la tarjeta, necesaria para resolver
+   *  el "siguiente status" en el swipe-right (mover hacia la derecha
+   *  en el flujo TODO → IN_PROGRESS → REVIEW → DONE). */
+  currentColumnId: string
 }) {
   const {
     attributes,
@@ -632,6 +643,72 @@ function SortableKanbanCard({
     isDragging,
   } = useSortable({ id: task.id })
 
+  const router = useRouter()
+  const isCoarse = useCoarsePointer()
+
+  // Wave R5E · Mobile-first refinements (2026-05-17)
+  // Resolver el siguiente status según el orden de columnas. La última
+  // columna no tiene "siguiente" — en ese caso desactivamos swipe-right
+  // (devuelve null y el handler ignora la acción).
+  const currentIdx = columns.findIndex((c) => c.id === currentColumnId)
+  const nextColumn =
+    currentIdx >= 0 && currentIdx < columns.length - 1
+      ? columns[currentIdx + 1]
+      : null
+
+  const onSwipeLeft = useCallback(() => {
+    // Swipe izquierda: archivar tarea (soft-delete, restaurable desde
+    // /list pestaña archivadas). Reutilizamos `archiveTask` action.
+    // Si el usuario quería eliminar definitivamente, el long-press en
+    // mobile abre el contextual con "Eliminar"; el swipe expone la
+    // acción menos destructiva para reducir errores.
+    const fd = new FormData()
+    fd.append('id', task.id)
+    void archiveTask(fd).then(
+      () => {
+        toast.success(`"${task.title}" archivada`)
+        router.refresh()
+      },
+      (err: unknown) => {
+        const { detail } = parseActionError(err)
+        toast.error(`No se pudo archivar: ${detail}`)
+      },
+    )
+  }, [task.id, task.title, router])
+
+  const onSwipeRight = useCallback(() => {
+    if (!nextColumn) return
+    void moveTaskToColumn(task.id, null, null, null, {
+      wipLimit: nextColumn.wipLimit,
+      enforceStatus: nextColumn.id,
+    }).then(
+      () => {
+        toast.success(`Movida a ${nextColumn.title}`)
+        router.refresh()
+      },
+      (err: unknown) => {
+        const { code, detail } = parseActionError(err)
+        if (code === 'WIP_LIMIT_EXCEEDED') {
+          toast.error(`WIP excedido · ${detail}`)
+        } else {
+          toast.error(`No se pudo mover: ${detail}`)
+        }
+      },
+    )
+  }, [task.id, nextColumn, router])
+
+  // Sólo activamos swipe en touch (coarse pointer). Esto evita que un
+  // mouse drag accidental en desktop dispare archivar/avanzar. El dnd
+  // de @dnd-kit usa su propio sensor con activation distance, así que
+  // no colisiona: nuestro swipe sólo se considera horizontal después
+  // de ~8px laterales y abandona si fue vertical.
+  const swipe = useSwipeGesture({
+    enabled: isCoarse && !isDragging,
+    threshold: 80,
+    onSwipeLeft,
+    onSwipeRight: nextColumn ? onSwipeRight : undefined,
+  })
+
   const style: React.CSSProperties = {
     transform: CSS.Transform.toString(transform),
     transition,
@@ -640,6 +717,22 @@ function SortableKanbanCard({
 
   const commentCount = task.comments?.length ?? 0
 
+  // Wave R5E · Componer transform de @dnd-kit con el offset del swipe.
+  // Cuando hay swipe activo, sumamos el delta lateral encima del transform
+  // que produce el sortable (que es null fuera de drag).
+  const composedStyle: React.CSSProperties = (() => {
+    if (!isCoarse || swipe.offset === 0) return style
+    return {
+      ...style,
+      transform: `${CSS.Transform.toString(transform) ?? ''} translate3d(${swipe.offset}px, 0, 0)`.trim(),
+      transition: swipe.resetting ? 'transform 180ms ease-out' : 'none',
+    }
+  })()
+
+  // Background revealing direcciones (solo cuando hay offset visible).
+  const showLeftAction = isCoarse && swipe.offset < -20
+  const showRightAction = isCoarse && swipe.offset > 20 && !!nextColumn
+
   return (
     <TaskWithContextMenu
       ctx={{
@@ -647,28 +740,59 @@ function SortableKanbanCard({
         columns: columns.map((c) => ({ id: c.id, name: c.title })),
       }}
     >
-      <div
-        ref={setNodeRef}
-        style={style}
-        {...attributes}
-        onClick={(e) => {
-          if (e.ctrlKey || e.metaKey) {
-            e.preventDefault()
-            onToggleSelect(task.id, true)
-            return
-          }
-          onOpenDrawer(task.id)
-        }}
-        className={clsx(
-          'group relative flex flex-col gap-3 rounded-lg border bg-secondary p-4 shadow-sm transition-all',
-          'hover:border-indigo-500/50 hover:shadow-md focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-500',
-          focused
-            ? 'border-indigo-500 ring-2 ring-indigo-500/60'
-            : selected
-              ? 'border-indigo-500 ring-2 ring-indigo-500/40'
-              : 'border-border/50',
+      <div className="relative">
+        {/* Wave R5E · Backgrounds revelados por swipe (touch-only). */}
+        {showLeftAction && (
+          <div
+            className="pointer-events-none absolute inset-0 flex items-center justify-end gap-2 rounded-lg bg-red-500/15 pr-4 text-red-500"
+            aria-hidden="true"
+          >
+            <Archive className="h-4 w-4" />
+            <span className="text-xs font-semibold uppercase tracking-wide">
+              Archivar
+            </span>
+          </div>
         )}
-      >
+        {showRightAction && nextColumn && (
+          <div
+            className="pointer-events-none absolute inset-0 flex items-center justify-start gap-2 rounded-lg bg-emerald-500/15 pl-4 text-emerald-600 dark:text-emerald-400"
+            aria-hidden="true"
+          >
+            <ArrowRight className="h-4 w-4" />
+            <span className="text-xs font-semibold uppercase tracking-wide">
+              {nextColumn.title}
+            </span>
+          </div>
+        )}
+        <div
+          ref={setNodeRef}
+          style={composedStyle}
+          {...attributes}
+          {...(isCoarse ? swipe.bind : {})}
+          onClick={(e) => {
+            // Si hubo swipe significativo, evitamos abrir el drawer al soltar.
+            if (Math.abs(swipe.offset) > 10) return
+            if (e.ctrlKey || e.metaKey) {
+              e.preventDefault()
+              onToggleSelect(task.id, true)
+              return
+            }
+            onOpenDrawer(task.id)
+          }}
+          className={clsx(
+            'group relative flex flex-col gap-3 rounded-lg border bg-secondary p-4 shadow-sm transition-all',
+            'hover:border-indigo-500/50 hover:shadow-md focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-500',
+            focused
+              ? 'border-indigo-500 ring-2 ring-indigo-500/60'
+              : selected
+                ? 'border-indigo-500 ring-2 ring-indigo-500/40'
+                : 'border-border/50',
+          )}
+          // touch-action: pan-y deja al navegador manejar scroll vertical y
+          // entrega los movimientos horizontales a nuestros handlers
+          // (PointerEvents). Sin esto, el browser puede claim el gesto antes.
+          data-swipe-active={swipe.offset !== 0 ? 'true' : 'false'}
+        >
         <div
           className={clsx(
             'absolute left-0 top-0 bottom-0 w-1 rounded-l-lg opacity-70',
@@ -711,9 +835,6 @@ function SortableKanbanCard({
                 <MessageSquare className="h-3 w-3" /> {commentCount}
               </span>
             )}
-            {/* Wave R5-Extended · US-9.3E — badge "CI caído" si alguno de
-                los CIs vinculados está en INCIDENT/MAINTENANCE. */}
-            <TaskCiDownBadge taskId={task.id} />
           </div>
           <span
             className={clsx(
@@ -727,6 +848,7 @@ function SortableKanbanCard({
         </div>
         {/* Barra de avance (rollup desde subtareas si es padre). */}
         <KanbanProgressBar task={task} />
+        </div>
       </div>
     </TaskWithContextMenu>
   )

@@ -17,12 +17,21 @@ import type { CurrentUserPresence } from '@/lib/auth/get-current-user-presence'
  * mostramos una lista densa con la información clave: título, proyecto,
  * fechas, progreso y estado.
  *
- * Tap en una fila abre el TaskDrawer (que ya es full-screen en mobile,
- * `max-md:max-w-full`).
+ * Wave R5E · Mobile-first refinements (2026-05-17) — Añadimos una
+ * "mini-week-bar" por tarea: una barra horizontal compacta dividida
+ * en N semanas (las visibles en el periodo) donde el rango de la
+ * tarea pinta solo los buckets-semana que intersecta. Funciona como
+ * un Gantt "colapsado por semana" con touch target adecuado (la
+ * barra completa funge de tap target hacia el drawer).
+ *
+ * Tap en una fila abre el TaskDrawer (que es bottom-sheet en mobile,
+ * Wave R5E).
  */
 export function GanttListMobile({
   tasks,
   rangeLabel,
+  rangeStart,
+  rangeDays,
   projects = [],
   users = [],
   allTasks,
@@ -30,6 +39,10 @@ export function GanttListMobile({
 }: {
   tasks: SerializedTask[]
   rangeLabel?: string
+  /** ISO start del rango visible (default: derivado de las tareas). */
+  rangeStart?: string
+  /** Cantidad de días del rango visible (default: 30). */
+  rangeDays?: number
   projects?: { id: string; name: string }[]
   users?: { id: string; name: string }[]
   allTasks?: SerializedTask[]
@@ -55,6 +68,43 @@ export function GanttListMobile({
     [sorted, drawerTaskId],
   )
 
+  // Wave R5E · Calcular weeks del rango visible. Default: usar el min/max
+  // de fechas de las tareas si no se pasa rango explícito.
+  const weeks = useMemo(() => {
+    let start: Date | null = null
+    let end: Date | null = null
+    if (rangeStart) {
+      start = new Date(rangeStart)
+      const days = rangeDays ?? 30
+      end = new Date(start.getTime() + days * 86_400_000)
+    } else {
+      for (const t of sorted) {
+        if (t.startDate) {
+          const d = new Date(t.startDate)
+          if (!start || d < start) start = d
+        }
+        if (t.endDate) {
+          const d = new Date(t.endDate)
+          if (!end || d > end) end = d
+        }
+      }
+    }
+    if (!start || !end) return null
+    // Cuadrar al lunes anterior para que las "semanas" sean ISO-week.
+    const dow = start.getUTCDay() // 0=domingo, 1=lunes...
+    const back = (dow + 6) % 7
+    const aligned = new Date(start.getTime() - back * 86_400_000)
+    const totalMs = end.getTime() - aligned.getTime()
+    const weekCount = Math.max(1, Math.ceil(totalMs / (7 * 86_400_000)))
+    // Cap a 8 semanas — más allá pierde resolución útil en mobile.
+    const cappedWeeks = Math.min(weekCount, 8)
+    return {
+      start: aligned,
+      end: new Date(aligned.getTime() + cappedWeeks * 7 * 86_400_000),
+      count: cappedWeeks,
+    }
+  }, [sorted, rangeStart, rangeDays])
+
   if (sorted.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center px-6 py-16 text-center">
@@ -75,13 +125,28 @@ export function GanttListMobile({
             {rangeLabel}
           </div>
         )}
+
+        {/* Wave R5E · cabecera de semanas (etiquetas W1..Wn) para anclar
+            las mini-barras de cada tarea. Sólo si tenemos rango. */}
+        {weeks && weeks.count > 1 && (
+          <div className="px-1 pt-1">
+            <div className="grid gap-px text-[9px] uppercase tracking-wider text-muted-foreground" style={{ gridTemplateColumns: `repeat(${weeks.count}, minmax(0, 1fr))` }}>
+              {Array.from({ length: weeks.count }).map((_, i) => (
+                <span key={i} className="text-center">
+                  S{i + 1}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
+
         <ul className="flex flex-col gap-2">
           {sorted.map((t) => (
             <li key={t.id}>
               <button
                 type="button"
                 onClick={() => openDrawer(t.id)}
-                className="flex w-full flex-col gap-1.5 rounded-lg border border-border bg-card px-3 py-3 text-left shadow-sm transition-colors hover:bg-accent active:bg-accent min-h-[44px]"
+                className="flex w-full flex-col gap-1.5 rounded-lg border border-border bg-card px-3 py-3 text-left shadow-sm transition-colors hover:bg-accent active:bg-accent min-h-11"
                 aria-label={`Abrir tarea ${t.title}`}
               >
                 <div className="flex items-start justify-between gap-2">
@@ -117,7 +182,19 @@ export function GanttListMobile({
                   )}
                 </div>
 
-                {/* Progress bar */}
+                {/* Wave R5E · Mini-week-bar: una barra por tarea cubriendo
+                    las semanas visibles del rango. Cada bucket pinta solo
+                    si la tarea solapa esa semana. */}
+                {weeks && t.startDate && t.endDate && (
+                  <WeekBar
+                    weeks={weeks}
+                    taskStart={t.startDate}
+                    taskEnd={t.endDate}
+                  />
+                )}
+
+                {/* Progress bar — preserva el indicador original; las
+                    week-bars cumplen otro propósito (cuándo, no cuánto). */}
                 {typeof t.progress === 'number' && (
                   <div
                     className="mt-1 h-1 w-full overflow-hidden rounded-full bg-muted"
@@ -138,7 +215,7 @@ export function GanttListMobile({
         </ul>
       </div>
 
-      {/* Drawer compartido — full-screen en mobile gracias a max-md:max-w-full */}
+      {/* Drawer compartido — bottom-sheet en mobile (Wave R5E). */}
       <TaskDrawer currentUser={currentUser}>
         {drawerTask ? (
           <TaskDrawerContent
@@ -151,6 +228,52 @@ export function GanttListMobile({
         ) : null}
       </TaskDrawer>
     </>
+  )
+}
+
+/**
+ * Wave R5E · WeekBar — renderiza N buckets-semana en grid; cada bucket
+ * se pinta sólido cuando la tarea intersecta esa semana. Es la
+ * representación visual "Gantt colapsado por semana" para mobile.
+ */
+function WeekBar({
+  weeks,
+  taskStart,
+  taskEnd,
+}: {
+  weeks: { start: Date; end: Date; count: number }
+  taskStart: string
+  taskEnd: string
+}) {
+  const ts = new Date(taskStart).getTime()
+  const te = new Date(taskEnd).getTime()
+  if (isNaN(ts) || isNaN(te)) return null
+  const weekMs = 7 * 86_400_000
+  const baseMs = weeks.start.getTime()
+  const cells = Array.from({ length: weeks.count }).map((_, i) => {
+    const ws = baseMs + i * weekMs
+    const we = ws + weekMs
+    // overlap: max(start) < min(end)
+    const overlap = Math.max(ts, ws) < Math.min(te, we)
+    return overlap
+  })
+  return (
+    <div
+      className="mt-1 grid gap-px overflow-hidden rounded bg-muted"
+      style={{ gridTemplateColumns: `repeat(${weeks.count}, minmax(0, 1fr))` }}
+      aria-label="Distribución por semana"
+    >
+      {cells.map((on, i) => (
+        <span
+          key={i}
+          className={clsx(
+            'h-1.5',
+            on ? 'bg-primary' : 'bg-transparent',
+          )}
+          aria-hidden="true"
+        />
+      ))}
+    </div>
   )
 }
 

@@ -4,6 +4,8 @@ import { ListBoardClient } from '@/components/interactions/ListBoardClient'
 import { GlobalBreadcrumbs } from '@/components/interactions/GlobalBreadcrumbs'
 import { ViewSwitcher } from '@/components/interactions/ViewSwitcher'
 import { NewTaskButton } from '@/components/interactions/NewTaskButton'
+import { MobileTaskFAB } from '@/components/mobile/MobileTaskFAB'
+import { PullToRefresh } from '@/components/mobile/PullToRefresh'
 import { getCurrentUserPresence } from '@/lib/auth/get-current-user-presence'
 import { getCurrentUser } from '@/lib/auth/get-current-user'
 import { resolveProjectVisibility } from '@/lib/auth/visibility'
@@ -94,7 +96,11 @@ export default async function ListViewPage() {
         </div>
       </header>
 
-      <div className="flex-1 overflow-auto px-6 pb-6 custom-scrollbar">
+      {/* Wave R5E · pull-to-refresh activo solo en touch (PullToRefresh
+          se hace no-op en desktop) + MobileTaskFAB para nueva tarea
+          rápida con un solo pulgar. El FAB despacha requestNewTask()
+          que abre el modal del NewTaskButton montado en el header. */}
+      <PullToRefresh className="flex-1 overflow-auto px-6 pb-6 custom-scrollbar">
         <div className="min-w-[900px] rounded-lg border border-border bg-card shadow-sm">
           <ListBoardClient
             tasks={tasks}
@@ -107,7 +113,8 @@ export default async function ListViewPage() {
             currentUser={currentUser}
           />
         </div>
-      </div>
+      </PullToRefresh>
+      <MobileTaskFAB />
     </div>
   )
 }

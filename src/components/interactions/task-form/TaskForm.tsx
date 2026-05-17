@@ -1264,6 +1264,54 @@ export function TaskForm({
       <div className="flex-1 overflow-y-auto pr-1 space-y-8 pb-10 custom-scrollbar">
         {tabContent}
       </div>
+
+      {/*
+       * Wave R5E · Mobile-first refinements (2026-05-17)
+       * Sticky bottom action bar para layout drawer en mobile.
+       *
+       * En desktop el chip Editar/Guardar vive arriba (renderHeaderActions),
+       * fácil de alcanzar con el cursor. En mobile el header queda en el
+       * top del bottom-sheet — lejos del pulgar y a menudo cubierto por el
+       * teclado virtual cuando se está editando. Esta barra duplica las
+       * acciones en la parte inferior con touch target ≥ 44px y respeta
+       * `safe-area-inset-bottom`.
+       *
+       * Solo aparece en mobile (`md:hidden`) y solo cuando el usuario está
+       * en modo edición (isEditing=true), para no duplicar el botón
+       * "Editar" cuando aún está en view-mode.
+       */}
+      {isEdit && isEditing && (
+        <div
+          className="md:hidden sticky bottom-0 left-0 right-0 z-10 flex items-center justify-between gap-2 border-t border-border bg-card/95 px-4 py-3 backdrop-blur shrink-0"
+          style={{ paddingBottom: 'calc(0.75rem + env(safe-area-inset-bottom))' }}
+          data-testid="task-form-mobile-actionbar"
+        >
+          <span
+            className="text-[11px] font-medium text-muted-foreground"
+            aria-live="polite"
+          >
+            {isPending ? 'Guardando…' : 'Edición activa'}
+          </span>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setIsEditing(false)}
+              disabled={isPending}
+              className="min-h-11 min-w-11 rounded-md border border-border bg-card px-3 py-2 text-sm font-medium text-foreground hover:bg-accent transition-colors disabled:opacity-60"
+            >
+              Cancelar
+            </button>
+            <button
+              type="button"
+              onClick={handleSaveAll}
+              disabled={isPending}
+              className="min-h-11 min-w-11 rounded-md bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-500 transition-colors disabled:opacity-60"
+            >
+              Guardar
+            </button>
+          </div>
+        </div>
+      )}
     </article>
   )
 }

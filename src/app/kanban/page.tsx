@@ -4,6 +4,8 @@ import { KanbanBoardClient } from '@/components/interactions/KanbanBoardClient'
 import { GlobalBreadcrumbs } from '@/components/interactions/GlobalBreadcrumbs'
 import { ViewSwitcher } from '@/components/interactions/ViewSwitcher'
 import { NewTaskButton } from '@/components/interactions/NewTaskButton'
+import { MobileTaskFAB } from '@/components/mobile/MobileTaskFAB'
+import { PullToRefresh } from '@/components/mobile/PullToRefresh'
 import { getCurrentUserPresence } from '@/lib/auth/get-current-user-presence'
 import { getCurrentUser } from '@/lib/auth/get-current-user'
 import { resolveProjectVisibility } from '@/lib/auth/visibility'
@@ -116,19 +118,26 @@ export default async function KanbanBoard() {
         </div>
       </header>
 
-      <KanbanBoardClient
-        columns={[...COLUMNS]}
-        tasksByColumn={tasksByColumn}
-        projects={projects}
-        users={users}
-        gerencias={gerencias}
-        areas={areas}
-        epics={epics}
-        allTasks={allTasksRaw}
-        phases={phases}
-        sprints={sprints}
-        currentUser={currentUser}
-      />
+      {/* Wave R5E · mobile-first refinements — pull-to-refresh (touch only)
+          + FAB para nueva tarea con un pulgar. El swipe horizontal sobre
+          cada card (archivar / mover a siguiente columna) vive dentro
+          de KanbanBoardClient → SortableKanbanCard. */}
+      <PullToRefresh className="flex-1 min-h-0">
+        <KanbanBoardClient
+          columns={[...COLUMNS]}
+          tasksByColumn={tasksByColumn}
+          projects={projects}
+          users={users}
+          gerencias={gerencias}
+          areas={areas}
+          epics={epics}
+          allTasks={allTasksRaw}
+          phases={phases}
+          sprints={sprints}
+          currentUser={currentUser}
+        />
+      </PullToRefresh>
+      <MobileTaskFAB />
     </div>
   )
 }

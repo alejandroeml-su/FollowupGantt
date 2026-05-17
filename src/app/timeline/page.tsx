@@ -3,6 +3,8 @@ import prisma from '@/lib/prisma'
 import { TimelineBoardClient } from '@/components/timeline/TimelineBoardClient'
 import { GlobalBreadcrumbs } from '@/components/interactions/GlobalBreadcrumbs'
 import { ViewSwitcher } from '@/components/interactions/ViewSwitcher'
+import { NewTaskButton } from '@/components/interactions/NewTaskButton'
+import { MobileTaskFAB } from '@/components/mobile/MobileTaskFAB'
 import type { TimelineTask } from '@/lib/timeline/types'
 import { getCurrentUser } from '@/lib/auth/get-current-user'
 import { getCurrentUserPresence } from '@/lib/auth/get-current-user-presence'
@@ -173,6 +175,40 @@ export default async function TimelinePage() {
           currentUser={currentUser}
         />
       </div>
+      {/* Wave R5E · mobile-first refinements — FAB para crear tarea.
+          Timeline no monta NewTaskButton en su header (read-only), pero
+          el FAB despacha requestNewTask() y cualquier NewTaskButton en
+          otra vista no aplica aquí. Para el FAB en /timeline, montamos
+          también un NewTaskButton "headless" oculto que reacciona al
+          tick y abre el modal — patrón análogo a /list y /kanban donde
+          el botón vive en el header. */}
+      <TimelineMobileNewTaskBridge
+        projects={projects}
+        users={users}
+      />
+      <MobileTaskFAB />
+    </div>
+  )
+}
+
+/**
+ * Wave R5E · Bridge para que el FAB de mobile en /timeline pueda abrir
+ * el modal de creación de tareas. La timeline page no tiene un
+ * NewTaskButton visible en su header (es una vista de lectura), así
+ * que montamos uno con label vacío y display:none — sólo nos importa
+ * que esté presente para que su efecto `useEffect(requestedAt)` abra
+ * el TaskCreationModal cuando el FAB dispare requestNewTask().
+ */
+function TimelineMobileNewTaskBridge({
+  projects,
+  users,
+}: {
+  projects: { id: string; name: string }[]
+  users: { id: string; name: string }[]
+}) {
+  return (
+    <div className="sr-only" aria-hidden="true">
+      <NewTaskButton projects={projects} users={users} allTasks={[]} />
     </div>
   )
 }
