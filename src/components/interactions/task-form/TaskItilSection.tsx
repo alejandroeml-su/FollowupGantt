@@ -20,13 +20,24 @@
  * El matriz P1..P4 se calcula y muestra como badge a partir de
  * impact × urgency.
  *
- * Deuda Fase 2/3: FKs a CMDB, SLA templates, support groups; tablas
- * normalizadas por tipo (`task_itil_attributes`); reglas de validación
- * I-01..I-10 del documento de Definición Extendida de Tareas.
+ * Deuda Fase 2/3 (parcial): FKs a CMDB resuelto en Wave R5 · US-9.3
+ * (selector "CIs afectados" con TaskCILink, ver más abajo). SLA
+ * templates, support groups y tablas normalizadas siguen pendientes.
+ * Reglas de validación I-01..I-10 del documento de Definición Extendida
+ * de Tareas también siguen como deuda.
+ *
+ * Wave R5 · US-9.3 — CMDB simplificado · selector "CIs afectados".
+ * Aplica sólo cuando la task es ITIL_TICKET. El selector busca CIs por
+ * nombre/código y crea TaskCILink rows con role=AFFECTED. La integración
+ * usa el server action `searchCIs` para autocompletado y `linkTaskToCI`/
+ * `unlinkTaskFromCI` para mutaciones. Sólo se monta en `mode='edit'`
+ * porque en `mode='create'` la task aún no tiene id (los links se
+ * agregan después de crear, en el drawer).
  */
 
 import { useState, useTransition } from 'react'
 import { ShieldAlert, Wrench, AlertTriangle } from 'lucide-react'
+import { TaskCISelector } from '@/components/cmdb/TaskCISelector'
 import { clsx } from 'clsx'
 import {
   type ItilAttributes,
@@ -37,6 +48,19 @@ import {
   emptyItilAttributes,
   calculatePriorityMatrix,
 } from '@/lib/itil/types'
+
+/** Wave R5 · US-9.3 — link Task↔CI ya persistido para esta task. */
+export type CILinkSummary = {
+  id: string
+  role: 'AFFECTED' | 'CAUSE' | 'AFFECTED_DOWNSTREAM' | 'INFORMATIONAL'
+  ci: {
+    id: string
+    code: string
+    name: string
+    type: string
+    criticality: string
+  }
+}
 
 type Props = {
   /**
@@ -53,6 +77,14 @@ type Props = {
   onAutosave?: (next: ItilAttributes) => void
   disabled?: boolean
   className?: string
+  /**
+   * Wave R5 · US-9.3 — id de la task. Habilita el selector CMDB cuando
+   * `mode='edit'`. Si no se pasa (ej. modo create), el selector NO se
+   * renderiza para evitar links huérfanos antes de crear.
+   */
+  taskId?: string | null
+  /** CIs ya linkeados a esta task (pre-cargados desde el server). */
+  ciLinks?: CILinkSummary[]
 }
 
 const RECORD_TYPES: { id: ItilRecordType; label: string; emoji: string }[] = [
@@ -87,6 +119,8 @@ export function TaskItilSection({
   onAutosave,
   disabled = false,
   className,
+  taskId,
+  ciLinks,
 }: Props) {
   const [draft, setDraft] = useState<ItilAttributes>(
     value ?? emptyItilAttributes(),
@@ -453,6 +487,15 @@ export function TaskItilSection({
           </div>
         </div>
       )}
+
+      {/* Wave R5 · US-9.3 — Selector CMDB · sólo cuando hay taskId */}
+      {mode === 'edit' && taskId ? (
+        <TaskCISelector
+          taskId={taskId}
+          initialLinks={ciLinks ?? []}
+          disabled={disabled}
+        />
+      ) : null}
     </section>
   )
 }

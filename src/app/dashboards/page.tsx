@@ -1,3 +1,4 @@
+import Link from 'next/link'
 import {
   LayoutTemplate,
   AlertTriangle,
@@ -6,6 +7,7 @@ import {
 } from 'lucide-react'
 import type { TaskStatus, TaskType } from '@prisma/client'
 import { getPortfolioKPIs, getKPIFilterOptions } from '@/lib/actions/kpis'
+import { getCmdbHealthStats } from '@/lib/actions/cmdb'
 import type { KPIFilters } from '@/lib/kpi-calc'
 import { KPIFilters as KPIFiltersPanel } from '@/components/dashboard/KPIFilters'
 import { KPIDashboardView } from '@/components/dashboard/KPIDashboardView'
@@ -41,10 +43,32 @@ export default async function DashboardsPage({
   const sp = await searchParams
   const filters = parseFilters(sp)
 
-  const [kpis, options] = await Promise.all([
+  // Wave R5 · US-9.3 — el widget CMDB Health ya no es mock: corre el
+  // stats real (count por status + criticality + top incidentes). Si el
+  // server action falla (ej. usuario sin workspace), caemos a placeholder.
+  const [kpis, options, cmdbStatsResult] = await Promise.all([
     getPortfolioKPIs(filters),
     getKPIFilterOptions(),
+    getCmdbHealthStats().catch(() => null),
   ])
+
+  const cmdbStats = cmdbStatsResult ?? {
+    total: 0,
+    countByStatus: {
+      PLANNED: 0,
+      ACTIVE: 0,
+      MAINTENANCE: 0,
+      RETIRED: 0,
+      INCIDENT: 0,
+    },
+    countByCriticality: {
+      LOW: 0,
+      MEDIUM: 0,
+      HIGH: 0,
+      CRITICAL: 0,
+    },
+    topByIncidents: [],
+  }
 
   return (
     <div className="flex h-full flex-col bg-background">
@@ -131,21 +155,75 @@ export default async function DashboardsPage({
                   </p>
                 </div>
 
+                {/* Wave R5 · US-9.3 — CMDB Health real (count CIs + criticidad
+                    + top incidentados últimos 30d). Reemplaza el placeholder
+                    que mostraba 142/150 servidores estáticos. */}
                 <div className="rounded-lg border border-border bg-background p-4">
-                  <h4 className="mb-3 flex items-center gap-2 text-sm font-medium text-foreground/90">
-                    <Database className="h-4 w-4 text-emerald-400" /> CMDB Health
-                  </h4>
+                  <div className="mb-3 flex items-center justify-between">
+                    <h4 className="flex items-center gap-2 text-sm font-medium text-foreground/90">
+                      <Database className="h-4 w-4 text-emerald-400" /> CMDB Health
+                    </h4>
+                    <Link
+                      href="/cmdb"
+                      className="text-[10px] uppercase tracking-wider text-primary hover:underline"
+                    >
+                      Ver CMDB
+                    </Link>
+                  </div>
                   <ul className="space-y-2 text-xs text-muted-foreground">
                     <li className="flex justify-between border-b border-border/50 pb-1">
-                      <span>Servidores Mapeados:</span> <span className="text-foreground">142 / 150</span>
+                      <span>CIs activos:</span>{' '}
+                      <span className="text-foreground">
+                        {cmdbStats.countByStatus.ACTIVE} / {cmdbStats.total}
+                      </span>
                     </li>
                     <li className="flex justify-between border-b border-border/50 pb-1">
-                      <span>Incidentes Críticos:</span> <span className="text-red-400">2</span>
+                      <span>CIs en mantenimiento:</span>{' '}
+                      <span className="text-amber-400">
+                        {cmdbStats.countByStatus.MAINTENANCE}
+                      </span>
+                    </li>
+                    <li className="flex justify-between border-b border-border/50 pb-1">
+                      <span>CIs con incidente activo:</span>{' '}
+                      <span className="text-red-400">
+                        {cmdbStats.countByStatus.INCIDENT}
+                      </span>
+                    </li>
+                    <li className="flex justify-between border-b border-border/50 pb-1">
+                      <span>Criticidad CRÍTICA:</span>{' '}
+                      <span className="text-rose-400">
+                        {cmdbStats.countByCriticality.CRITICAL}
+                      </span>
                     </li>
                     <li className="flex justify-between pb-1">
-                      <span>SLA Cumplimiento:</span> <span className="text-emerald-400">98.5%</span>
+                      <span>Criticidad ALTA:</span>{' '}
+                      <span className="text-orange-400">
+                        {cmdbStats.countByCriticality.HIGH}
+                      </span>
                     </li>
                   </ul>
+                  {cmdbStats.topByIncidents.length > 0 ? (
+                    <div className="mt-3 border-t border-border/50 pt-2">
+                      <h5 className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                        Top 5 CIs con incidentes (30d)
+                      </h5>
+                      <ul className="space-y-0.5 text-[11px]">
+                        {cmdbStats.topByIncidents.map((c) => (
+                          <li key={c.id} className="flex items-center justify-between">
+                            <Link
+                              href={`/cmdb/${c.id}`}
+                              className="truncate text-primary hover:underline"
+                            >
+                              <span className="font-mono">{c.code}</span> · {c.name}
+                            </Link>
+                            <span className="text-rose-400">
+                              {c.incidentsLast30d}
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  ) : null}
                 </div>
               </div>
             </div>

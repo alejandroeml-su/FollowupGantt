@@ -416,6 +416,14 @@ model User {
   chatMessages         ChatMessage[]         @relation("ChatMessageAuthor")
   chatMessageReactions ChatMessageReaction[] @relation("ChatReactionUser")
 
+  /// Wave R5 · US-9.3 — CMDB simplificado (Gestión de Activos ITIL v4).
+  /// Configuration Items donde este usuario figura como `owner`. SetNull en
+  /// `ConfigurationItem.ownerId` preserva el CI aunque el dueño sea borrado
+  /// (compliance: el inventario sobrevive a la rotación de responsables).
+  ownedConfigurationItems   ConfigurationItem[] @relation("CIOwner")
+  /// CIs creados por este usuario (auditoría). SetNull al borrar.
+  createdConfigurationItems ConfigurationItem[] @relation("CICreator")
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
@@ -743,7 +751,7 @@ model Project {
   /// correos para crear tareas (o agregar comentarios si subject incluye
   /// `[#MNEMONIC]`). Se genera en createProject como slug del nombre.
   /// NULL en proyectos pre-existentes; backfill manual cuando se requiera.
-  inboundEmailAlias String?         @unique
+  inboundEmailAlias String?        @unique
   inboundEmails     InboundEmail[]
 
   createdAt DateTime @default(now())
@@ -1391,6 +1399,13 @@ model Task {
   crossDepsAsSource CrossProjectDependency[] @relation("CrossDepSource")
   crossDepsAsTarget CrossProjectDependency[] @relation("CrossDepTarget")
 
+  /// Wave R5 · US-9.3 — Links a Configuration Items afectados (CMDB).
+  /// Aplica principalmente a tasks ITIL_TICKET (Incident/Problem/Change)
+  /// pero NO se restringe en BD: una task PMI puede linkear a un CI si
+  /// pertinente. Cascade al borrar la task — los links son metadata, no
+  /// preservamos relación huérfana.
+  ciLinks TaskCILink[]
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -1642,8 +1657,8 @@ model Clip {
   thumbnailPath String?
 
   // Capturados del MediaRecorder + blob.size.
-  durationSec Int @default(0)
-  sizeBytes   Int @default(0)
+  durationSec Int    @default(0)
+  sizeBytes   Int    @default(0)
   mimeType    String @default("video/webm")
 
   createdAt DateTime @default(now())
@@ -2561,6 +2576,12 @@ model Workspace {
 
   /// Wave P20-C — Auto-Pilot history (cross-project optimization runs).
   autoPilotRuns AutoPilotRun[]
+
+  /// Wave R5 · US-9.3 — CMDB simplificado. Los Configuration Items son
+  /// workspace-scoped (no project-scoped) porque la infraestructura
+  /// (servidores, apps, contratos) suele compartirse entre proyectos.
+  /// Cascade: archivar WS borra su inventario CMDB.
+  configurationItems ConfigurationItem[]
 
   /// Wave R4-E · Monetización SaaS — relación 1-1 con BillingSubscription.
   /// Cascade: borrar/archivar WS purga la subscripción Stripe asociada
@@ -4598,4 +4619,196 @@ model AttachmentVersion {
 
   @@unique([attachmentId, version])
   @@index([attachmentId, version(sort: Desc)])
+}
+
+// ─── Wave R5 · US-9.3 · CMDB simplificado (Gestión de Activos ITIL v4)
+//
+// Configuration Items (CIs) = elementos de infraestructura/servicio que
+// pueden ser afectados por incidentes, problemas o cambios. El modelo
+// está deliberadamente simplificado (no es Atlassian Insight ni
+// ServiceNow CMDB) — solo cubre los atributos imprescindibles para que
+// un Gestor de Servicios TI pueda inventariar y linkear afectaciones
+// desde tickets ITIL.
+//
+// Scope: workspace-scoped. La infraestructura suele compartirse entre
+// proyectos del mismo workspace, por eso NO atamos `ConfigurationItem`
+// a `Project`. Para visibilidad, basta con membership en el workspace.
+//
+// Soft-delete: `retiredAt` marca el CI como retirado; las queries
+// filtran por defecto los retired. `deleteCI` hace hard-delete solo si
+// el CI no tiene relaciones ni tickets — preservamos historial.
+
+enum CIType {
+  /// Servicio TI lógico (ej. "Servicio de Email", "Booking Online").
+  SERVICE
+  /// Aplicación de software (ej. Sync, SAP, FollowupGantt).
+  APPLICATION
+  /// Servidor físico o VM (ej. prod-app-01, db-mssql-02).
+  SERVER
+  /// Base de datos (ej. Supabase prod, MSSQL Avante).
+  DATABASE
+  /// Dispositivo de red (switch, router, firewall).
+  NETWORK_DEVICE
+  /// Endpoint de usuario (laptop, kiosko, terminal).
+  ENDPOINT
+  /// Documento o knowledge base (ej. runbook, manual operación).
+  DOCUMENT
+  /// Proceso de negocio (ej. "Check-in huéspedes").
+  BUSINESS_PROCESS
+  /// Contrato de servicio o licencia (ej. licencia Office, MSP).
+  CONTRACT
+  /// Otro tipo no categorizado.
+  OTHER
+}
+
+enum CIStatus {
+  /// Planeado / no implementado todavía.
+  PLANNED
+  /// Activo / operativo.
+  ACTIVE
+  /// En mantenimiento programado.
+  MAINTENANCE
+  /// Retirado / decomisionado.
+  RETIRED
+  /// Afectado por incidente activo (estado transitorio).
+  INCIDENT
+}
+
+enum CICriticality {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum CIRelationKind {
+  /// "A depende de B": si B cae, A puede dejar de funcionar.
+  DEPENDS_ON
+  /// "A corre sobre B" (ej. App → Server).
+  RUNS_ON
+  /// "A usa B" (referencia funcional sin acoplamiento dur o).
+  USES
+  /// "A contiene B" (ej. cluster contiene nodos).
+  CONTAINS
+  /// Relación genérica sin semántica fuerte.
+  RELATED_TO
+}
+
+enum CILinkRole {
+  /// CI directamente afectado por el ticket.
+  AFFECTED
+  /// CI identificado como causa raíz (Problem mgmt).
+  CAUSE
+  /// CI afectado río abajo por dependencia (impact downstream).
+  AFFECTED_DOWNSTREAM
+  /// Solo informativo (mencionado pero no impactado).
+  INFORMATIONAL
+}
+
+model ConfigurationItem {
+  id          String    @id @default(uuid())
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  /// Código legible único por workspace · auto-generado al crear con
+  /// patrón `CI-001`, `CI-002`, … Permite al equipo TI referenciar el CI
+  /// en runbooks/tickets externos sin recordar el UUID. La unicidad es
+  /// `@@unique([workspaceId, code])` — dos WS distintos pueden tener
+  /// ambos un `CI-001`.
+  code        String
+  name        String
+  type        CIType        @default(OTHER)
+  status      CIStatus      @default(ACTIVE)
+  criticality CICriticality @default(MEDIUM)
+
+  /// Dueño operativo del CI (responsable de su salud). SetNull para no
+  /// perder el CI si se va el dueño — la UI muestra "Sin dueño asignado".
+  ownerId String?
+  owner   User?   @relation("CIOwner", fields: [ownerId], references: [id], onDelete: SetNull)
+
+  /// Ambiente de despliegue (PROD/STAGING/DEV/TEST). String libre por
+  /// pragmatismo — algunos workspaces usan etiquetas distintas (UAT,
+  /// PREPROD). La UI sugiere los 4 estándar pero acepta cualquier valor.
+  environment String?
+
+  description String?
+
+  /// Atributos custom key/value. Validado en server action como
+  /// Record<string, string | number | boolean>. NO se permiten objetos
+  /// anidados para mantener la búsqueda simple y evitar atajos
+  /// arbitrarios que harían imposible la lectura humana.
+  attributes Json?
+
+  /// Soft-delete: `retiredAt` marca el CI como decomisionado. Las
+  /// queries filtran por defecto los retired. Hard-delete vía
+  /// `deleteCI` solo si no tiene relaciones ni tickets.
+  retiredAt DateTime?
+
+  createdById String?
+  createdBy   User?   @relation("CICreator", fields: [createdById], references: [id], onDelete: SetNull)
+
+  /// Relaciones outbound (A → B): este CI depende/usa/etc otros CIs.
+  relationsFrom CIRelation[] @relation("CIRelationFrom")
+  /// Relaciones inbound (B → A): otros CIs apuntan a este.
+  relationsTo   CIRelation[] @relation("CIRelationTo")
+
+  /// Tickets (Task ITIL) que afectan/usan este CI.
+  taskLinks TaskCILink[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([workspaceId, code])
+  @@index([workspaceId, type])
+  @@index([workspaceId, status])
+  @@index([workspaceId, criticality])
+  @@index([workspaceId, retiredAt])
+  @@index([ownerId])
+}
+
+model CIRelation {
+  id String @id @default(uuid())
+
+  fromCIId String
+  fromCI   ConfigurationItem @relation("CIRelationFrom", fields: [fromCIId], references: [id], onDelete: Cascade)
+
+  toCIId String
+  toCI   ConfigurationItem @relation("CIRelationTo", fields: [toCIId], references: [id], onDelete: Cascade)
+
+  kind CIRelationKind @default(DEPENDS_ON)
+
+  /// Notas operativas sobre la relación ("Conecta vía VPN", "SLA P1").
+  notes String?
+
+  createdAt DateTime @default(now())
+
+  /// Una pareja (from, to) sólo puede tener UN edge de cada `kind`.
+  /// El server action valida además anti-ciclo directo (no se permite
+  /// crear B→A con mismo `kind` si ya existe A→B).
+  @@unique([fromCIId, toCIId, kind])
+  @@index([fromCIId])
+  @@index([toCIId])
+}
+
+/// M:N entre Task y ConfigurationItem con un `role` que tipifica el
+/// vínculo (afectado, causa raíz, downstream, informativo). Se usa
+/// principalmente desde Tasks ITIL pero la BD no restringe el tipo.
+model TaskCILink {
+  id String @id @default(uuid())
+
+  taskId String
+  task   Task   @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  ciId String
+  ci   ConfigurationItem @relation(fields: [ciId], references: [id], onDelete: Cascade)
+
+  role CILinkRole @default(AFFECTED)
+
+  createdAt DateTime @default(now())
+
+  /// Un ticket puede aparecer N veces sobre el mismo CI siempre que
+  /// el `role` sea diferente (ej. AFFECTED + CAUSE en un mismo Problem).
+  @@unique([taskId, ciId, role])
+  @@index([taskId])
+  @@index([ciId])
 }
