@@ -236,6 +236,12 @@ export const KNOWN_AUDIT_ACTIONS = [
   'ci.relation_removed',
   'ci.task_linked',
   'ci.task_unlinked',
+  // US-9.2 · Wave R5 — Gap Analysis (AS-IS vs TO-BE)
+  'gap.created',
+  'gap.updated',
+  'gap.deleted',
+  'gap.dimension_recalculated',
+  'gap.exported',
 ] as const
 
 export type AuditAction = (typeof KNOWN_AUDIT_ACTIONS)[number]
@@ -427,6 +433,12 @@ export const ACTION_LABELS: Record<AuditAction, string> = {
   'ci.relation_removed': 'CMDB · relación entre CIs eliminada',
   'ci.task_linked': 'CMDB · ticket linkeado a CI',
   'ci.task_unlinked': 'CMDB · ticket desvinculado de CI',
+  // US-9.2 · Wave R5 — Gap Analysis
+  'gap.created': 'Gap Analysis · análisis creado',
+  'gap.updated': 'Gap Analysis · análisis actualizado',
+  'gap.deleted': 'Gap Analysis · análisis eliminado',
+  'gap.dimension_recalculated': 'Gap Analysis · métricas auto recalculadas',
+  'gap.exported': 'Gap Analysis · exportado a Excel',
 }
 
 // ───────────────────────── Tipos de entidad ─────────────────────────
