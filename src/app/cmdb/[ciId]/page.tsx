@@ -1,10 +1,12 @@
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
-import { ArrowLeft, Database, Server, Building, User as UserIcon } from 'lucide-react'
+import { ArrowLeft, Database, Server, Building, User as UserIcon, AlertTriangle } from 'lucide-react'
 import { getCIDetail } from '@/lib/actions/cmdb'
 import { queryAuditEvents } from '@/lib/actions/audit'
 import { CIRelationTree } from '@/components/cmdb/CIRelationTree'
 import { ACTION_LABELS } from '@/lib/audit/types'
+import { getCurrentUser } from '@/lib/auth/get-current-user'
+import { hasAdminRole } from '@/lib/auth/permissions'
 
 /**
  * Wave R5 · US-9.3 — CMDB · Detalle de un Configuration Item.
@@ -54,6 +56,12 @@ export default async function CIDetailPage({ params }: Props) {
     }
     throw err
   }
+
+  // Wave R5-Extended — sólo ADMIN+ ve la pestaña "Impacto" (la página
+  // protegida con `redirect` igualmente; el link sólo se renderiza para
+  // evitar UX rota).
+  const viewer = await getCurrentUser()
+  const canSeeImpact = !!viewer && hasAdminRole(viewer.roles)
 
   // Audit del CI (best-effort: si falla, no rompemos la página).
   let auditItems: Awaited<ReturnType<typeof queryAuditEvents>>['items'] = []
@@ -118,6 +126,14 @@ export default async function CIDetailPage({ params }: Props) {
             <a href="#audit" className="text-muted-foreground hover:text-foreground">
               Auditoría ({auditItems.length})
             </a>
+            {canSeeImpact ? (
+              <Link
+                href={`/cmdb/${ci.id}/impact`}
+                className="inline-flex items-center gap-1 text-rose-300 hover:text-rose-200"
+              >
+                <AlertTriangle className="h-3 w-3" /> Impacto
+              </Link>
+            ) : null}
           </nav>
 
           {/* Overview */}
