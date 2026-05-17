@@ -416,6 +416,11 @@ model User {
   chatMessages         ChatMessage[]         @relation("ChatMessageAuthor")
   chatMessageReactions ChatMessageReaction[] @relation("ChatReactionUser")
 
+  /// US-9.2 · Wave R5 — Gap Analysis. Análisis (AS-IS vs TO-BE) creados
+  /// por este usuario. `SetNull` en `GapAnalysis.createdById` para preservar
+  /// el análisis aunque su autor original se elimine (compliance auditoría).
+  createdGapAnalyses GapAnalysis[] @relation("GapAnalysisCreator")
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
@@ -745,6 +750,11 @@ model Project {
   /// NULL en proyectos pre-existentes; backfill manual cuando se requiera.
   inboundEmailAlias String?         @unique
   inboundEmails     InboundEmail[]
+
+  /// US-9.2 · Wave R5 — Gap Analysis del proyecto (AS-IS vs TO-BE).
+  /// Cascade al borrar proyecto: el análisis carece de sentido sin las
+  /// métricas operativas del proyecto que lo origina.
+  gapAnalyses GapAnalysis[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1390,6 +1400,11 @@ model Task {
   // en `CrossProjectDependency` para no romper CPM/Gantt actual.
   crossDepsAsSource CrossProjectDependency[] @relation("CrossDepSource")
   crossDepsAsTarget CrossProjectDependency[] @relation("CrossDepTarget")
+
+  /// US-9.2 · Wave R5 — Acciones de cierre de gap que apuntan a esta tarea.
+  /// `SetNull` en `GapDimensionAction.taskId` preserva la acción aunque la
+  /// tarea sea eliminada (la acción puede tener `freeText` como fallback).
+  gapDimensionActions GapDimensionAction[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -4598,4 +4613,131 @@ model AttachmentVersion {
 
   @@unique([attachmentId, version])
   @@index([attachmentId, version(sort: Desc)])
+}
+
+// ─────────────────────────────────────────────────────────────
+// US-9.2 · Wave R5 — Gap Analysis (AS-IS vs TO-BE)
+//
+// Permite al Analista de Negocio construir Dashboards comparativos
+// entre el estado actual (AS-IS) y el estado deseado (TO-BE) de un
+// proyecto, agrupando dimensiones (ej. "Madurez ITIL", "Cobertura
+// DoD", "Cumplimiento PMI"). Cada dimensión puede ser:
+//   - AUTO: el valor AS-IS se calcula a partir de métricas del
+//     proyecto (% de tasks con DoD, # de RACI completos, etc.).
+//   - MANUAL: el analista lo ingresa (escala 1-5, encuesta, etc.).
+//
+// Convenciones del repo aplicadas:
+//   - `Float` para valores numéricos (DOUBLE PRECISION) — restricción
+//     explícita del entregable.
+//   - JSON `metricMetadata` para guardar el último cómputo (timestamp,
+//     muestra, etc.) sin agregar columnas dedicadas.
+//   - Cascade en `gapAnalysis` (sin análisis no hay dimensiones) y en
+//     `dimension` (sin dimensión no hay acciones).
+// ─────────────────────────────────────────────────────────────
+
+/// US-9.2 · Wave R5 — Estado del Gap Analysis.
+enum GapAnalysisStatus {
+  DRAFT
+  IN_PROGRESS
+  COMPLETED
+}
+
+/// US-9.2 · Wave R5 — Tipo de dimensión.
+/// AUTO: valor AS-IS calculado por `auto-metrics.ts` desde el proyecto.
+/// MANUAL: valor AS-IS ingresado por el analista.
+enum GapDimensionKind {
+  AUTO
+  MANUAL
+}
+
+/// US-9.2 · Wave R5 — Status de una acción de cierre de gap.
+enum GapDimensionActionStatus {
+  OPEN
+  IN_PROGRESS
+  DONE
+}
+
+model GapAnalysis {
+  id          String            @id @default(uuid())
+  projectId   String
+  project     Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  name        String
+  description String?
+  /// Fecha objetivo para cerrar el gap (opcional). El radar/heatmap
+  /// la usa para resaltar dimensiones cuyo `toBeValue` no se alcanza
+  /// dentro del horizonte.
+  targetDate  DateTime?
+  status      GapAnalysisStatus @default(DRAFT)
+
+  /// Autor original del análisis. SetNull para preservar el análisis
+  /// aunque el usuario sea eliminado (compliance).
+  createdById String?
+  createdBy   User?   @relation("GapAnalysisCreator", fields: [createdById], references: [id], onDelete: SetNull)
+
+  dimensions GapDimension[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([projectId, status])
+  @@index([createdById])
+}
+
+model GapDimension {
+  id            String           @id @default(uuid())
+  gapAnalysisId String
+  gapAnalysis   GapAnalysis      @relation(fields: [gapAnalysisId], references: [id], onDelete: Cascade)
+  name          String
+  /// Categoría libre para agrupar visualmente (ej. "Procesos", "Tecnología",
+  /// "Personas"). Nullable para no obligar al analista.
+  category      String?
+  kind          GapDimensionKind @default(MANUAL)
+  /// Clave del catálogo de auto-metrics cuando `kind = AUTO`. Validada
+  /// contra `AUTO_METRIC_KEYS` en server action; ignorada cuando MANUAL.
+  metricKey     String?
+  /// Valores numéricos. Float (DOUBLE PRECISION) para permitir decimales
+  /// (porcentajes, días). Nullable para soportar dimensiones recién
+  /// creadas sin valor todavía.
+  asIsValue     Float?
+  toBeValue     Float?
+  /// Unidad de medida humana ("%", "h", "1-5", "score"). Sólo display.
+  unit          String?
+  /// Peso relativo de la dimensión (1-10). El radar y el score
+  /// consolidado lo usan para ponderar gaps críticos vs cosméticos.
+  weight        Int?
+  notes         String?
+  /// Metadata del último cómputo automático: { computedAt: ISO,
+  /// sampleSize: number, formula?: string }. Sólo cuando kind=AUTO.
+  metricMetadata Json?
+  /// Ordenamiento visual en la tabla y orden de ejes del radar.
+  position      Int              @default(0)
+
+  actions GapDimensionAction[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([gapAnalysisId, position])
+  @@index([kind, metricKey])
+}
+
+model GapDimensionAction {
+  id          String                   @id @default(uuid())
+  dimensionId String
+  dimension   GapDimension             @relation(fields: [dimensionId], references: [id], onDelete: Cascade)
+  /// Vínculo opcional a una Task existente del proyecto. Si está
+  /// presente, la UI muestra el título de la tarea y un link al detalle.
+  /// SetNull para que la acción sobreviva al borrado de la tarea.
+  taskId      String?
+  task        Task?                    @relation(fields: [taskId], references: [id], onDelete: SetNull)
+  /// Texto libre cuando aún no se ha creado una task formal (ej.
+  /// "Capacitar equipo en ITIL v4"). Es el fallback de `taskId`.
+  freeText    String?
+  status      GapDimensionActionStatus @default(OPEN)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([dimensionId, status])
+  @@index([taskId])
 }

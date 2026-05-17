@@ -16,6 +16,8 @@ import {
   CalendarClock, Lightbulb, Activity, BookOpen, Megaphone,
   // Wave P20-C · Brain Auto-Pilot
   Wand2,
+  // US-9.2 · Wave R5 · Gap Analysis (AS-IS vs TO-BE)
+  Scale as ScaleIcon,
   type LucideIcon
 } from 'lucide-react';
 import { clsx } from 'clsx';
@@ -162,6 +164,9 @@ const menuGroups: RouteGroup[] = [
       { name: 'sidebar.items.goals', path: '/goals', icon: Compass },
       { name: 'sidebar.items.executiveReports', path: '/reports', icon: FileBarChart },
       { name: 'sidebar.items.aiInsights', path: '/insights', icon: Brain },
+      // US-9.2 · Wave R5 — Gap Analysis (AS-IS vs TO-BE) en grupo Estrategia
+      // por su naturaleza de diagnóstico de madurez transversal al proyecto.
+      { name: 'sidebar.items.gapAnalysis', path: '/gap-analysis', icon: ScaleIcon },
       // Wave P20-C · Brain Auto-Pilot · solo roles ADMIN/GERENCIA_GENERAL/
       // SUPER_ADMIN pueden mutar datos (la página gatea fuerte además).
       // En el modelo de roles del Sidebar (DebugRole) GERENCIA_GENERAL no
