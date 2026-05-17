@@ -23,6 +23,8 @@ import prisma from '@/lib/prisma'
 import { requireProjectAccess } from '@/lib/auth/check-project-access'
 import { getCurrentUser } from '@/lib/auth/get-current-user'
 import { applyAIChecklistSuggestion } from '@/lib/actions/checklist'
+import { recordAuditEventSafe } from '@/lib/audit/events'
+import { withMetrics } from '@/lib/observability/metrics'
 import {
   improveDescription,
   type ImproveDescriptionInput,
@@ -525,4 +527,264 @@ export async function applyRefinementAction(
   revalidatePath(`/tasks/${task.id}`)
 
   return { ok: true, taskId: task.id, applied }
+}
+
+// ─── Apply (Wave R5 Extended) — AI Auto-Apply multi-campo ───────────
+//
+// US R5E · "Aplicar" en un click con diff side-by-side por campo. A
+// diferencia de `applyRefinementAction` (que aplica una sola sugerencia
+// puntual con kind discriminado), esta acción recibe un set de campos
+// individualmente seleccionados por el usuario en el dialog de diff y
+// los actualiza en una sola transacción.
+//
+// Diseño:
+//   · El cliente envía un payload con `proposed` (los valores que la
+//     IA propuso) y `accepted` (los campos que el usuario marcó OK).
+//   · El server valida cada campo aceptado contra su zod schema y solo
+//     escribe los que pasen validación.
+//   · RBAC vía `requireProjectAccess` (Wave P13 visibility).
+//   · Audit `task.ai_applied` con `{ fields, model }` en metadata.
+//   · `revalidatePath` para `/list`, `/gantt`, `/kanban`, `/timeline`
+//     (los TaskDrawerContent los re-fetch al `router.refresh()`).
+//
+// Campos soportados en R5E: title, description, userStory,
+// scrumAttributes, pmiAttributes, itilAttributes. Los métodos auxiliares
+// `applyRefinementAction` siguen disponibles para flujos pre-existentes
+// (checklist/tags/categorization/merge_duplicate); no los duplicamos.
+
+const TaskAIAcceptedFieldSchema = z.enum([
+  'title',
+  'description',
+  'userStory',
+  'scrumAttributes',
+  'pmiAttributes',
+  'itilAttributes',
+])
+
+const ApplyTaskRefinementSchema = z.object({
+  taskId: z.string().min(1),
+  accepted: z.array(TaskAIAcceptedFieldSchema).min(1),
+  proposed: z.object({
+    title: z.string().min(1).max(500).optional(),
+    description: z.string().max(8000).optional(),
+    userStory: z
+      .object({
+        asA: z.string().max(500).optional().nullable(),
+        iWant: z.string().max(500).optional().nullable(),
+        soThat: z.string().max(500).optional().nullable(),
+        criteria: z
+          .array(
+            z.object({
+              id: z.string().optional(),
+              text: z.string().min(1).max(500),
+              done: z.boolean().optional(),
+            }),
+          )
+          .optional(),
+      })
+      .optional()
+      .nullable(),
+    scrumAttributes: z.record(z.string(), z.unknown()).optional().nullable(),
+    pmiAttributes: z.record(z.string(), z.unknown()).optional().nullable(),
+    itilAttributes: z.record(z.string(), z.unknown()).optional().nullable(),
+  }),
+  /** Modelo origen: 'llm' | 'heuristic' (label de RefinementSource). */
+  model: z.string().min(1).max(64),
+})
+
+export type ApplyTaskRefinementInput = z.infer<typeof ApplyTaskRefinementSchema>
+
+export type ApplyTaskRefinementResult =
+  | { ok: true; taskId: string; applied: string[] }
+  | { ok: false; error: string }
+
+/**
+ * Wave R5 Extended · US R5E — AI Auto-Apply.
+ *
+ * Aplica los campos `accepted` propuestos por la IA. No toca el resto
+ * de campos. Valida shape y permisos antes de mutar y registra un
+ * único evento `task.ai_applied` con el listado de campos aplicados.
+ */
+export async function applyTaskRefinement(
+  rawInput: ApplyTaskRefinementInput,
+): Promise<ApplyTaskRefinementResult> {
+  return withMetrics('action.applyTaskRefinement', async () => {
+    const parsed = ApplyTaskRefinementSchema.safeParse(rawInput)
+    if (!parsed.success) {
+      return {
+        ok: false,
+        error: `[INVALID_INPUT] ${parsed.error.issues
+          .map((i) => i.message)
+          .join('; ')}`,
+      }
+    }
+    const { taskId, accepted, proposed, model } = parsed.data
+
+    const task = await prisma.task.findUnique({
+      where: { id: taskId },
+      select: {
+        id: true,
+        title: true,
+        description: true,
+        projectId: true,
+        userStory: true,
+        scrumAttributes: true,
+        pmiAttributes: true,
+        itilAttributes: true,
+      },
+    })
+    if (!task) return { ok: false, error: '[NOT_FOUND] tarea no encontrada' }
+
+    // RBAC: lanza `[FORBIDDEN]` si el usuario no tiene visibilidad sobre
+    // el proyecto. requireProjectAccess también valida `[UNAUTHORIZED]`.
+    const user = await requireProjectAccess(task.projectId)
+
+    const updates: Record<string, unknown> = {}
+    const appliedFields: string[] = []
+    const historyEntries: Array<{
+      field: string
+      oldValue: string
+      newValue: string
+    }> = []
+
+    const acceptSet = new Set(accepted)
+
+    if (acceptSet.has('title') && typeof proposed.title === 'string') {
+      const newTitle = proposed.title.trim()
+      if (newTitle.length > 0 && newTitle !== task.title) {
+        updates.title = newTitle
+        historyEntries.push({
+          field: 'title',
+          oldValue: task.title ?? '',
+          newValue: newTitle,
+        })
+        appliedFields.push('title')
+      }
+    }
+
+    if (
+      acceptSet.has('description') &&
+      typeof proposed.description === 'string'
+    ) {
+      const newDesc = proposed.description
+      if (newDesc !== (task.description ?? '')) {
+        updates.description = newDesc
+        historyEntries.push({
+          field: 'description',
+          oldValue: task.description ?? '',
+          newValue: newDesc,
+        })
+        appliedFields.push('description')
+      }
+    }
+
+    if (acceptSet.has('userStory') && proposed.userStory) {
+      // Merge defensivo con el shape canónico del módulo user-story.
+      const us = proposed.userStory
+      const merged = {
+        asA: typeof us.asA === 'string' ? us.asA : '',
+        iWant: typeof us.iWant === 'string' ? us.iWant : '',
+        soThat: typeof us.soThat === 'string' ? us.soThat : '',
+        criteria: Array.isArray(us.criteria)
+          ? us.criteria.map((c) => ({
+              id:
+                c.id ??
+                (typeof crypto !== 'undefined' && 'randomUUID' in crypto
+                  ? crypto.randomUUID()
+                  : `c-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`),
+              text: c.text,
+              done: Boolean(c.done),
+            }))
+          : [],
+      }
+      updates.userStory = merged
+      historyEntries.push({
+        field: 'userStory',
+        oldValue: task.userStory ? JSON.stringify(task.userStory).slice(0, 500) : '',
+        newValue: JSON.stringify(merged).slice(0, 500),
+      })
+      appliedFields.push('userStory')
+    }
+
+    // Para los tres bloques de atributos por metodología guardamos el
+    // objeto completo tal como llega (zod ya lo validó como record). El
+    // shape extendido se normaliza al renderizar en el form.
+    if (acceptSet.has('scrumAttributes') && proposed.scrumAttributes) {
+      updates.scrumAttributes = proposed.scrumAttributes
+      historyEntries.push({
+        field: 'scrumAttributes',
+        oldValue: task.scrumAttributes
+          ? JSON.stringify(task.scrumAttributes).slice(0, 500)
+          : '',
+        newValue: JSON.stringify(proposed.scrumAttributes).slice(0, 500),
+      })
+      appliedFields.push('scrumAttributes')
+    }
+    if (acceptSet.has('pmiAttributes') && proposed.pmiAttributes) {
+      updates.pmiAttributes = proposed.pmiAttributes
+      historyEntries.push({
+        field: 'pmiAttributes',
+        oldValue: task.pmiAttributes
+          ? JSON.stringify(task.pmiAttributes).slice(0, 500)
+          : '',
+        newValue: JSON.stringify(proposed.pmiAttributes).slice(0, 500),
+      })
+      appliedFields.push('pmiAttributes')
+    }
+    if (acceptSet.has('itilAttributes') && proposed.itilAttributes) {
+      updates.itilAttributes = proposed.itilAttributes
+      historyEntries.push({
+        field: 'itilAttributes',
+        oldValue: task.itilAttributes
+          ? JSON.stringify(task.itilAttributes).slice(0, 500)
+          : '',
+        newValue: JSON.stringify(proposed.itilAttributes).slice(0, 500),
+      })
+      appliedFields.push('itilAttributes')
+    }
+
+    if (appliedFields.length === 0) {
+      return {
+        ok: false,
+        error: '[INVALID_INPUT] ningún campo aceptado contiene cambios efectivos',
+      }
+    }
+
+    await prisma.$transaction([
+      prisma.task.update({
+        where: { id: task.id },
+        data: updates,
+        select: { id: true },
+      }),
+      ...historyEntries.map((h) =>
+        prisma.taskHistory.create({
+          data: {
+            taskId: task.id,
+            field: h.field,
+            oldValue: h.oldValue,
+            newValue: h.newValue,
+            userId: user.id,
+          },
+        }),
+      ),
+    ])
+
+    // Audit event Wave R5 Extended. `recordAuditEventSafe` nunca lanza,
+    // así que es seguro encadenarlo sin try/catch adicional.
+    await recordAuditEventSafe({
+      action: 'task.ai_applied',
+      entityType: 'task',
+      entityId: task.id,
+      actorId: user.id,
+      metadata: { fields: appliedFields, model },
+    })
+
+    revalidatePath('/list')
+    revalidatePath('/gantt')
+    revalidatePath('/kanban')
+    revalidatePath('/timeline')
+    revalidatePath(`/tasks/${task.id}`)
+
+    return { ok: true, taskId: task.id, applied: appliedFields }
+  })
 }

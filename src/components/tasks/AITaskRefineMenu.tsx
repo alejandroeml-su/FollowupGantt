@@ -26,6 +26,10 @@ import {
   type RefinementKind,
 } from './AISuggestionDialog'
 import {
+  AIAutoApplyDialog,
+  type AIAutoApplyProposal,
+} from './AIAutoApplyDialog'
+import {
   improveDescriptionAction,
   suggestChecklistAction,
   suggestTagsAction,
@@ -34,13 +38,26 @@ import {
 } from '@/lib/actions/task-refinement'
 import type { RefinementSource } from '@/lib/ai/refinement/schemas'
 
+/**
+ * Wave R5 Extended — AI Auto-Apply.
+ *
+ * Además de las 5 acciones puntuales originales (description, checklist,
+ * tags, duplicates, categorization) agregamos un sexto entry que ejecuta
+ * `improveDescriptionAction` y abre `AIAutoApplyDialog` con diff
+ * multi-campo (description + acceptanceCriteria → userStory.criteria).
+ * El usuario decide por checkbox qué campos aceptar y aplicamos todo en
+ * una transacción vía `applyTaskRefinement`.
+ */
+type MenuKind = RefinementKind | 'auto_apply'
+
 interface MenuItem {
-  kind: RefinementKind
+  kind: MenuKind
   label: string
   emoji: string
 }
 
 const MENU_ITEMS: MenuItem[] = [
+  { kind: 'auto_apply', label: 'Aplicar (diff multi-campo)', emoji: '⚡' },
   { kind: 'description', label: 'Mejorar descripción', emoji: '📝' },
   { kind: 'checklist', label: 'Sugerir checklist', emoji: '✅' },
   { kind: 'tags', label: 'Sugerir tags', emoji: '🏷️' },
@@ -67,13 +84,17 @@ export function AITaskRefineMenu({
   onApplied,
 }: AITaskRefineMenuProps): React.JSX.Element {
   const [menuOpen, setMenuOpen] = useState(false)
-  const [pendingKind, setPendingKind] = useState<RefinementKind | null>(null)
+  const [pendingKind, setPendingKind] = useState<MenuKind | null>(null)
   const [, startTransition] = useTransition()
   const [dialogOpen, setDialogOpen] = useState(false)
   const [suggestion, setSuggestion] = useState<SuggestionPayload | null>(null)
   const [source, setSource] = useState<RefinementSource>('llm')
   const [fallbackReason, setFallbackReason] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  // Wave R5 Extended — estado del dialog de Auto-Apply multi-campo.
+  const [autoApplyOpen, setAutoApplyOpen] = useState(false)
+  const [autoApplyProposal, setAutoApplyProposal] =
+    useState<AIAutoApplyProposal | null>(null)
   const containerRef = useRef<HTMLDivElement | null>(null)
 
   // Click-outside para cerrar el menú.
@@ -89,12 +110,47 @@ export function AITaskRefineMenu({
     return () => document.removeEventListener('mousedown', onDocClick)
   }, [menuOpen])
 
-  function runAction(kind: RefinementKind) {
+  function runAction(kind: MenuKind) {
     setMenuOpen(false)
     setError(null)
     setPendingKind(kind)
     startTransition(async () => {
       try {
+        if (kind === 'auto_apply') {
+          // Wave R5 Extended — usamos `improveDescriptionAction` como
+          // proxy multi-campo (devuelve description + acceptanceCriteria
+          // + risks). El dialog renderiza solo los campos que la IA
+          // efectivamente propuso. `risks` se ignoran aquí — siguen
+          // pasando por el flujo `description` clásico cuando el usuario
+          // los acepta desde el AISuggestionDialog tradicional.
+          const envelope = await improveDescriptionAction(taskId)
+          setSource(envelope.source)
+          setFallbackReason(envelope.fallbackReason ?? null)
+          const description = envelope.data.improvedDescription
+          const acceptance = envelope.data.acceptanceCriteria ?? []
+          const proposal: AIAutoApplyProposal = {
+            description,
+            // Si hay criterios sugeridos, construimos un userStory cuyo
+            // shape preserva los CA actuales (si existen) y agrega los
+            // sugeridos como nuevos items con `done: false`.
+            userStory:
+              acceptance.length > 0
+                ? {
+                    asA: '',
+                    iWant: '',
+                    soThat: '',
+                    criteria: acceptance.map((text) => ({
+                      text,
+                      done: false,
+                    })),
+                  }
+                : null,
+          }
+          setAutoApplyProposal(proposal)
+          setAutoApplyOpen(true)
+          return
+        }
+
         let envelope:
           | Awaited<ReturnType<typeof improveDescriptionAction>>
           | Awaited<ReturnType<typeof suggestChecklistAction>>
@@ -207,6 +263,29 @@ export function AITaskRefineMenu({
         source={source}
         fallbackReason={fallbackReason}
         onApplied={handleApplied}
+        onError={(msg) => setError(msg)}
+      />
+
+      {/* Wave R5 Extended — AI Auto-Apply multi-campo. */}
+      <AIAutoApplyDialog
+        open={autoApplyOpen}
+        onClose={() => {
+          setAutoApplyOpen(false)
+          setAutoApplyProposal(null)
+        }}
+        taskId={taskId}
+        currentTask={{
+          title: currentTask.title,
+          description: currentTask.description ?? null,
+        }}
+        proposed={autoApplyProposal ?? {}}
+        source={source}
+        fallbackReason={fallbackReason}
+        onApplied={() => {
+          setAutoApplyOpen(false)
+          setAutoApplyProposal(null)
+          onApplied?.()
+        }}
         onError={(msg) => setError(msg)}
       />
     </div>
