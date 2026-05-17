@@ -24,6 +24,7 @@ import { ExportProjectButton } from '@/components/backup/ExportProjectButton';
 import { ImportProjectDialog } from '@/components/backup/ImportProjectDialog';
 import ProjectHeaderPresence from '@/components/projects/ProjectHeaderPresence';
 import { NewSprintButton } from '@/components/sprints/NewSprintButton';
+import { ExportPdfDropdown } from '@/components/reports/ExportPdfDropdown';
 import type { CurrentUserPresence } from '@/lib/auth/get-current-user-presence';
 import { useTranslation } from '@/lib/i18n/use-translation';
 
@@ -72,12 +73,19 @@ type Props = {
     version: string;
     scopeMode: 'EPIC' | 'SPRINT';
   }>;
+  /**
+   * Wave R5 Extended (US-Reporting-PDF) — sprint ACTIVE del proyecto si
+   * existe. El dropdown "Exportar PDF" del header lo usa para enlazar al
+   * Sprint Review PDF. Si es null, el item queda deshabilitado.
+   */
+  activeSprint?: { id: string; name: string } | null;
 };
 
 export default function ProjectDetailClient({
   projectId,
   currentUser,
   sprintReleases = [],
+  activeSprint = null,
 }: Props) {
   const { t } = useTranslation();
   const [tasks] = useState(initialTasks);
@@ -188,6 +196,12 @@ export default function ProjectDetailClient({
                 variant="solid"
                 label={t('pages.projectDetail.newSprint')}
                 releases={sprintReleases}
+              />
+              {/* Wave R5 Extended · US-Reporting-PDF — Dropdown reporting */}
+              <ExportPdfDropdown
+                projectId={projectId}
+                activeSprintId={activeSprint?.id ?? null}
+                activeSprintName={activeSprint?.name ?? null}
               />
             </div>
 
