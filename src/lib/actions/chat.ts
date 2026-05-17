@@ -39,43 +39,23 @@ import { assertCanViewProject } from '@/lib/auth/visibility'
 import { withMetrics } from '@/lib/observability/metrics'
 import { extractMentions } from '@/lib/mentions/parse'
 import { resolveHandlesToUsers } from '@/lib/mentions/resolve'
+import {
+  ALLOWED_REACTION_EMOJIS,
+  DEFAULT_CHANNEL_NAME,
+  type ChatErrorCode,
+  type SerializedChatChannel,
+  type SerializedChatMessage,
+  type SerializedChatMessageReaction,
+} from '@/lib/chat/shared'
 
 // ───────────────────────── Errores tipados ─────────────────────────
-
-export type ChatErrorCode =
-  | 'INVALID_INPUT'
-  | 'CHANNEL_NOT_FOUND'
-  | 'MESSAGE_NOT_FOUND'
-  | 'PROJECT_NOT_FOUND'
-  | 'FORBIDDEN'
-  | 'PARENT_MISMATCH'
+//
+// Next.js 16 prohíbe exportar valores no-async desde 'use server'.
+// Las constantes y tipos compartidos viven en `@/lib/chat/shared`.
 
 function actionError(code: ChatErrorCode, detail: string): never {
   throw new Error(`[${code}] ${detail}`)
 }
-
-// ───────────────────────── Constantes ─────────────────────────
-
-/** Nombre canónico del canal por defecto que se crea en cada proyecto. */
-export const DEFAULT_CHANNEL_NAME = 'general'
-
-/**
- * Set canónico de emojis aceptados como reacción. Mantenemos una lista
- * corta para evitar contenido arbitrario y simplificar la UI. Puede
- * extenderse sin migración (es validación de runtime).
- */
-export const ALLOWED_REACTION_EMOJIS = [
-  '👍',
-  '👎',
-  '❤️',
-  '🎉',
-  '🚀',
-  '🔥',
-  '😄',
-  '😢',
-  '🙏',
-  '👀',
-] as const
 
 // ───────────────────────── Schemas ─────────────────────────
 
@@ -109,38 +89,6 @@ const reactionSchema = z.object({
   messageId: z.string().min(1),
   emoji: z.string().min(1).max(8),
 })
-
-// ───────────────────────── Tipos serializados (cliente) ─────────────
-
-export type SerializedChatChannel = {
-  id: string
-  projectId: string
-  name: string
-  kind: ChatChannelKind
-  description: string | null
-  lastMessageAt: string | null
-  createdAt: string
-}
-
-export type SerializedChatMessageReaction = {
-  emoji: string
-  userIds: string[]
-}
-
-export type SerializedChatMessage = {
-  id: string
-  channelId: string
-  content: string
-  parentMessageId: string | null
-  createdAt: string
-  editedAt: string | null
-  deletedAt: string | null
-  author: { id: string; name: string } | null
-  /** Reacciones agrupadas por emoji con la lista de userIds que la activaron. */
-  reactions: SerializedChatMessageReaction[]
-  /** Handles resueltos a `User.id` para resaltar menciones en cliente. */
-  mentionedUserIds: string[]
-}
 
 // ───────────────────────── Helpers internos ─────────────────────────
 
