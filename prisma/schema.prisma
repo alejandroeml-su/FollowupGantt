@@ -289,6 +289,11 @@ model User {
   apiTokens ApiToken[]
   webhooks  Webhook[]
 
+  /// Wave R5 Extended · Marketplace — Installs de integraciones que este
+  /// usuario activó (auditoría: quién conectó qué). SetNull en la relación
+  /// para preservar la install si el usuario se elimina.
+  integrationsInstalled IntegrationInstall[]
+
   // Wave P17-B · Equipo B — API pública v2 + Webhooks v2 (auditoría de creación;
   // las credenciales pertenecen al workspace, NO al usuario, así que aquí
   // mantenemos la relación con SetNull para preservar histórico).
@@ -1327,6 +1332,17 @@ model Task {
   /// pasan. Se calcula en cada `createTask`/`updateTask` y se persiste
   /// para queries rápidas ("dame las tareas pendientes de definir").
   definitionComplete Boolean @default(false)
+
+  /// Wave R5 Extended · Marketplace — Referencias a recursos externos
+  /// vinculados a la tarea por providers del marketplace. Shape (Json libre):
+  ///   {
+  ///     github?: { issueNumber: number, url: string, repoFullName: string }
+  ///   }
+  /// Convive con `TaskGitHubLink` (Ola P4) por compatibilidad — los nuevos
+  /// callers del marketplace usan este campo; el TaskGitHubLink queda como
+  /// origen autoritativo del listado en /list/inbound y se sigue alimentando
+  /// desde `linkTaskToGithubIssue`.
+  externalRefs Json?
 
   // Enlace externo de referencia (Confluence, Figma, ticket externo, etc.)
   referenceUrl String?
@@ -2607,6 +2623,11 @@ model Workspace {
   /// Cascade: archivar WS borra su inventario CMDB.
   configurationItems ConfigurationItem[]
 
+  /// Wave R5 Extended · Marketplace — Installs activos/desconectados de
+  /// integraciones tercerizadas (Slack/GitHub al inicio; extensible vía
+  /// registry sin migración). Cascade onDelete preserva la consistencia.
+  integrations IntegrationInstall[]
+
   /// Wave R4-E · Monetización SaaS — relación 1-1 con BillingSubscription.
   /// Cascade: borrar/archivar WS purga la subscripción Stripe asociada
   /// (la cancelación efectiva en Stripe la hace el webhook + el helper
@@ -3285,6 +3306,63 @@ model TaskGitHubLink {
   @@unique([taskId, repoFullName, issueNumber])
   @@index([taskId])
   @@index([repoFullName, issueNumber])
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// Wave R5 Extended · US R5E-Marketplace — Marketplace de integraciones.
+//
+// El modelo `Integration` (Ola P4) sigue vigente para los webhook-outbound
+// project-scoped (Slack/Teams legacy). `IntegrationInstall` introduce la
+// capa marketplace workspace-scoped: catálogo de providers en código
+// (`src/lib/integrations/registry.ts`) + 1 install por (workspace, provider).
+//
+// Diseño:
+//   - `providerKey` es string libre (no enum) → el catálogo se extiende sin
+//     migración: añadir un provider al `registry.ts` y listo.
+//   - `config` Json contiene tokens + mappings (TODO: cifrado at-rest, R6).
+//   - `lastUsedAt` lo actualizan los dispatchers (best-effort) para reflejar
+//     "última notificación entregada con éxito" en la UI.
+//   - `@@unique([workspaceId, providerKey])` → 1 install por par para evitar
+//     duplicados; reinstalar = actualizar la fila existente.
+// ─────────────────────────────────────────────────────────────────────
+
+enum IntegrationStatus {
+  CONNECTED
+  DISCONNECTED
+  ERROR
+}
+
+model IntegrationInstall {
+  id          String    @id @default(cuid())
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  /// Clave del provider del registry (`slack`, `github`, etc.). Lowercase.
+  providerKey String
+
+  status IntegrationStatus @default(CONNECTED)
+
+  /// Config validada por el zod schema del registry del provider. TODO R6:
+  /// cifrar tokens at-rest con KMS (`encryptedConfig`). Por ahora se guarda
+  /// en claro asumiendo que la BD ya está protegida por RLS + secret manager.
+  config Json
+
+  installedById String?
+  installedBy   User?   @relation(fields: [installedById], references: [id])
+
+  installedAt DateTime  @default(now())
+  /// Set por los dispatchers (Slack `chat.postMessage`, GitHub API, …) tras
+  /// una entrega exitosa. Permite mostrar "última actividad" en la UI sin
+  /// scanear el audit log.
+  lastUsedAt  DateTime?
+
+  /// Contador in-row de fallos consecutivos para circuit-breaker simple.
+  /// >= 3 fallos consecutivos → `status = ERROR`. Reset a 0 en delivery OK.
+  consecutiveFailures Int @default(0)
+
+  @@unique([workspaceId, providerKey])
+  @@index([workspaceId, status])
+  @@map("IntegrationInstall")
 }
 
 // ─────────────────────────────────────────────────────────────────────

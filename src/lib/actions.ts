@@ -26,6 +26,8 @@ import { seedOnboardingKit, shouldSeedKit } from '@/lib/onboarding/seed-kit'
 import { requireProjectCapacity } from '@/lib/billing/enforce'
 // Wave P17-B (API v2 / Webhooks v2) — dispatch fire-and-forget.
 import { dispatchEvent as dispatchV2Event } from '@/lib/webhooks-out/dispatcher'
+// Wave R5 Extended · Marketplace — dispatcher fire-and-forget para Slack/GitHub.
+import { dispatchMarketplaceEvent } from '@/lib/integrations/marketplace-dispatcher'
 // Wave P18-B (Automation rule engine) — trigger rules tras mutaciones.
 import { dispatchEvent as dispatchAutomationEvent } from '@/lib/actions/automation'
 // Wave P17-D (Observability APM) — RED metrics wrapper.
@@ -483,6 +485,19 @@ export async function createTask(formData: FormData) {
         projectId,
       },
     })
+    // Wave R5 Extended · Marketplace — dispatcher fire-and-forget.
+    // No bloquea la creación de la tarea: cualquier error queda capturado
+    // dentro del dispatcher (console.warn + audit `integration.delivery_failed`).
+    void dispatchMarketplaceEvent({
+      workspaceId: project.workspaceId,
+      event: 'task.created',
+      taskId: created.id,
+      projectId,
+      title: created.title,
+      projectName: project.name,
+    }).catch((err) => {
+      console.warn('[Marketplace] dispatch task.created failed:', (err as Error).message)
+    })
   }
   // Wave P18-B — Automation rule engine fire-and-forget (`task.created`).
   void dispatchAutomationEvent('task.created', {
@@ -770,6 +785,50 @@ export async function updateTask(formData: FormData) {
     })
   }
 
+  // Wave R5 Extended · Marketplace — emite `task.assigned` cuando cambia el
+  // assignee (no en cada update). Slack/etc. filtran este evento si no lo
+  // suscribieron al instalar.
+  const wsId = taskToUpdate.project.workspaceId
+  if (wsId && assigneeId !== undefined && (assigneeId || null) !== oldTask.assigneeId) {
+    let assigneeName: string | undefined
+    if (assigneeId) {
+      try {
+        const u = await prisma.user.findUnique({
+          where: { id: assigneeId },
+          select: { name: true, email: true },
+        })
+        assigneeName = u?.name ?? u?.email ?? undefined
+      } catch {
+        assigneeName = undefined
+      }
+    }
+    void dispatchMarketplaceEvent({
+      workspaceId: wsId,
+      event: 'task.assigned',
+      taskId: id,
+      projectId: taskToUpdate.projectId,
+      title: oldTask.title,
+      projectName: taskToUpdate.project.name,
+      assigneeName,
+    }).catch((err) => {
+      console.warn('[Marketplace] dispatch task.assigned failed:', (err as Error).message)
+    })
+  }
+  // `task.completed` cuando el status pasa a DONE.
+  if (wsId && status && status !== oldTask.status && status === 'DONE') {
+    void dispatchMarketplaceEvent({
+      workspaceId: wsId,
+      event: 'task.completed',
+      taskId: id,
+      projectId: taskToUpdate.projectId,
+      title: oldTask.title,
+      projectName: taskToUpdate.project.name,
+      newStatus: status,
+    }).catch((err) => {
+      console.warn('[Marketplace] dispatch task.completed failed:', (err as Error).message)
+    })
+  }
+
   // Invalidar cache CPM si la mutación afectó a campos relevantes
   // (fechas, hito). El resto de campos no afecta al grafo, pero el coste
   // de invalidar es trivial frente a la complejidad de discriminar.
@@ -1022,6 +1081,38 @@ export async function updateTaskStatus(
         newStatus,
       },
     })
+    // Wave R5 Extended · Marketplace — task.completed cuando llega a DONE.
+    // Cargamos title + workspaceId on demand para no inflar el `before` query.
+    if (newStatus === 'DONE') {
+      try {
+        const ctx = await prisma.task.findUnique({
+          where: { id },
+          select: {
+            title: true,
+            projectId: true,
+            project: { select: { workspaceId: true, name: true } },
+          },
+        })
+        if (ctx?.project?.workspaceId) {
+          void dispatchMarketplaceEvent({
+            workspaceId: ctx.project.workspaceId,
+            event: 'task.completed',
+            taskId: id,
+            projectId: ctx.projectId,
+            title: ctx.title,
+            projectName: ctx.project.name,
+            newStatus: status,
+          }).catch((err) => {
+            console.warn(
+              '[Marketplace] dispatch task.completed (status) failed:',
+              (err as Error).message,
+            )
+          })
+        }
+      } catch (e) {
+        console.warn('[Marketplace] context fetch failed:', (e as Error).message)
+      }
+    }
     // También TaskHistory para que el tab "Historial" lo refleje.
     try {
       await prisma.taskHistory.create({

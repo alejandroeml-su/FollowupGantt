@@ -13,7 +13,15 @@
  */
 
 import { IntegrationsList } from '@/components/integrations/IntegrationsList'
+import { MarketplaceCatalog } from '@/components/integrations/MarketplaceCatalog'
 import { listIntegrations } from '@/lib/actions/integrations'
+import {
+  listIntegrationInstalls,
+  listAvailableProviders,
+} from '@/lib/actions/marketplace'
+import {
+  getActiveWorkspaceId,
+} from '@/lib/actions/workspaces'
 import prisma from '@/lib/prisma'
 import { getCurrentUser } from '@/lib/auth/get-current-user'
 import { resolveProjectVisibility } from '@/lib/auth/visibility'
@@ -62,6 +70,20 @@ export default async function IntegrationsSettingsPage() {
 
   const inboundDomain = getInboundEmailDomain()
 
+  // Wave R5 Extended · Marketplace — catálogo + installs del workspace activo.
+  // Si no hay workspace activo (usuario aún no eligió uno), no renderizamos
+  // el marketplace para evitar mostrar un estado confuso.
+  const activeWorkspaceId = await getActiveWorkspaceId().catch(() => null)
+  const providers = await listAvailableProviders()
+  let installs: Awaited<ReturnType<typeof listIntegrationInstalls>> = []
+  if (activeWorkspaceId) {
+    try {
+      installs = await listIntegrationInstalls(activeWorkspaceId)
+    } catch {
+      installs = []
+    }
+  }
+
   return (
     <div className="flex h-full flex-col bg-background">
       <header className="flex h-16 shrink-0 items-center justify-between border-b border-border px-8 bg-subtle/50">
@@ -75,7 +97,16 @@ export default async function IntegrationsSettingsPage() {
       </header>
 
       <div className="flex-1 overflow-auto p-6">
-        <div className="mx-auto max-w-5xl space-y-6">
+        <div className="mx-auto max-w-5xl space-y-8">
+          {/* Wave R5 Extended · Marketplace — providers tercerizados. */}
+          {activeWorkspaceId ? (
+            <MarketplaceCatalog
+              workspaceId={activeWorkspaceId}
+              providers={providers}
+              installs={installs}
+            />
+          ) : null}
+
           {/* R4 · US-7.4 — Email ClickApp */}
           {inboundEmailProjects.length > 0 ? (
             <EmailToTaskCard
@@ -84,7 +115,12 @@ export default async function IntegrationsSettingsPage() {
             />
           ) : null}
 
-          <IntegrationsList initial={integrations} />
+          <section>
+            <h2 className="mb-3 text-base font-medium text-foreground">
+              Webhooks legacy (Slack/Teams/GitHub project-scoped)
+            </h2>
+            <IntegrationsList initial={integrations} />
+          </section>
         </div>
       </div>
     </div>

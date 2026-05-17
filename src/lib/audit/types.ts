@@ -259,6 +259,18 @@ export const KNOWN_AUDIT_ACTIONS = [
   // Wave R5 Extended · US-Reporting-PDF — Status Report PMI / Sprint Review.
   // @react-pdf/renderer streamed binary, audita kind + projectId + sprintId opcional.
   'report.exported',
+  // Wave R5 Extended · US R5E-Marketplace — Integraciones tercerizadas.
+  // `integration.installed` / `integration.disconnected` se emiten desde los
+  // server actions del marketplace. `integration.delivery_failed` lo dispara
+  // el dispatcher tras un fallo de entrega (Slack/GitHub) — best-effort.
+  // `integration.webhook_received` se audita en el endpoint inbound de
+  // GitHub (sólo logging por ahora, processing diferido a R5E++).
+  // `task.linked_external` audita el link de Task a issue/PR externo.
+  'integration.installed',
+  'integration.disconnected',
+  'integration.delivery_failed',
+  'integration.webhook_received',
+  'task.linked_external',
 ] as const
 
 export type AuditAction = (typeof KNOWN_AUDIT_ACTIONS)[number]
@@ -467,6 +479,12 @@ export const ACTION_LABELS: Record<AuditAction, string> = {
   'task.ai_applied': 'IA · refinement aplicado a tarea',
   // Wave R5 Extended · US-Reporting-PDF
   'report.exported': 'Reporte PDF · descarga generada',
+  // Wave R5 Extended · US R5E-Marketplace
+  'integration.installed': 'Marketplace · integración instalada',
+  'integration.disconnected': 'Marketplace · integración desconectada',
+  'integration.delivery_failed': 'Marketplace · entrega fallida',
+  'integration.webhook_received': 'Marketplace · webhook recibido',
+  'task.linked_external': 'Tarea · vinculada a recurso externo',
 }
 
 // ───────────────────────── Tipos de entidad ─────────────────────────
