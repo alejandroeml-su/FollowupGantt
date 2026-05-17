@@ -33,11 +33,13 @@ import {
   type CICriticality,
   type CIRelationKind,
   type CILinkRole,
+  type CIChangeStatus,
 } from '@prisma/client'
 import prisma from '@/lib/prisma'
 import { requireUser } from '@/lib/auth/get-current-user'
 import { recordAuditEventSafe } from '@/lib/audit/events'
 import { withMetrics } from '@/lib/observability/metrics'
+import { hasAdminRole } from '@/lib/auth/permissions'
 
 // ───────────────────────── Errores tipados ─────────────────────────
 
@@ -1021,5 +1023,849 @@ export async function getCmdbHealthStats(): Promise<{
     }
 
     return { total, countByStatus, countByCriticality, topByIncidents }
+  })
+}
+
+// ────────────────────── Wave R5-Extended ──────────────────────
+//
+// 1) Lifecycle audit trail · `updateCiStatus` valida la transición
+//    permitida y persiste un `CILifecycleEvent`.
+// 2) Bulk Import desde CSV · `bulkImportCIs` corre todo bajo una
+//    transacción y devuelve detalle fila-por-fila.
+// 3) Change Request ligero · 4 server actions (`createCIChangeRequest`,
+//    `approveCIChangeRequest`, `executeCIChangeRequest`,
+//    `cancelCIChangeRequest`).
+// ───────────────────────────────────────────────────────────────
+
+// ── Lifecycle: matriz de transición ───────────────────────────
+
+/**
+ * Matriz de transiciones válidas para `CIStatus`. Reglas operativas:
+ *   - `PLANNED → ACTIVE` (entra a producción).
+ *   - `ACTIVE ↔ MAINTENANCE` (ventana programada).
+ *   - `ACTIVE/MAINTENANCE/PLANNED → INCIDENT` (falla detectada).
+ *   - `INCIDENT → ACTIVE` (resuelto y operativo).
+ *   - `INCIDENT → MAINTENANCE` (mitigado, en mantenimiento).
+ *   - `ACTIVE/MAINTENANCE/PLANNED → RETIRED` (decomisionado).
+ *   - `RETIRED → PLANNED` (re-uso del CI; cualquier otra transición
+ *     desde RETIRED queda bloqueada para preservar la semántica del
+ *     soft-delete).
+ *
+ * Las transiciones a sí mismo se permiten (es un no-op auditado).
+ */
+const CI_STATUS_TRANSITIONS: Record<CIStatus, ReadonlySet<CIStatus>> = {
+  PLANNED: new Set<CIStatus>(['PLANNED', 'ACTIVE', 'INCIDENT', 'RETIRED']),
+  ACTIVE: new Set<CIStatus>(['ACTIVE', 'MAINTENANCE', 'INCIDENT', 'RETIRED']),
+  MAINTENANCE: new Set<CIStatus>([
+    'MAINTENANCE',
+    'ACTIVE',
+    'INCIDENT',
+    'RETIRED',
+  ]),
+  INCIDENT: new Set<CIStatus>(['INCIDENT', 'ACTIVE', 'MAINTENANCE', 'RETIRED']),
+  // Desde RETIRED sólo PLANNED (reincorporación). Todo lo demás bloqueado.
+  RETIRED: new Set<CIStatus>(['RETIRED', 'PLANNED']),
+}
+
+function isValidCITransition(from: CIStatus, to: CIStatus): boolean {
+  const allowed = CI_STATUS_TRANSITIONS[from]
+  return !!allowed && allowed.has(to)
+}
+
+const updateCiStatusSchema = z.object({
+  ciId: z.string().min(1),
+  toStatus: z.enum([
+    'PLANNED',
+    'ACTIVE',
+    'MAINTENANCE',
+    'RETIRED',
+    'INCIDENT',
+  ] as const satisfies readonly CIStatus[]),
+  note: z.string().trim().max(500).optional().nullable(),
+})
+
+export type UpdateCiStatusInput = z.input<typeof updateCiStatusSchema>
+
+/**
+ * Cambia el `CIStatus` de un CI validando la transición permitida y
+ * persistiendo el evento en `CILifecycleEvent`. Idempotente cuando
+ * `from === to` (igual emite evento — sirve como anclaje de auditoría).
+ *
+ * RETIRED → cualquier otro estado distinto de PLANNED queda bloqueado
+ * para preservar la semántica del soft-delete. Si se mueve a RETIRED,
+ * además se setea `retiredAt = now()` (alineado con `retireCI`).
+ *
+ * El `actorId` se infiere de la sesión; el evento queda con SetNull
+ * si más adelante el usuario es eliminado.
+ */
+export async function updateCiStatus(input: UpdateCiStatusInput): Promise<{
+  eventId: string
+  fromStatus: CIStatus
+  toStatus: CIStatus
+}> {
+  return withMetrics('action.cmdb.updateCiStatus', async () => {
+    const parsed = updateCiStatusSchema.safeParse(input)
+    if (!parsed.success) {
+      actionError(
+        'INVALID_INPUT',
+        parsed.error.issues.map((i) => i.message).join('; '),
+      )
+    }
+    const data = parsed.data
+    const user = await requireUser()
+
+    const ci = await prisma.configurationItem.findUnique({
+      where: { id: data.ciId },
+      select: {
+        id: true,
+        workspaceId: true,
+        status: true,
+        retiredAt: true,
+        code: true,
+      },
+    })
+    if (!ci) actionError('NOT_FOUND', `CI ${data.ciId} no existe`)
+
+    if (!isValidCITransition(ci.status, data.toStatus)) {
+      actionError(
+        'CONFLICT',
+        `Transición no permitida: ${ci.status} → ${data.toStatus}`,
+      )
+    }
+
+    // Persistencia atómica: actualización del status + retiredAt + evento.
+    const result = await prisma.$transaction(async (tx) => {
+      await tx.configurationItem.update({
+        where: { id: ci.id },
+        data: {
+          status: data.toStatus,
+          // Si pasa a RETIRED, fijamos `retiredAt` (no sobrescribe si ya
+          // tenía valor). Si sale de RETIRED → PLANNED, lo limpiamos.
+          ...(data.toStatus === 'RETIRED' && !ci.retiredAt
+            ? { retiredAt: new Date() }
+            : {}),
+          ...(ci.status === 'RETIRED' && data.toStatus === 'PLANNED'
+            ? { retiredAt: null }
+            : {}),
+        },
+      })
+      const evt = await tx.cILifecycleEvent.create({
+        data: {
+          ciId: ci.id,
+          fromStatus: ci.status,
+          toStatus: data.toStatus,
+          note: data.note ?? null,
+          actorId: user.id,
+        },
+        select: { id: true },
+      })
+      return evt
+    })
+
+    await recordAuditEventSafe({
+      action: 'ci.status_changed',
+      entityType: 'configuration_item',
+      entityId: ci.id,
+      actorId: user.id,
+      before: { status: ci.status },
+      after: { status: data.toStatus },
+      metadata: {
+        workspaceId: ci.workspaceId,
+        code: ci.code,
+        eventId: result.id,
+        note: data.note ?? null,
+      },
+    })
+
+    revalidateCmdbRoutes(ci.id)
+    return { eventId: result.id, fromStatus: ci.status, toStatus: data.toStatus }
+  })
+}
+
+/**
+ * Lista los eventos de lifecycle de un CI ordenados desc por fecha.
+ * Workspace-check via el CI (FK Cascade preserva la integridad).
+ */
+export async function listCILifecycleEvents(ciId: string): Promise<
+  Array<{
+    id: string
+    fromStatus: CIStatus | null
+    toStatus: CIStatus
+    note: string | null
+    createdAt: Date
+    actor: { id: string; name: string } | null
+  }>
+> {
+  return withMetrics('action.cmdb.listCILifecycleEvents', async () => {
+    const user = await requireUser()
+    const workspaceId =
+      (user as { workspaceId?: string | null }).workspaceId ?? null
+
+    const ci = await prisma.configurationItem.findUnique({
+      where: { id: ciId },
+      select: { id: true, workspaceId: true },
+    })
+    if (!ci) actionError('NOT_FOUND', `CI ${ciId} no existe`)
+    if (workspaceId && ci.workspaceId !== workspaceId) {
+      actionError('FORBIDDEN', 'CI fuera del workspace activo')
+    }
+
+    const events = await prisma.cILifecycleEvent.findMany({
+      where: { ciId },
+      orderBy: { createdAt: 'desc' },
+      select: {
+        id: true,
+        fromStatus: true,
+        toStatus: true,
+        note: true,
+        createdAt: true,
+        actor: { select: { id: true, name: true } },
+      },
+    })
+    return events
+  })
+}
+
+// ─────────────────────── Bulk Import CSV ─────────────────────
+
+/**
+ * Forma esperada de cada fila CSV. Las columnas `type`, `status` y
+ * `criticality` se parsean en mayúsculas y se validan contra los enums;
+ * `ownerEmail` se resuelve a `User.id` con búsqueda case-insensitive
+ * dentro del mismo workspace (cualquier usuario activo del WS).
+ */
+const csvRowSchema = z.object({
+  name: z.string().trim().min(1, 'name vacío').max(200),
+  type: z.enum(CI_TYPES).optional(),
+  status: z.enum(CI_STATUSES).optional(),
+  criticality: z.enum(CI_CRITICALITIES).optional(),
+  description: z.string().trim().max(4000).optional().nullable(),
+  ownerEmail: z
+    .string()
+    .trim()
+    .email('email inválido')
+    .optional()
+    .nullable()
+    .or(z.literal('').transform(() => null)),
+})
+
+export type CsvImportRowResult =
+  | {
+      rowIndex: number
+      status: 'ok'
+      ciId: string
+      code: string
+      name: string
+    }
+  | {
+      rowIndex: number
+      status: 'error'
+      message: string
+      rawName?: string
+    }
+
+export type BulkImportResult = {
+  created: number
+  failed: number
+  rows: CsvImportRowResult[]
+}
+
+/**
+ * Parser CSV minimalista. NO es RFC 4180 completo — soporta los casos
+ * realistas que producirían Excel/LibreOffice al exportar inventarios:
+ *   - delimitador `,`
+ *   - comillas dobles para escapar comas embebidas
+ *   - `""` dentro de comillas representa una comilla literal
+ *   - filas vacías y trailing CRLF se ignoran
+ *
+ * Si necesitamos algo más serio en el futuro, se cambia por `papaparse`.
+ */
+function parseCsv(text: string): string[][] {
+  const rows: string[][] = []
+  let row: string[] = []
+  let cur = ''
+  let inQuotes = false
+  let i = 0
+  while (i < text.length) {
+    const ch = text[i]
+    if (inQuotes) {
+      if (ch === '"') {
+        if (text[i + 1] === '"') {
+          cur += '"'
+          i += 2
+          continue
+        }
+        inQuotes = false
+        i++
+        continue
+      }
+      cur += ch
+      i++
+      continue
+    }
+    if (ch === '"') {
+      inQuotes = true
+      i++
+      continue
+    }
+    if (ch === ',') {
+      row.push(cur)
+      cur = ''
+      i++
+      continue
+    }
+    if (ch === '\r') {
+      i++
+      continue
+    }
+    if (ch === '\n') {
+      row.push(cur)
+      rows.push(row)
+      row = []
+      cur = ''
+      i++
+      continue
+    }
+    cur += ch
+    i++
+  }
+  // último campo / última fila si no termina en newline
+  if (cur.length > 0 || row.length > 0) {
+    row.push(cur)
+    rows.push(row)
+  }
+  // limpia filas totalmente vacías ("," vacíos al final del archivo)
+  return rows.filter((r) => r.some((c) => c.trim().length > 0))
+}
+
+const REQUIRED_HEADERS = [
+  'name',
+  'type',
+  'status',
+  'criticality',
+  'description',
+  'ownerEmail',
+] as const
+
+/**
+ * Bulk import: parsea el CSV, valida fila por fila, y dentro de UNA SOLA
+ * transacción crea todos los CIs válidos. Si alguna fila falla, NO se
+ * persiste nada (rollback). El objetivo: la UI puede mostrar todos los
+ * errores juntos y el operador corrige y reintenta una sola vez.
+ *
+ * Permiso: sólo ADMIN+. La validación de rol es server-side; la página
+ * `/cmdb/import` también gate por ADMIN para no exponer el form a quien
+ * no puede usarlo.
+ *
+ * Auditoría: `ci.bulk_imported` con `{ created, failed }` y los códigos
+ * de los CIs creados en `metadata.ciCodes` para trazabilidad.
+ */
+export async function bulkImportCIs(
+  csvText: string,
+): Promise<BulkImportResult> {
+  return withMetrics('action.cmdb.bulkImportCIs', async () => {
+    const user = await requireUser()
+    if (!hasAdminRole(user.roles)) {
+      actionError('FORBIDDEN', 'Sólo ADMIN puede importar CIs en bulk')
+    }
+    const { workspaceId } = await requireUserWorkspace()
+
+    if (typeof csvText !== 'string' || csvText.trim().length === 0) {
+      actionError('INVALID_INPUT', 'CSV vacío')
+    }
+
+    const grid = parseCsv(csvText)
+    if (grid.length === 0) {
+      actionError('INVALID_INPUT', 'CSV no contiene filas')
+    }
+
+    const header = grid[0].map((h) => h.trim())
+    const idx: Record<(typeof REQUIRED_HEADERS)[number], number> = {
+      name: header.indexOf('name'),
+      type: header.indexOf('type'),
+      status: header.indexOf('status'),
+      criticality: header.indexOf('criticality'),
+      description: header.indexOf('description'),
+      ownerEmail: header.indexOf('ownerEmail'),
+    }
+    // `name` es la única columna OBLIGATORIA del header; las demás
+    // pueden faltar y se interpretan como undefined por fila.
+    if (idx.name < 0) {
+      actionError(
+        'INVALID_INPUT',
+        `Header CSV inválido. Esperado: ${REQUIRED_HEADERS.join(',')} (al menos "name")`,
+      )
+    }
+
+    const dataRows = grid.slice(1)
+    if (dataRows.length === 0) {
+      actionError('INVALID_INPUT', 'CSV sin filas de datos (sólo header)')
+    }
+
+    // Resolución previa de owners por email (case-insensitive). Hacemos
+    // un único query con todos los emails distintos para evitar N+1.
+    const allEmails = new Set<string>()
+    for (const row of dataRows) {
+      const e = idx.ownerEmail >= 0 ? row[idx.ownerEmail]?.trim() : ''
+      if (e) allEmails.add(e.toLowerCase())
+    }
+    const ownersByEmail = new Map<string, string>()
+    if (allEmails.size > 0) {
+      const users = await prisma.user.findMany({
+        where: {
+          email: { in: Array.from(allEmails), mode: 'insensitive' },
+          archivedAt: null,
+        },
+        select: { id: true, email: true },
+      })
+      for (const u of users) {
+        ownersByEmail.set(u.email.toLowerCase(), u.id)
+      }
+    }
+
+    // Pre-validación fila por fila. Generamos:
+    //   - `valid` con los datos listos para crear (en orden).
+    //   - `errors` para las filas que no compilan.
+    type ValidRow = {
+      rowIndex: number
+      name: string
+      type: CIType
+      status: CIStatus
+      criticality: CICriticality
+      description: string | null
+      ownerId: string | null
+    }
+    const valid: ValidRow[] = []
+    const errors: CsvImportRowResult[] = []
+
+    for (let r = 0; r < dataRows.length; r++) {
+      const rowIndex = r + 2 // +2: header es fila 1, datos arrancan en 2
+      const row = dataRows[r]
+      const cell = (i: number) => (i >= 0 ? (row[i] ?? '').trim() : '')
+
+      const rawName = cell(idx.name)
+      const candidate = {
+        name: rawName,
+        type: cell(idx.type).toUpperCase() || undefined,
+        status: cell(idx.status).toUpperCase() || undefined,
+        criticality: cell(idx.criticality).toUpperCase() || undefined,
+        description: cell(idx.description) || undefined,
+        ownerEmail: cell(idx.ownerEmail) || undefined,
+      }
+
+      const parsed = csvRowSchema.safeParse(candidate)
+      if (!parsed.success) {
+        errors.push({
+          rowIndex,
+          status: 'error',
+          message: parsed.error.issues.map((i) => i.message).join('; '),
+          rawName: rawName || undefined,
+        })
+        continue
+      }
+
+      let ownerId: string | null = null
+      if (parsed.data.ownerEmail) {
+        const found = ownersByEmail.get(parsed.data.ownerEmail.toLowerCase())
+        if (!found) {
+          errors.push({
+            rowIndex,
+            status: 'error',
+            message: `ownerEmail "${parsed.data.ownerEmail}" no resuelve a un usuario activo`,
+            rawName: rawName || undefined,
+          })
+          continue
+        }
+        ownerId = found
+      }
+
+      valid.push({
+        rowIndex,
+        name: parsed.data.name,
+        type: parsed.data.type ?? 'OTHER',
+        status: parsed.data.status ?? 'ACTIVE',
+        criticality: parsed.data.criticality ?? 'MEDIUM',
+        description: parsed.data.description ?? null,
+        ownerId,
+      })
+    }
+
+    // Si CUALQUIER fila falló, NO creamos nada y devolvemos el detalle.
+    if (errors.length > 0) {
+      return {
+        created: 0,
+        failed: errors.length,
+        rows: errors,
+      }
+    }
+
+    // Transacción atómica para todos los inserts. Generamos los códigos
+    // dentro de la transacción para evitar colisiones con creaciones
+    // paralelas — locking light: si `P2002` revienta, propagamos el
+    // error y dejamos al operador reintentar (raro en flujo bulk).
+    const createdRows: CsvImportRowResult[] = await prisma.$transaction(
+      async (tx) => {
+        // Buscamos el último código existente para calcular la base.
+        const last = await tx.configurationItem.findFirst({
+          where: { workspaceId, code: { startsWith: 'CI-' } },
+          orderBy: { code: 'desc' },
+          select: { code: true },
+        })
+        let n = 1
+        if (last?.code) {
+          const parsedNum = parseInt(last.code.replace('CI-', ''), 10)
+          if (Number.isFinite(parsedNum)) n = parsedNum + 1
+        }
+
+        const out: CsvImportRowResult[] = []
+        for (const v of valid) {
+          const code = `CI-${String(n).padStart(3, '0')}`
+          n += 1
+          const created = await tx.configurationItem.create({
+            data: {
+              workspaceId,
+              code,
+              name: v.name,
+              type: v.type,
+              status: v.status,
+              criticality: v.criticality,
+              description: v.description,
+              ownerId: v.ownerId,
+              createdById: user.id,
+            },
+            select: { id: true, code: true, name: true },
+          })
+          out.push({
+            rowIndex: v.rowIndex,
+            status: 'ok',
+            ciId: created.id,
+            code: created.code,
+            name: created.name,
+          })
+        }
+        return out
+      },
+    )
+
+    await recordAuditEventSafe({
+      action: 'ci.bulk_imported',
+      entityType: 'configuration_item',
+      actorId: user.id,
+      after: {
+        created: createdRows.length,
+        failed: 0,
+      },
+      metadata: {
+        workspaceId,
+        ciCodes: createdRows
+          .filter((r): r is Extract<CsvImportRowResult, { status: 'ok' }> =>
+            r.status === 'ok',
+          )
+          .map((r) => r.code),
+      },
+    })
+
+    revalidateCmdbRoutes()
+    return {
+      created: createdRows.length,
+      failed: 0,
+      rows: createdRows,
+    }
+  })
+}
+
+// ───────────────────── Change Request ligero ─────────────────────
+
+const createChangeRequestSchema = z.object({
+  ciId: z.string().min(1),
+  title: z.string().trim().min(1).max(200),
+  rationale: z.string().trim().max(4000).optional().nullable(),
+  plannedAt: z.coerce.date().optional().nullable(),
+})
+
+export type CreateCIChangeRequestInput = z.input<typeof createChangeRequestSchema>
+
+/**
+ * Cualquier usuario con visibilidad del workspace puede SOLICITAR un
+ * cambio. La aprobación/ejecución sí requieren ADMIN.
+ */
+export async function createCIChangeRequest(
+  input: CreateCIChangeRequestInput,
+): Promise<{ id: string }> {
+  return withMetrics('action.cmdb.createCIChangeRequest', async () => {
+    const parsed = createChangeRequestSchema.safeParse(input)
+    if (!parsed.success) {
+      actionError(
+        'INVALID_INPUT',
+        parsed.error.issues.map((i) => i.message).join('; '),
+      )
+    }
+    const data = parsed.data
+    const user = await requireUser()
+    const workspaceId =
+      (user as { workspaceId?: string | null }).workspaceId ?? null
+
+    const ci = await prisma.configurationItem.findUnique({
+      where: { id: data.ciId },
+      select: { id: true, workspaceId: true, code: true },
+    })
+    if (!ci) actionError('NOT_FOUND', `CI ${data.ciId} no existe`)
+    if (workspaceId && ci.workspaceId !== workspaceId) {
+      actionError('FORBIDDEN', 'CI fuera del workspace activo')
+    }
+
+    const created = await prisma.cIChangeRequest.create({
+      data: {
+        ciId: data.ciId,
+        title: data.title,
+        rationale: data.rationale ?? null,
+        plannedAt: data.plannedAt ?? null,
+        status: 'PROPOSED',
+        requestedById: user.id,
+      },
+      select: { id: true },
+    })
+
+    await recordAuditEventSafe({
+      action: 'ci.change_requested',
+      entityType: 'ci_change_request',
+      entityId: created.id,
+      actorId: user.id,
+      after: {
+        ciId: data.ciId,
+        title: data.title,
+        plannedAt: data.plannedAt?.toISOString() ?? null,
+      },
+      metadata: { workspaceId: ci.workspaceId, code: ci.code },
+    })
+
+    revalidateCmdbRoutes(data.ciId)
+    return created
+  })
+}
+
+async function loadChangeRequestForAdmin(
+  id: string,
+): Promise<{
+  id: string
+  ciId: string
+  status: CIChangeStatus
+  workspaceId: string
+  code: string
+}> {
+  const cr = await prisma.cIChangeRequest.findUnique({
+    where: { id },
+    select: {
+      id: true,
+      ciId: true,
+      status: true,
+      ci: { select: { workspaceId: true, code: true } },
+    },
+  })
+  if (!cr) actionError('NOT_FOUND', `Change Request ${id} no existe`)
+  return {
+    id: cr.id,
+    ciId: cr.ciId,
+    status: cr.status,
+    workspaceId: cr.ci.workspaceId,
+    code: cr.ci.code,
+  }
+}
+
+function requireAdmin(roles: readonly string[]): void {
+  if (!hasAdminRole(roles)) {
+    actionError('FORBIDDEN', 'Sólo ADMIN puede gestionar el Change Request')
+  }
+}
+
+/**
+ * Aprueba un Change Request. Sólo ADMIN. Transición permitida:
+ *   `PROPOSED → APPROVED`.
+ * El `approvedById` queda en el actor; futuros ejecutores pueden ser
+ * distintos (no se restringe a "el mismo ADMIN que aprobó ejecuta").
+ */
+export async function approveCIChangeRequest(input: {
+  id: string
+}): Promise<void> {
+  return withMetrics('action.cmdb.approveCIChangeRequest', async () => {
+    const user = await requireUser()
+    requireAdmin(user.roles)
+    const cr = await loadChangeRequestForAdmin(input.id)
+    if (cr.status !== 'PROPOSED') {
+      actionError(
+        'CONFLICT',
+        `Sólo se pueden aprobar requests en estado PROPOSED (actual: ${cr.status})`,
+      )
+    }
+
+    await prisma.cIChangeRequest.update({
+      where: { id: cr.id },
+      data: { status: 'APPROVED', approvedById: user.id },
+    })
+
+    await recordAuditEventSafe({
+      action: 'ci.change_approved',
+      entityType: 'ci_change_request',
+      entityId: cr.id,
+      actorId: user.id,
+      before: { status: 'PROPOSED' },
+      after: { status: 'APPROVED' },
+      metadata: { workspaceId: cr.workspaceId, ciId: cr.ciId, code: cr.code },
+    })
+    revalidateCmdbRoutes(cr.ciId)
+  })
+}
+
+/**
+ * Ejecuta un Change Request previamente APPROVED, fija `executedAt`.
+ * Sólo ADMIN.
+ */
+export async function executeCIChangeRequest(input: {
+  id: string
+}): Promise<void> {
+  return withMetrics('action.cmdb.executeCIChangeRequest', async () => {
+    const user = await requireUser()
+    requireAdmin(user.roles)
+    const cr = await loadChangeRequestForAdmin(input.id)
+    if (cr.status !== 'APPROVED') {
+      actionError(
+        'CONFLICT',
+        `Sólo se pueden ejecutar requests APROBADOS (actual: ${cr.status})`,
+      )
+    }
+    await prisma.cIChangeRequest.update({
+      where: { id: cr.id },
+      data: { status: 'EXECUTED', executedAt: new Date() },
+    })
+    await recordAuditEventSafe({
+      action: 'ci.change_executed',
+      entityType: 'ci_change_request',
+      entityId: cr.id,
+      actorId: user.id,
+      before: { status: 'APPROVED' },
+      after: { status: 'EXECUTED' },
+      metadata: { workspaceId: cr.workspaceId, ciId: cr.ciId, code: cr.code },
+    })
+    revalidateCmdbRoutes(cr.ciId)
+  })
+}
+
+/**
+ * Cancela o rechaza un Change Request. Acepta cualquier estado distinto
+ * de EXECUTED (no se "des-ejecuta" una ventana ya aplicada). Si el
+ * actor es el requester original, el verbo conceptual es "cancelar";
+ * si es un ADMIN distinto, es "rechazar"; ambos caen en CANCELLED por
+ * simplicidad y disparan la misma audit action `ci.change_cancelled`.
+ *
+ * Política: el requester puede cancelar SU propio request (cualquier
+ * estado != EXECUTED). Cualquier ADMIN también puede.
+ */
+export async function cancelCIChangeRequest(input: {
+  id: string
+  reason?: string | null
+}): Promise<void> {
+  return withMetrics('action.cmdb.cancelCIChangeRequest', async () => {
+    const user = await requireUser()
+    const cr = await prisma.cIChangeRequest.findUnique({
+      where: { id: input.id },
+      select: {
+        id: true,
+        ciId: true,
+        status: true,
+        requestedById: true,
+        ci: { select: { workspaceId: true, code: true } },
+      },
+    })
+    if (!cr) actionError('NOT_FOUND', `Change Request ${input.id} no existe`)
+
+    if (cr.status === 'EXECUTED') {
+      actionError('CONFLICT', 'No se puede cancelar un cambio ya ejecutado')
+    }
+    if (cr.status === 'CANCELLED' || cr.status === 'REJECTED') {
+      // Ya terminal — idempotente.
+      return
+    }
+
+    // Permiso: el dueño del request o un ADMIN.
+    const isOwner = cr.requestedById === user.id
+    if (!isOwner && !hasAdminRole(user.roles)) {
+      actionError(
+        'FORBIDDEN',
+        'Sólo el solicitante o un ADMIN pueden cancelar el cambio',
+      )
+    }
+
+    const newStatus: CIChangeStatus =
+      !isOwner && hasAdminRole(user.roles) ? 'REJECTED' : 'CANCELLED'
+
+    await prisma.cIChangeRequest.update({
+      where: { id: cr.id },
+      data: { status: newStatus },
+    })
+    await recordAuditEventSafe({
+      action: 'ci.change_cancelled',
+      entityType: 'ci_change_request',
+      entityId: cr.id,
+      actorId: user.id,
+      before: { status: cr.status },
+      after: { status: newStatus },
+      metadata: {
+        workspaceId: cr.ci.workspaceId,
+        ciId: cr.ciId,
+        code: cr.ci.code,
+        reason: input.reason ?? null,
+      },
+    })
+    revalidateCmdbRoutes(cr.ciId)
+  })
+}
+
+/**
+ * Lista los Change Requests de un CI, ordenados por más reciente.
+ * Workspace check vía CI.
+ */
+export async function listCIChangeRequests(ciId: string): Promise<
+  Array<{
+    id: string
+    title: string
+    rationale: string | null
+    plannedAt: Date | null
+    executedAt: Date | null
+    status: CIChangeStatus
+    createdAt: Date
+    requestedBy: { id: string; name: string }
+    approvedBy: { id: string; name: string } | null
+  }>
+> {
+  return withMetrics('action.cmdb.listCIChangeRequests', async () => {
+    const user = await requireUser()
+    const workspaceId =
+      (user as { workspaceId?: string | null }).workspaceId ?? null
+
+    const ci = await prisma.configurationItem.findUnique({
+      where: { id: ciId },
+      select: { id: true, workspaceId: true },
+    })
+    if (!ci) actionError('NOT_FOUND', `CI ${ciId} no existe`)
+    if (workspaceId && ci.workspaceId !== workspaceId) {
+      actionError('FORBIDDEN', 'CI fuera del workspace activo')
+    }
+
+    const rows = await prisma.cIChangeRequest.findMany({
+      where: { ciId },
+      orderBy: { createdAt: 'desc' },
+      select: {
+        id: true,
+        title: true,
+        rationale: true,
+        plannedAt: true,
+        executedAt: true,
+        status: true,
+        createdAt: true,
+        requestedBy: { select: { id: true, name: true } },
+        approvedBy: { select: { id: true, name: true } },
+      },
+    })
+    return rows
   })
 }
