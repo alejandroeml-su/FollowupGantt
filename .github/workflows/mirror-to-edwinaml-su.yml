@@ -76,22 +76,10 @@ jobs:
             cat /tmp/ref.json
             exit 1
           fi
-          echo "→ PATCH /repos/edwinaml-su/FollowupGantt (test Contents:write con un campo benigno)"
-          ORIGINAL_DESC=$(jq -r '.description // ""' /tmp/repo.json)
-          echo "   description original: '${ORIGINAL_DESC}'"
-          HTTP_CODE=$(curl -s -o /tmp/patch.json -w "%{http_code}" -X PATCH -H "Authorization: Bearer ${MIRROR_PAT}" -H "Accept: application/vnd.github+json" -d "{\"description\":\"${ORIGINAL_DESC}\"}" https://api.github.com/repos/edwinaml-su/FollowupGantt)
-          echo "   HTTP ${HTTP_CODE}"
-          if [ "${HTTP_CODE}" != "200" ]; then
-            echo "::error::PAT NO TIENE write access. Esta es la causa real del fallo del push."
-            echo "Body:"
-            cat /tmp/patch.json
-            echo ""
-            echo "Fix: en el fine-grained PAT, en 'Repository permissions' debe estar:"
-            echo "  - Contents: Read and Write"
-            echo "  - Workflows: Read and Write (sólo si el push incluye .github/workflows/*)"
-            exit 1
-          fi
-          echo "✅ PAT tiene Contents:write. Procediendo al push."
+          # Nota: NO se valida Contents:write con PATCH /repos/... porque ese
+          # endpoint requiere Administration:write (no Contents). Falsos
+          # negativos. El test definitivo de write es el git push siguiente.
+          echo "✅ Lectura OK. El git push validará el write."
 
       - name: Mirror push (fast-forward only)
         env:
