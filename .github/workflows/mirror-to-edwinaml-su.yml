@@ -48,20 +48,47 @@ jobs:
           fetch-depth: 0
           ref: master
 
-      - name: Mirror push (fast-forward only)
+      - name: Verify PAT auth before push (diagnostic)
         env:
           MIRROR_PAT: ${{ secrets.EDWINAML_SU_MIRROR_PAT }}
         run: |
           set -euo pipefail
           if [ -z "${MIRROR_PAT:-}" ]; then
-            echo "::error::EDWINAML_SU_MIRROR_PAT secret no está configurado. Revisa el header del workflow para el setup."
+            echo "::error::EDWINAML_SU_MIRROR_PAT secret no está configurado."
             exit 1
           fi
-          # Username 'edwinaml-su' (no 'x-access-token'). El placeholder
-          # 'x-access-token' solo funciona con GitHub App installation tokens
-          # y classic PATs; los fine-grained PATs requieren el username real
-          # del owner del token o GitHub responde "Repository not found" 404.
-          git remote add mirror "https://edwinaml-su:${MIRROR_PAT}@github.com/edwinaml-su/FollowupGantt.git"
+          echo "PAT length: ${#MIRROR_PAT} chars"
+          echo "PAT prefix: ${MIRROR_PAT:0:11}…"
+          echo ""
+          echo "→ GET /repos/edwinaml-su/FollowupGantt"
+          HTTP_CODE=$(curl -s -o /tmp/repo.json -w "%{http_code}" -H "Authorization: Bearer ${MIRROR_PAT}" https://api.github.com/repos/edwinaml-su/FollowupGantt)
+          echo "   HTTP ${HTTP_CODE}"
+          if [ "${HTTP_CODE}" != "200" ]; then
+            echo "::error::PAT no puede leer metadata del repo. Revisar scopes (Metadata: Read) y owner del PAT."
+            cat /tmp/repo.json
+            exit 1
+          fi
+          echo "→ GET /repos/edwinaml-su/FollowupGantt/git/refs/heads/master (requiere Contents:read)"
+          HTTP_CODE=$(curl -s -o /tmp/ref.json -w "%{http_code}" -H "Authorization: Bearer ${MIRROR_PAT}" https://api.github.com/repos/edwinaml-su/FollowupGantt/git/refs/heads/master)
+          echo "   HTTP ${HTTP_CODE}"
+          if [ "${HTTP_CODE}" != "200" ]; then
+            echo "::error::PAT no puede leer refs/Contents. Confirma 'Contents: Read and Write' en el fine-grained PAT."
+            cat /tmp/ref.json
+            exit 1
+          fi
+          echo "✅ PAT valida lectura. Procediendo al push."
+
+      - name: Mirror push (fast-forward only)
+        env:
+          MIRROR_PAT: ${{ secrets.EDWINAML_SU_MIRROR_PAT }}
+        run: |
+          set -euo pipefail
+          # Approach canónico: gh auth setup-git configura el credential
+          # helper de git con el PAT actual. Funciona uniforme con classic +
+          # fine-grained, sin gymnastics de username en URL.
+          echo "${MIRROR_PAT}" | gh auth login --with-token
+          gh auth setup-git
+          git remote add mirror https://github.com/edwinaml-su/FollowupGantt.git
           echo "Pusheando master ($(git rev-parse --short HEAD)) a edwinaml-su/FollowupGantt…"
           git push mirror master
           echo "✅ Sincronizado."
