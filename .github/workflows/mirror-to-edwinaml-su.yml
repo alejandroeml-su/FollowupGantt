@@ -42,11 +42,17 @@ jobs:
     runs-on: ubuntu-latest
     if: github.repository == 'alejandroeml-su/FollowupGantt'
     steps:
-      - name: Checkout (full history)
+      - name: Checkout (full history, sin credentials persistentes)
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
           ref: master
+          # CRÍTICO: si esto queda en true (default), actions/checkout
+          # configura http.extraheader con GITHUB_TOKEN que sobreescribe
+          # el credential helper de gh — el git push usa GITHUB_TOKEN
+          # (sin acceso al repo edwinaml-su) y devuelve "Repository not
+          # found" 404. Descubierto 2026-05-17 tras 6 intentos.
+          persist-credentials: false
 
       - name: Verify PAT auth before push (diagnostic)
         env:
@@ -76,7 +82,10 @@ jobs:
             cat /tmp/ref.json
             exit 1
           fi
-          echo "✅ PAT valida lectura. Procediendo al push."
+          # Nota: NO se valida Contents:write con PATCH /repos/... porque ese
+          # endpoint requiere Administration:write (no Contents). Falsos
+          # negativos. El test definitivo de write es el git push siguiente.
+          echo "✅ Lectura OK. El git push validará el write."
 
       - name: Mirror push (fast-forward only)
         env:
