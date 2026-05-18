@@ -57,7 +57,11 @@ jobs:
             echo "::error::EDWINAML_SU_MIRROR_PAT secret no está configurado. Revisa el header del workflow para el setup."
             exit 1
           fi
-          git remote add mirror "https://x-access-token:${MIRROR_PAT}@github.com/edwinaml-su/FollowupGantt.git"
+          # Username 'edwinaml-su' (no 'x-access-token'). El placeholder
+          # 'x-access-token' solo funciona con GitHub App installation tokens
+          # y classic PATs; los fine-grained PATs requieren el username real
+          # del owner del token o GitHub responde "Repository not found" 404.
+          git remote add mirror "https://edwinaml-su:${MIRROR_PAT}@github.com/edwinaml-su/FollowupGantt.git"
           echo "Pusheando master ($(git rev-parse --short HEAD)) a edwinaml-su/FollowupGantt…"
           git push mirror master
           echo "✅ Sincronizado."
